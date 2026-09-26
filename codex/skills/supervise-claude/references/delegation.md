@@ -11,7 +11,9 @@ Write `claude-prompt-N.md` with clearly delimited sections. Keep it task-focused
 You implement; Codex planned and will independently review and deliver.
 Do a brief sanity-check of the plan, then Implement, run the targeted Tests and do a
 concise self-review. Do not write a second long plan. Report real plan defects; adjust
-reversible implementation details within scope; never expand scope silently.
+reversible implementation details within scope; never expand scope silently. This is a
+non-interactive supervised run: use only granted tools, never ask the human to approve a
+command, and report a denied required operation as a blocker.
 </role>
 <task>
 [Objective, scope, expected behavior, likely files and Definition of Done.]
@@ -37,7 +39,8 @@ Only edit the agreed scope on the task branch selected by Codex. Preserve existi
 changes. No staging, commits, push or PR creation by Claude; Codex handles delivery
 after independent validation. No deploy, sudo, production access, real secrets,
 broad rm -rf, destructive reset/clean or security bypass. Do not change permissions/settings,
-hooks or security controls to unblock yourself. Report blockers instead.
+hooks or security controls to unblock yourself, and do not try alternate unsafe commands.
+Report blockers instead.
 Inventory filenames/metadata before reading untracked files; never read, copy,
 hash or log likely secret/auth files identified in the baseline exclusions.
 Preserve them untouched; their presence alone is not a blocker.
@@ -66,16 +69,16 @@ Aim to finish within two cycles. A third cycle is allowed only for an objective,
 
 ## Execute Claude non-interactively
 
-Before constructing the command, inspect the installed `claude --help` again if it has not already been captured for this run. Use only advertised options and values. Use a Bash argument array, quoted paths and stdin/file input supported by that version; never `eval` or concatenate user content into a shell command.
+Before execution, inspect the installed `claude --help` again if it has not already been captured for this run. Use only advertised options and values. The supplied `scripts/run_claude.py` helper repeats that capability check, constructs an argument list without a shell and feeds the saved prompt on stdin. Run it with `python3` from the skill directory; do not reimplement its quoting or permission construction in an ad-hoc shell command.
 
-- Prefer `--print` with task input on stdin, if supported.
+- Invoke `scripts/run_claude.py` with the project, saved prompt, external log path, deadline and one repeated `--allow-command` argument for each safe command family already discovered and inspected during pre-flight. Pass patterns such as `git status *` or the project's exact test command, without a `Bash(...)` wrapper. Never pass shell composition, redirection or an interpreter escape; invoke each command family separately.
 - Use an explicit turn cap (default 20) only when advertised. Do not assume `--max-turns` exists. If absent, disclose this and use a bounded process deadline (default 15 minutes per cycle) with an available, verified process supervisor such as `timeout`; verify its help before selecting options. Kill and reap the invocation at the deadline; do not leave a background implementer running while reviewing. If no reliable execution bound exists, BLOCKED.
 - The three-cycle ceiling is mandatory even when a per-invocation turn cap is unavailable. A time limit is not a turn limit; report which bound was used.
-- Prefer a supported permission mode that denies unapproved calls non-interactively (for example `dontAsk`, when advertised), together with a narrow allowlist. Never use bypass modes, `--dangerously-skip-permissions`, or equivalent Codex bypasses.
-- Limit available tools where supported (`--tools`), not just automatic approvals (`--allowedTools`). Start with required read/search/edit tools. Restrict writes to agreed project paths through the available permission controls. Allow only the specific inspected Bash validation commands needed for this task; never grant unrestricted Bash, shell interpreters, arbitrary script execution, MCP, browser or network tools. Validate permission-rule syntax for the installed version instead of guessing patterns.
-- Add explicit CLI deny rules as defense in depth when `claude --help` advertises them (e.g. `--disallowedTools` with its documented `Bash(...)` syntax). For Claude (not the Codex delivery step), deny `git add`, `git push`, `git commit`, `gh pr create`, `gh pr merge`, `gh pr review`, `git reset --hard`, destructive `git clean`, `sudo`, and the deployment commands identified during pre-flight. Prefer broader denials of reset/clean command families over fragile destructive-flag matching when supported. Discover syntax from installed help; never guess flags or matching semantics. If help does not establish a safe granular rule, deny the whole relevant tool when supported, or report the limitation and BLOCKED if safe execution cannot be bounded. Keep prompt prohibitions, the narrow allowlist and inherited deny rules; deny patterns do not cover every alias, wrapper or hook.
+- The helper requires the installed CLI to advertise `dontAsk`, `--permission-prompts none`, restricted mode, tool selection, allow/deny rules and strict MCP configuration. It fails before invocation when any capability is absent; do not guess a replacement flag or fall back to a bypass mode. Classify the run as BLOCKED if no equivalent safe non-interactive mode can be verified.
+- Restricted mode isolates this invocation from user/project/local permission settings, confines file tools to the working directory, refuses bypass mode and disables unselected code/network tools. The helper exposes only `Read`, `Glob`, `Grep`, `Edit`, `Write`, plus `Bash` when at least one inspected command family is supplied. `dontAsk` plus `--permission-prompts none` makes every non-allowed action fail instead of waiting for approval. The helper never edits global or project Claude settings, so ordinary interactive sessions are unaffected.
+- The helper rejects unrestricted Bash, shell composition/interpreter escapes, delivery/privileged commands and non-read-only Git families. Its explicit deny rules cover commit, push, reset, clean, history rewriting, PR delivery/review, sudo, SSH/SCP and permission ownership changes. Deployment, production and secret-access commands must remain absent from the task allowlist and forbidden by the prompt. Prompt restrictions remain mandatory because CLI rules are defense in depth, not an OS security boundary.
 - Preserve project rules, skills and agents. Do not use bare/safe modes that discard project instructions. Do not enable extra agents/plugins/tools merely because they exist. If required project behavior conflicts with the safety boundary, stop and explain.
-- Inspect effective inherited settings and hooks: an added allowlist does not revoke broader inherited grants. Do not weaken existing deny rules. If safe effective permissions cannot be established without changing security settings, BLOCKED.
+- Inspect hooks and every allowed script/command because permitted validation can execute arbitrary project code. Restricted mode prevents broader user/project/local permission grants from widening this invocation; managed settings still apply and must be inspected when present. Do not weaken existing deny rules. If safe effective permissions cannot be established without changing security settings, BLOCKED.
 - Discover capabilities on each run; an option observed in one installed version is not a permanent assumption.
 
 Save stdout AND stderr to `claude-round-N.log` (or separate named files), the exact argument list without secrets, start/end times and exit code. Feed the saved prompt as input. Read Claude's final report into context; open the rest of the log only as needed. Handle failures explicitly so they still reach review and final reporting. Exit 0 or Claude's self-reported success is not evidence of completion. Authentication, quota, permission, timeout and transport errors are blockers to classify; do not retry indefinitely or request secret values.
