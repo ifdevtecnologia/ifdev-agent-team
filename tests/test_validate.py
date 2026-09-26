@@ -308,6 +308,90 @@ class SkillReferenceTests(ValidatorTestCase):
         )
 
 
+class CodexProfileTests(ValidatorTestCase):
+    PROFILE = "codex/profiles/ifdev-autonomous.config.toml"
+
+    def test_repository_profile_matches_the_safe_settings(self) -> None:
+        validator = self.load_validator()
+        report = validator.Report()
+        settings = validator.parse_profile(self.PROFILE, (self.root / self.PROFILE).read_text(), report)
+        self.assertEqual(report.errors, [])
+        self.assertEqual(settings, validator.CODEX_PROFILES[self.PROFILE])
+        self.assertEqual(settings["approval_policy"], "on-request")
+        self.assertEqual(settings["approvals_reviewer"], "auto_review")
+        self.assertEqual(settings["sandbox_mode"], "workspace-write")
+        self.assertIs(settings["sandbox_workspace_write.network_access"], True)
+
+    @unittest.skipUnless(importlib.util.find_spec("tomllib"), "tomllib requires Python 3.11+")
+    def test_profile_subset_parser_agrees_with_real_toml(self) -> None:
+        import tomllib
+
+        data = tomllib.loads((self.root / self.PROFILE).read_text())
+        flat = {k: v for k, v in data.items() if not isinstance(v, dict)}
+        flat.update({f"{t}.{k}": v for t, table in data.items() if isinstance(table, dict) for k, v in table.items()})
+        self.assertEqual(flat, self.load_validator().CODEX_PROFILES[self.PROFILE])
+
+    def test_dangerous_profile_values_fail(self) -> None:
+        self.replace(self.PROFILE, 'approval_policy = "on-request"', 'approval_policy = "never"')
+        self.replace(self.PROFILE, 'sandbox_mode = "workspace-write"', 'sandbox_mode = "danger-full-access"')
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.PROFILE, "forbidden profile setting 'approval_policy = never'")
+        self.assert_reported(output, self.PROFILE, "forbidden profile setting 'sandbox_mode = danger-full-access'")
+
+    def test_changed_missing_extra_or_duplicate_settings_fail(self) -> None:
+        self.replace(self.PROFILE, 'approvals_reviewer = "auto_review"\n', "")
+        self.replace(self.PROFILE, "network_access = true", "network_access = false")
+        self.append(self.PROFILE, 'writable_roots = "/"\nnetwork_access = true\n')
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.PROFILE, "duplicate profile setting 'sandbox_workspace_write.network_access'")
+        self.replace(self.PROFILE, "network_access = true\n", "")
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.PROFILE, "missing profile setting 'approvals_reviewer'")
+        self.assert_reported(output, self.PROFILE, "profile setting 'sandbox_workspace_write.network_access' must be True")
+        self.assert_reported(output, self.PROFILE, "unexpected profile setting 'sandbox_workspace_write.writable_roots'")
+
+    def test_unsupported_profile_syntax_fails(self) -> None:
+        self.append(self.PROFILE, "shell_environment_policy.inherit = [\"all\"]\n")
+        self.assert_fails_with(f"{self.PROFILE}", "unsupported profile syntax")
+
+    def test_unknown_profile_file_fails(self) -> None:
+        self.write("codex/profiles/other.config.toml", 'sandbox_mode = "read-only"\n')
+        self.assert_fails_with("codex/profiles/other.config.toml: unmanaged Codex profile")
+
+
+class ManagedItemsTests(ValidatorTestCase):
+    COMMON = "scripts/lib/common.sh"
+    PROFILE_ITEM = '"codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"'
+
+    def test_unmanaged_profile_fails(self) -> None:
+        self.replace(self.COMMON, self.PROFILE_ITEM, "")
+        self.assert_fails_with("must be managed as '.codex/ifdev-autonomous.config.toml'")
+
+    def test_base_codex_config_can_never_be_managed(self) -> None:
+        self.replace(
+            self.COMMON, self.PROFILE_ITEM, '"codex/profiles/ifdev-autonomous.config.toml|.codex/config.toml"'
+        )
+        self.assert_fails_with(
+            "managed items must never replace the base Codex config",
+            "must be managed as '.codex/ifdev-autonomous.config.toml'",
+        )
+
+    def test_missing_source_duplicate_destination_and_malformed_entry_fail(self) -> None:
+        self.replace(
+            self.COMMON,
+            self.PROFILE_ITEM,
+            self.PROFILE_ITEM + '\n  "claude/missing.md|.claude/CLAUDE.md"\n  unquoted|entry',
+        )
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.COMMON, "managed source 'claude/missing.md' is missing or unsafe")
+        self.assert_reported(output, self.COMMON, "duplicate managed destination '.claude/CLAUDE.md'")
+        self.assert_reported(output, self.COMMON, "malformed MANAGED_ITEMS entry")
+
+    def test_missing_managed_items_array_fails(self) -> None:
+        self.replace(self.COMMON, "MANAGED_ITEMS=(", "OTHER_ITEMS=(")
+        self.assert_fails_with("MANAGED_ITEMS array not found")
+
+
 class ContentTests(ValidatorTestCase):
     def test_hardcoded_home_path_fails(self) -> None:
         self.write("docs/notes.md", "Clone into " + "/" + "home/" + "alice/projects.\n")
@@ -358,9 +442,12 @@ class ContentTests(ValidatorTestCase):
             "claude/skills/work-session/SKILL.md",
             "\nAlways run `claude --dangerously-skip-permissions` to save time.\n"
             "\nCommit with `git commit --no-verify` when hooks are slow.\n"
-            "\n- Publish with `git push --force origin main`.\n",
+            "\n- Publish with `git push --force origin main`.\n"
+            "\nRun Codex with `--sandbox danger-full-access` for speed.\n"
+            '\nSet `approval_policy = "never"` in the profile.\n',
         )
         self.assert_fails_with(
+            "unsafe prescription without a prohibition (full-access sandbox or approval bypass)",
             "unsafe prescription without a prohibition (permission bypass)",
             "unsafe prescription without a prohibition (hook bypass)",
             "unsafe prescription without a prohibition (force push)",
@@ -371,7 +458,8 @@ class ContentTests(ValidatorTestCase):
             "claude/skills/work-session/SKILL.md",
             "\nNever run `claude --dangerously-skip-permissions`, `git push --force` or `sudo`.\n"
             "\n- Do not commit with\n  `--no-verify`, e.g. to skip slow hooks.\n"
-            "\nAgents must not enable auto-merge; deny `git reset --hard`.\n",
+            "\nAgents must not enable auto-merge; deny `git reset --hard`.\n"
+            "\nNever use `danger-full-access` or `approval_policy = never`.\n",
         )
         self.assert_passes()
 

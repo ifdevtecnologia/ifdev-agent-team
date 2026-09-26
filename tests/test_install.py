@@ -24,7 +24,9 @@ MANAGED = {
     ".claude/skills/work-session": "claude/skills/work-session",
     ".claude/skills/verify-changes": "claude/skills/verify-changes",
     ".codex/skills/supervise-claude": "codex/skills/supervise-claude",
+    ".codex/ifdev-autonomous.config.toml": "codex/profiles/ifdev-autonomous.config.toml",
 }
+PROFILE = ".codex/ifdev-autonomous.config.toml"
 
 SIBLINGS = {
     ".claude/settings.json": '{"synthetic": true}\n',
@@ -132,7 +134,7 @@ class InstallTests(InstallerTestCase):
         self.assert_all_links()
         self.assertEqual(self.backup_dirs(), [])
         self.assertFalse((self.home / ".ifdev-ai-tools" / "lock").exists())
-        self.assertIn("8 linked, 0 backed up, 0 unchanged", result.stdout)
+        self.assertIn("9 linked, 0 backed up, 0 unchanged", result.stdout)
         # The link resolves to real content, not only to the right path string.
         self.assertTrue((self.home / ".claude/skills/verify-changes/SKILL.md").is_file())
 
@@ -151,6 +153,35 @@ class InstallTests(InstallerTestCase):
             skill_text = (self.home / skill_link / "SKILL.md").read_text()
             for name in references:
                 self.assertIn(f"references/{name}", skill_text, f"{skill_link} does not link {name}")
+
+    def test_codex_profile_is_opt_in_and_base_config_is_untouched(self) -> None:
+        self.write_siblings()
+        base_config = self.home / ".codex/config.toml"
+        before = base_config.read_bytes()
+
+        self.install()
+
+        profile = self.home / PROFILE
+        self.assertTrue(profile.is_symlink())
+        self.assertEqual(profile.read_bytes(), (self.repo / MANAGED[PROFILE]).read_bytes())
+        self.assertFalse(base_config.is_symlink())
+        self.assertEqual(base_config.read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in (self.home / ".codex").iterdir()), ["config.toml", "ifdev-autonomous.config.toml", "skills"])
+
+        self.assert_ok(self.run_script("uninstall.sh"))
+        self.assertFalse(profile.exists() or profile.is_symlink())
+        self.assertEqual(base_config.read_bytes(), before)
+
+    def test_existing_local_profile_is_backed_up_not_overwritten(self) -> None:
+        self.write_home(PROFILE, 'sandbox_mode = "read-only"\n')
+
+        result = self.install()
+
+        self.assertIn("1 backed up", result.stdout)
+        (backup,) = self.backup_dirs()
+        self.assertEqual((backup / PROFILE).read_text(), 'sandbox_mode = "read-only"\n')
+        self.assertEqual((backup / "MANIFEST").read_text().splitlines(), [PROFILE])
+        self.assert_all_links()
 
     def test_existing_file_directory_and_symlinks_are_backed_up(self) -> None:
         self.write_siblings()
@@ -198,7 +229,7 @@ class InstallTests(InstallerTestCase):
 
         self.assertEqual(snapshot(self.home), before)
         self.assertEqual(self.backup_dirs(), [])
-        self.assertIn("0 linked, 0 backed up, 8 unchanged", result.stdout)
+        self.assertIn("0 linked, 0 backed up, 9 unchanged", result.stdout)
 
     def test_symlinked_parent_directory_is_rejected_without_changes(self) -> None:
         (self.home / ".claude").mkdir()
