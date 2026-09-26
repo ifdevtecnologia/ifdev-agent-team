@@ -33,7 +33,12 @@ SIBLINGS = {
     ".claude/rules/project-extra.md": "# extra rule\n",
     ".claude/skills/other-skill/SKILL.md": "---\nname: other-skill\n---\n",
     ".claude/agents/other-agent.md": "# other agent\n",
-    ".codex/config.toml": "synthetic = true\n",
+    ".codex/config.toml": (
+        'approval_policy = "on-request"\n'
+        'sandbox_mode = "read-only"\n'
+        "[sandbox_workspace_write]\n"
+        "network_access = false\n"
+    ),
     ".codex/skills/other/SKILL.md": "# other codex skill\n",
 }
 
@@ -164,8 +169,12 @@ class InstallTests(InstallerTestCase):
         profile = self.home / PROFILE
         self.assertTrue(profile.is_symlink())
         self.assertEqual(profile.read_bytes(), (self.repo / MANAGED[PROFILE]).read_bytes())
+        self.assertIn(b'approval_policy = "never"', profile.read_bytes())
+        self.assertIn(b'network_access = true', profile.read_bytes())
         self.assertFalse(base_config.is_symlink())
         self.assertEqual(base_config.read_bytes(), before)
+        self.assertIn(b'approval_policy = "on-request"', base_config.read_bytes())
+        self.assertIn(b'network_access = false', base_config.read_bytes())
         self.assertEqual(sorted(p.name for p in (self.home / ".codex").iterdir()), ["config.toml", "ifdev-autonomous.config.toml", "skills"])
 
         self.assert_ok(self.run_script("uninstall.sh"))

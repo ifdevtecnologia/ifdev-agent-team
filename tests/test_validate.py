@@ -317,10 +317,29 @@ class CodexProfileTests(ValidatorTestCase):
         settings = validator.parse_profile(self.PROFILE, (self.root / self.PROFILE).read_text(), report)
         self.assertEqual(report.errors, [])
         self.assertEqual(settings, validator.CODEX_PROFILES[self.PROFILE])
-        self.assertEqual(settings["approval_policy"], "on-request")
-        self.assertEqual(settings["approvals_reviewer"], "auto_review")
+        self.assertEqual(settings["approval_policy"], "never")
         self.assertEqual(settings["sandbox_mode"], "workspace-write")
         self.assertIs(settings["sandbox_workspace_write.network_access"], True)
+        self.assertNotIn("approvals_reviewer", settings)
+        self.assertNotIn("danger-full-access", settings.values())
+
+    def test_autonomous_supervision_keeps_dangerous_operations_prohibited(self) -> None:
+        policy = (self.root / "codex/skills/supervise-claude/SKILL.md").read_text().lower()
+        for prohibition in (
+            "force push",
+            "rewrite remote history",
+            "git reset --hard",
+            "destructive `git clean`",
+            "sudo",
+            "ssh/scp",
+            "deploy",
+            "production",
+            "extract real project secrets",
+            "approve/merge a pr",
+            "auto-merge",
+        ):
+            with self.subTest(prohibition=prohibition):
+                self.assertIn(prohibition, policy)
 
     @unittest.skipUnless(importlib.util.find_spec("tomllib"), "tomllib requires Python 3.11+")
     def test_profile_subset_parser_agrees_with_real_toml(self) -> None:
@@ -332,21 +351,19 @@ class CodexProfileTests(ValidatorTestCase):
         self.assertEqual(flat, self.load_validator().CODEX_PROFILES[self.PROFILE])
 
     def test_dangerous_profile_values_fail(self) -> None:
-        self.replace(self.PROFILE, 'approval_policy = "on-request"', 'approval_policy = "never"')
         self.replace(self.PROFILE, 'sandbox_mode = "workspace-write"', 'sandbox_mode = "danger-full-access"')
         output = self.assert_fails_with()
-        self.assert_reported(output, self.PROFILE, "forbidden profile setting 'approval_policy = never'")
         self.assert_reported(output, self.PROFILE, "forbidden profile setting 'sandbox_mode = danger-full-access'")
 
     def test_changed_missing_extra_or_duplicate_settings_fail(self) -> None:
-        self.replace(self.PROFILE, 'approvals_reviewer = "auto_review"\n', "")
+        self.replace(self.PROFILE, 'approval_policy = "never"\n', "")
         self.replace(self.PROFILE, "network_access = true", "network_access = false")
         self.append(self.PROFILE, 'writable_roots = "/"\nnetwork_access = true\n')
         output = self.assert_fails_with()
         self.assert_reported(output, self.PROFILE, "duplicate profile setting 'sandbox_workspace_write.network_access'")
         self.replace(self.PROFILE, "network_access = true\n", "")
         output = self.assert_fails_with()
-        self.assert_reported(output, self.PROFILE, "missing profile setting 'approvals_reviewer'")
+        self.assert_reported(output, self.PROFILE, "missing profile setting 'approval_policy'")
         self.assert_reported(output, self.PROFILE, "profile setting 'sandbox_workspace_write.network_access' must be True")
         self.assert_reported(output, self.PROFILE, "unexpected profile setting 'sandbox_workspace_write.writable_roots'")
 
