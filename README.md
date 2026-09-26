@@ -127,7 +127,16 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 
 ## Claude and Codex supervision
 
-The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. Codex analyzes and plans once; Claude does a brief sanity check, implements, runs targeted tests and self-reviews; Codex reviews independently, runs the relevant final gate and delivers. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
+The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. Codex analyzes and plans once; Claude runs non-interactively in restricted `dontAsk` mode with basic implementation tools and only the inspected task-specific command families, implements, runs targeted tests and self-reviews; denied operations fail for Claude to report instead of opening an approval prompt. Codex then reviews independently, runs the relevant final gate and delivers. The helper passes permissions only to supervised invocations and does not modify interactive Claude settings. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
+
+```text
+Codex supervisor
+  -> Claude non-interactive implementer (restricted dontAsk + narrow permissions)
+  -> targeted tests
+  -> Codex independent review
+  -> commit -> push -> pull request
+  -> human merge
+```
 
 ## Context efficiency
 

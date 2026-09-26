@@ -45,6 +45,7 @@ REQUIRED_FILES = (
     "codex/skills/supervise-claude/references/delegation.md",
     "codex/skills/supervise-claude/references/review.md",
     "codex/skills/supervise-claude/references/delivery.md",
+    "codex/skills/supervise-claude/scripts/run_claude.py",
     "scripts/install.sh",
     "scripts/uninstall.sh",
     "scripts/validate.sh",
@@ -52,6 +53,7 @@ REQUIRED_FILES = (
     "scripts/lib/common.sh",
     "tests/test_install.py",
     "tests/test_validate.py",
+    "tests/test_supervise_claude.py",
     ".github/workflows/validate.yml",
 )
 

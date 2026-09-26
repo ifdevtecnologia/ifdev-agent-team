@@ -43,7 +43,7 @@ Load the minimum context required to safely complete the current task. Detailed 
 
    Keep `state.md` with project root, run directory, baseline, cycles started (initially 0), implementation status, delivery status, branch/base, created commit hashes and PR URL when available.
 3. **Delegate.** Read [delegation.md](references/delegation.md) before writing `claude-prompt-N.md`. Prompts are task-focused and point to instruction files instead of pasting them; corrective prompts carry only findings, evidence, files, expected fixes, regressions and the checks to rerun, plus instruction-file pointers and correction-specific constraints bounding authority.
-4. **Execute Claude** non-interactively with a verified turn or time bound, a non-interactive denying permission mode, a narrow tool allowlist and deny rules for delivery and destructive commands, as detailed in [delegation.md](references/delegation.md). Save full output to disk.
+4. **Execute Claude** through the fail-closed helper in `scripts/run_claude.py`, with a verified time bound and only the inspected task-specific command families, as detailed in [delegation.md](references/delegation.md). Save full output to disk.
 5. **Review.** Read [review.md](references/review.md) before reviewing. After every invocation, including failures, review metadata first, then selective diffs and all relevant safe new files, compare with the baseline, map behavior to tests and run the applicable checks independently.
 6. **Deliver.** Read [delivery.md](references/delivery.md) only once implementation is COMPLETE. Codex stages explicit task paths, inspects the staged set before every commit, creates logical commits, pushes the task branch and opens the PR for human review and merge.
 
