@@ -1,0 +1,36 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: python3 -m pip install -r requirements-dev.txt
+
+      - name: Bash syntax
+        run: |
+          for script in scripts/*.sh scripts/lib/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Static validation
+        run: bash scripts/validate.sh
+
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v

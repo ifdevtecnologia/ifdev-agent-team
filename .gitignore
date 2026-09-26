@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+
+# OS/editor noise
+.DS_Store
+*.swp
+
+# Secrets must never be versioned here (the validator also rejects them if tracked)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+token*
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+auth.json
+.netrc
+.git-credentials
