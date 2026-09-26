@@ -1,0 +1,10 @@
+# Opt-in Codex profile for supervised runs: codex --profile ifdev-autonomous
+# Managed by ifdev-ai-tools; the base ~/.codex/config.toml is never modified.
+# Keeps the workspace sandbox, routes eligible approval prompts to the auto-reviewer and
+# lets sandboxed commands reach the network (dependencies, git push, gh) for this profile only.
+approval_policy = "on-request"
+approvals_reviewer = "auto_review"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true

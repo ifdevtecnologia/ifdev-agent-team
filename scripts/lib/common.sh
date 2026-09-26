@@ -13,6 +13,8 @@ MANAGED_ITEMS=(
   "claude/skills/work-session|.claude/skills/work-session"
   "claude/skills/verify-changes|.claude/skills/verify-changes"
   "codex/skills/supervise-claude|.codex/skills/supervise-claude"
+  # Opt-in profile file only; the base ~/.codex/config.toml is never touched.
+  "codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"
 )
 
 STATE_DIR_REL=".ifdev-ai-tools"

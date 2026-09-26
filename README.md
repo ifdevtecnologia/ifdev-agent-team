@@ -24,8 +24,9 @@ claude/
   skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
 codex/
   skills/supervise-claude/           -> ~/.codex/skills/supervise-claude (with references/)
+  profiles/ifdev-autonomous.config.toml -> ~/.codex/ifdev-autonomous.config.toml (opt-in profile)
 scripts/
-  install.sh, uninstall.sh           link / unlink the eight items above
+  install.sh, uninstall.sh           link / unlink the nine items above
   lib/common.sh                      managed item list and shared safety helpers
   validate.sh, validate.py           static repository validation
 tests/                               isolated automated tests (Python unittest)
@@ -37,7 +38,7 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 
 - Bash (3.2 or newer), `git` and standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`). This is all the installer needs.
 - For validation and tests only: Python 3.9+ and PyYAML 6.0.3, pinned in [`requirements-dev.txt`](requirements-dev.txt). Install it with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
-- Claude Code and/or Codex installed separately; this toolkit does not install or configure them.
+- Claude Code and/or Codex installed separately; this toolkit does not install them and, apart from the opt-in Codex profile below, does not configure them.
 
 ## Install on a new machine
 
@@ -56,7 +57,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 ### What the installer does
 
 - Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the eight destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, so unknown siblings (your settings, other skills and agents) are preserved.
+- Creates symlinks for exactly the nine destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
 - Is idempotent: a second run reports every item as unchanged and creates no backup.
@@ -110,6 +111,7 @@ python3 -m unittest discover -s tests -v
 - unsafe prescriptions (permission or hook bypasses, destructive commands, privileged execution, protected-branch bypasses) that appear without a prohibition in the same sentence;
 - obsolete delivery instructions in the installed `claude/` and `codex/` content that contradict `claude/rules/git-workflow.md`: requiring approval for every commit, or forbidding pushes even when delivery is authorized. Narrower restrictions are not reported: conditional wording (such as "without authorization" or "unless"), explicit user restrictions, prohibitions limited to force pushes or default/protected branches, and prohibitions aimed at Claude inside the `supervise-claude` skill;
 - consistency of the commit emoji/type convention;
+- `MANAGED_ITEMS` in `scripts/lib/common.sh`: every source exists, destinations are unique and none replaces `~/.codex/config.toml`; every file in `codex/profiles/` is a known, managed profile whose settings exactly match the expected safe values (a small TOML subset is parsed, so no TOML dependency is needed);
 - Bash syntax of every `*.sh` file.
 
 The file inventory comes from `git ls-files --cached --others --exclude-standard`, so it works on a fresh clone and on an uncommitted working tree. Paths that look like secrets are classified by name before anything is opened, checking every path component (so a matching directory covers everything below it): `.env*`, `credential*`, `secret*` and `token*` (also dot-prefixed, such as `.credentials.json`), `auth` and `auth.*` (such as `auth.json`, `auth.yaml`), private keys and key stores (`id_rsa*`, `id_ed25519*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.ppk`, `*.jks`, `*.keystore`), credential files (`.netrc`, `.git-credentials`, `.pypirc`, `.npmrc`) and cloud/tool credential directories (`.aws`, `.azure`, `.gcloud`, `.kube`, `.docker`, `.oci`, `.ssh`, `.gnupg`, `.config/gcloud`, `.config/gh`). They are never read, hashed or copied, and their index content is never inspected; untracked ones are left untouched.
@@ -134,9 +136,26 @@ Codex supervisor
   -> Claude non-interactive implementer (restricted dontAsk + narrow permissions)
   -> targeted tests
   -> Codex independent review
+  -> optional Codex Mechanical remediation (no Claude cycle) + revalidation
   -> commit -> push -> pull request
   -> human merge
 ```
+
+**Mechanical remediation.** When the only remaining failures are formatting, whitespace or line endings, Codex may run an already-inspected deterministic formatter or normalization itself, on task-scope files only, then review the resulting diff independently and rerun the relevant validation. It is not a Claude invocation and does not consume one of the three cycles; after cycle 3 it is allowed only when those failures are the sole remaining ones and no semantic, security or correctness finding is open. Semantic fixes, tests, refactors, SQL/RLS/auth/security code, migrations, dependencies, architecture, behavior changes and suppressions always remain Claude's; in doubt Codex delegates or stops BLOCKED. The deterministic boundaries (eligible operations, scope, cycle accounting, delivery ownership) are encoded and tested in [`scripts/supervision_policy.py`](codex/skills/supervise-claude/scripts/supervision_policy.py); see [the phase reference](codex/skills/supervise-claude/references/mechanical-remediation.md).
+
+**Delivery ownership.** Claude never stages, commits, pushes or opens PRs. Codex commits to the task branch, pushes it and opens the PR. Only a human approves and merges; no agent merges or enables auto-merge.
+
+### Opt-in Codex profile `ifdev-autonomous`
+
+The installer links [`codex/profiles/ifdev-autonomous.config.toml`](codex/profiles/ifdev-autonomous.config.toml) to `~/.codex/ifdev-autonomous.config.toml` (Codex reads profiles from `$CODEX_HOME/<name>.config.toml`). It changes nothing until you select it:
+
+```bash
+codex --profile ifdev-autonomous
+```
+
+It keeps `sandbox_mode = "workspace-write"` (writes confined to the workspace), uses `approval_policy = "on-request"` with `approvals_reviewer = "auto_review"` so eligible boundary prompts go to Codex's auto-reviewer instead of waiting for you, and sets `[sandbox_workspace_write] network_access = true` so sandboxed commands can install dependencies, push the task branch and call `gh`. Network access applies only to sessions using this profile; plain `codex` keeps your base `~/.codex/config.toml`, which the toolkit never modifies. The profile does not use full-access sandboxing, never-ask approvals or bypass flags, and the validator rejects `danger-full-access` or never-ask approval values in it.
+
+GitHub CLI authentication is a one-time human step outside the agent: run `gh auth login` in your own terminal and confirm with `gh auth status`. Agents use the existing authentication and never run the login themselves or read its token.
 
 ## Context efficiency
 
@@ -156,13 +175,13 @@ So `claude/CLAUDE.md` and the three global rules are **always loaded**; they sta
 
 | Entrypoint | Read only when needed |
 | --- | --- |
-| `codex/skills/supervise-claude/SKILL.md` | `references/safety-and-preflight.md` (before pre-flight), `references/delegation.md` (before delegating), `references/review.md` (before each review), `references/delivery.md` (only at delivery) |
+| `codex/skills/supervise-claude/SKILL.md` | `references/safety-and-preflight.md` (before pre-flight), `references/delegation.md` (before delegating), `references/review.md` (before each review), `references/mechanical-remediation.md` (only before Codex changes a file), `references/delivery.md` (only at delivery) |
 | `claude/skills/verify-changes/SKILL.md` | `references/commit-messages.md` (when commit messages are proposed) |
 | `claude/skills/work-session/SKILL.md` | `references/commit-proposal.md` (when delivery is not authorized) |
 
-A reference is binding once its phase starts; every invariant of the former single-file supervisor skill lives either in the entrypoint or in the reference for its phase. Reference directories ride on the existing skill directory links, so the eight managed paths are unchanged.
+A reference is binding once its phase starts; every invariant of the former single-file supervisor skill lives either in the entrypoint or in the reference for its phase. Reference directories ride on the existing skill directory links, so adding references does not change the managed paths.
 
-Static entrypoint sizes in lines (not a token or runtime measurement): `claude/CLAUDE.md` 42 → 39, `verify-changes` 54 → 43, `work-session` 64 → 48, `supervise-claude` 203 → 72. Fewer lines do not always mean fewer bytes: `claude/CLAUDE.md` grew from 3505 to 3645 bytes, so no byte or token saving is claimed for it. Qualitatively, a supervisor run no longer loads lock, prompt, CLI, review, commit, push and PR procedures up front, delegation prompts point to instruction files instead of pasting them, and corrective prompts carry only findings, evidence, instruction-file pointers and correction-specific constraints.
+Static entrypoint sizes in lines (not a token or runtime measurement): `claude/CLAUDE.md` 42 → 39, `verify-changes` 54 → 43, `work-session` 64 → 48, `supervise-claude` 203 → 74. Fewer lines do not always mean fewer bytes: `claude/CLAUDE.md` grew from 3505 to 3645 bytes, so no byte or token saving is claimed for it. Qualitatively, a supervisor run no longer loads lock, prompt, CLI, review, commit, push and PR procedures up front, delegation prompts point to instruction files instead of pasting them, and corrective prompts carry only findings, evidence, instruction-file pointers and correction-specific constraints.
 
 ### Scoped project rules
 
@@ -192,4 +211,4 @@ Commits follow the emoji Conventional Commits convention and the branch/PR flow 
 
 ## Scope and ownership
 
-The repository owns only the eight linked items. It does not version or manage Claude/Codex settings, permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched.
+The repository owns only the nine linked items, including the opt-in Codex profile file. It does not version or manage the base Codex `config.toml` or other Claude/Codex settings, permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched.

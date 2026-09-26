@@ -4,7 +4,8 @@
 Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter, local
 Markdown links, references to installed global files, machine-specific paths, product/domain
 content, sensitive paths, credential patterns, unsafe prescriptions, obsolete delivery
-instructions, commit convention consistency and Bash syntax.
+instructions, commit convention consistency, managed items, managed Codex profile settings and
+Bash syntax.
 
 This is a heuristic gate, not a comprehensive semantic or security review. Sensitive
 paths are classified by name before any file is opened and are never read. Every diagnostic
@@ -45,7 +46,10 @@ REQUIRED_FILES = (
     "codex/skills/supervise-claude/references/delegation.md",
     "codex/skills/supervise-claude/references/review.md",
     "codex/skills/supervise-claude/references/delivery.md",
+    "codex/skills/supervise-claude/references/mechanical-remediation.md",
     "codex/skills/supervise-claude/scripts/run_claude.py",
+    "codex/skills/supervise-claude/scripts/supervision_policy.py",
+    "codex/profiles/ifdev-autonomous.config.toml",
     "scripts/install.sh",
     "scripts/uninstall.sh",
     "scripts/validate.sh",
@@ -89,6 +93,9 @@ PRODUCT_TERMS = re.compile(r"\b(?:" + "|".join(_PRODUCT_FRAGMENTS) + r")s?\b", r
 UNSAFE_PRESCRIPTIONS = {
     "permission bypass": re.compile(
         r"--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|\bbypassPermissions\b|--yolo\b"
+    ),
+    "full-access sandbox or approval bypass": re.compile(
+        r"\bdanger-full-access\b|\bapproval_policy\s*=\s*\"?never\b|--ask-for-approval\s+never\b"
     ),
     "hook bypass": re.compile(r"--no-verify\b"),
     "force push": re.compile(r"\bgit\s+push\b[^\n.]*\s(?:--force(?:-with-lease)?|-f)\b|\bforce[- ]push"),
@@ -167,6 +174,27 @@ MANAGED_REFERENCE_PREFIXES = {
     "claude": ("CLAUDE.md", "rules/", "agents/", "skills/"),
     "codex": ("skills/",),
 }
+
+MANAGED_ITEMS_FILE = "scripts/lib/common.sh"
+MANAGED_ITEMS_BLOCK = re.compile(r"^MANAGED_ITEMS=\((.*?)^\)", re.MULTILINE | re.DOTALL)
+MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
+BASE_CODEX_CONFIG = ".codex/config.toml"
+
+# Managed opt-in Codex profiles and their exact settings. Profiles live beside the base config
+# as $CODEX_HOME/<name>.config.toml and are selected with `codex --profile <name>`.
+CODEX_PROFILES_DIR = "codex/profiles/"
+CODEX_PROFILES = {
+    "codex/profiles/ifdev-autonomous.config.toml": {
+        "approval_policy": "on-request",
+        "approvals_reviewer": "auto_review",
+        "sandbox_mode": "workspace-write",
+        "sandbox_workspace_write.network_access": True,
+    },
+}
+FORBIDDEN_PROFILE_VALUES = {("approval_policy", "never"), ("sandbox_mode", "danger-full-access")}
+# A deliberately small TOML subset: comments, simple tables, string and boolean values.
+TOML_TABLE = re.compile(r"^\[([A-Za-z0-9_-]+)\]\s*(?:#.*)?$")
+TOML_ENTRY = re.compile(r'^([A-Za-z0-9_-]+)\s*=\s*("[^"\\]*"|true|false)\s*(?:#.*)?$')
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")
@@ -522,6 +550,91 @@ def check_text(root: Path, rel: str, text: str, report: Report) -> None:
         check_links(root, rel, text, report)
 
 
+def parse_managed_items(texts: dict[str, str], report: Report) -> list[tuple[str, str]]:
+    text = texts.get(MANAGED_ITEMS_FILE)
+    match = MANAGED_ITEMS_BLOCK.search(text) if text is not None else None
+    if match is None:
+        report.add(MANAGED_ITEMS_FILE, "MANAGED_ITEMS array not found")
+        return []
+    items = []
+    for offset, line in enumerate(match.group(1).split("\n")):
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        entry = MANAGED_ITEM.match(line)
+        if entry is None:
+            report.add(MANAGED_ITEMS_FILE, "malformed MANAGED_ITEMS entry", line_of(text, match.start(1)) + offset)
+            continue
+        items.append(entry.groups())
+    return items
+
+
+def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str], report: Report) -> None:
+    items = parse_managed_items(texts, report)
+    destinations: set[str] = set()
+    for source, destination in items:
+        path = root / source
+        if path.is_symlink() or not (path.is_file() or path.is_dir()) or has_unsafe_parent(root, source):
+            report.add(MANAGED_ITEMS_FILE, f"managed source '{source}' is missing or unsafe")
+        elif path.is_dir() and not any(c.startswith(source.rstrip("/") + "/") for c in candidates):
+            report.add(MANAGED_ITEMS_FILE, f"managed source directory '{source}' has no tracked content")
+        if destination in destinations:
+            report.add(MANAGED_ITEMS_FILE, f"duplicate managed destination '{destination}'")
+        destinations.add(destination)
+        if destination == BASE_CODEX_CONFIG:
+            report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
+    managed = dict(items)
+    for rel in candidates:
+        if rel.startswith(CODEX_PROFILES_DIR) and rel not in CODEX_PROFILES:
+            report.add(rel, "unmanaged Codex profile (add it to CODEX_PROFILES in scripts/validate.py)")
+    for rel in CODEX_PROFILES:
+        expected = ".codex/" + PurePosixPath(rel).name
+        if managed.get(rel) != expected:
+            report.add(MANAGED_ITEMS_FILE, f"Codex profile '{rel}' must be managed as '{expected}'")
+
+
+def parse_profile(rel: str, text: str, report: Report) -> dict | None:
+    settings: dict = {}
+    table = ""
+    ok = True
+    for number, raw in enumerate(text.split("\n"), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        header = TOML_TABLE.match(line)
+        entry = TOML_ENTRY.match(line)
+        if header:
+            table = header.group(1) + "."
+            continue
+        if entry is None:
+            report.add(rel, "unsupported profile syntax (only comments, simple tables, strings and booleans)", number)
+            ok = False
+            continue
+        key, value = table + entry.group(1), entry.group(2)
+        if key in settings:
+            report.add(rel, f"duplicate profile setting '{key}'", number)
+            ok = False
+        settings[key] = value.strip('"') if value.startswith('"') else value == "true"
+    return settings if ok else None
+
+
+def check_codex_profiles(texts: dict[str, str], report: Report) -> None:
+    for rel, expected in CODEX_PROFILES.items():
+        if rel not in texts:
+            continue  # reported by check_required
+        settings = parse_profile(rel, texts[rel], report)
+        if settings is None:
+            continue
+        for key, value in sorted(settings.items()):
+            if (key, value) in FORBIDDEN_PROFILE_VALUES:
+                report.add(rel, f"forbidden profile setting '{key} = {value}'")
+            elif key not in expected:
+                report.add(rel, f"unexpected profile setting '{key}'")
+            elif value != expected[key]:
+                report.add(rel, f"profile setting '{key}' must be {expected[key]!r}")
+        for key in sorted(set(expected) - set(settings)):
+            report.add(rel, f"missing profile setting '{key}'")
+
+
 def check_bash_syntax(root: Path, texts: dict[str, str], report: Report) -> None:
     for rel in sorted(texts):
         if not rel.endswith(".sh"):
@@ -563,6 +676,8 @@ def validate(root: Path) -> Report:
     check_executable_scripts(root, report)
     check_definitions(texts, candidates, report)
     check_commit_table(texts, report)
+    check_managed_items(root, texts, candidates, report)
+    check_codex_profiles(texts, report)
     for rel, text in sorted(texts.items()):
         check_text(root, rel, text, report)
     check_bash_syntax(root, texts, report)
