@@ -13,7 +13,7 @@ If the project provides a specialized reviewer for a domain touched by the diff,
 
 ## What to evaluate
 
-Read the diff, new files and the callers needed to understand the behavior — do not review only the changed lines.
+Start from metadata (`git status`, then `--stat`/`--name-status` of the staged and unstaged diffs, including new files). Then read the relevant diffs, the safe new files and the callers needed to understand the behavior — do not review only the changed lines. Classify likely secret paths by name before opening anything.
 In priority order:
 
 1. Reproducible bugs: logic, edge cases, nullability, concurrency, error handling.
