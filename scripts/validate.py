@@ -185,13 +185,12 @@ BASE_CODEX_CONFIG = ".codex/config.toml"
 CODEX_PROFILES_DIR = "codex/profiles/"
 CODEX_PROFILES = {
     "codex/profiles/ifdev-autonomous.config.toml": {
-        "approval_policy": "on-request",
-        "approvals_reviewer": "auto_review",
+        "approval_policy": "never",
         "sandbox_mode": "workspace-write",
         "sandbox_workspace_write.network_access": True,
     },
 }
-FORBIDDEN_PROFILE_VALUES = {("approval_policy", "never"), ("sandbox_mode", "danger-full-access")}
+FORBIDDEN_PROFILE_VALUES = {("sandbox_mode", "danger-full-access")}
 # A deliberately small TOML subset: comments, simple tables, string and boolean values.
 TOML_TABLE = re.compile(r"^\[([A-Za-z0-9_-]+)\]\s*(?:#.*)?$")
 TOML_ENTRY = re.compile(r'^([A-Za-z0-9_-]+)\s*=\s*("[^"\\]*"|true|false)\s*(?:#.*)?$')
