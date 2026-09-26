@@ -270,6 +270,44 @@ class ReferenceTests(ValidatorTestCase):
         self.assert_passes()
 
 
+class SkillReferenceTests(ValidatorTestCase):
+    SKILL = "codex/skills/supervise-claude/SKILL.md"
+    REFERENCE = "codex/skills/supervise-claude/references/review.md"
+
+    def test_missing_mandatory_reference_fails(self) -> None:
+        (self.root / self.REFERENCE).unlink()
+        output = self.assert_fails_with(f"{self.REFERENCE}: required file is missing")
+        self.assert_reported(output, self.SKILL, "broken local link 'references/review.md'")
+
+    def test_broken_link_to_reference_fails(self) -> None:
+        self.append(self.SKILL, "\nSee [extra steps](references/missing-steps.md).\n")
+        self.assert_fails_with(f"{self.SKILL}", "broken local link 'references/missing-steps.md'")
+
+    def test_symlinked_reference_is_not_accepted(self) -> None:
+        outside = self.tmp / "outside.md"
+        outside.write_text("outside\n")
+        (self.root / self.REFERENCE).unlink()
+        os.symlink(outside, self.root / self.REFERENCE)
+        output = self.assert_fails_with(f"{self.REFERENCE}: required file is missing or is not a regular file")
+        self.assert_reported(output, self.REFERENCE, "symlink points outside the repository")
+
+    def test_reference_prose_needs_no_frontmatter(self) -> None:
+        self.write("codex/skills/supervise-claude/references/extra.md", "# Extra\n\nPlain reference prose.\n")
+        self.write("claude/skills/verify-changes/references/extra.md", "Plain reference prose.\n")
+        self.assert_passes()
+
+    def test_references_are_checked_for_unsafe_and_obsolete_instructions(self) -> None:
+        self.append(self.REFERENCE, "\nThen run `sudo make install`.\n")
+        self.append("claude/skills/verify-changes/references/commit-messages.md", "\nNever push automatically.\n")
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.REFERENCE, "unsafe prescription without a prohibition (sudo)")
+        self.assert_reported(
+            output,
+            "claude/skills/verify-changes/references/commit-messages.md",
+            "obsolete delivery instruction (unconditional push prohibition)",
+        )
+
+
 class ContentTests(ValidatorTestCase):
     def test_hardcoded_home_path_fails(self) -> None:
         self.write("docs/notes.md", "Clone into " + "/" + "home/" + "alice/projects.\n")

@@ -18,37 +18,26 @@ Work from the repository root. The rule sources are `~/.claude/rules/testing.md`
 
 ## Run
 
-1. Identify changed files (including new ones), their consumers and the relevant new/changed behaviors. Map each behavior to appropriate existing/new tests or to an explicit, justified exception under the testing rule; a coverage percentage alone does not prove this.
-2. Check for regressions in consumers of changed contracts, not only in the changed files.
-3. Run the smallest set that verifies the changed behavior; `all` covers every area present in the repository.
-4. Failure caused by the task: fix it within scope and rerun only the affected checks.
-5. Preexisting failure: distinguish it from the task and report it without fixing it out of scope.
-6. Missing tool, SDK, service or permission: mark it BLOCKED. Do not install globally, change versions or use a remote environment as a substitute for the local one.
-7. Local services: confirm configuration and target before starting. Reset or recreate data only on a disposable database or with authorized loss.
+1. Start from metadata: `git status`, then `--stat`/`--name-status` of the staged and unstaged diffs, including new files. Read the relevant diffs and new files next; open lockfiles, generated files and snapshots only as needed, while still checking that dependency changes are consistent.
+2. Classify the impact and each candidate check's applicability as defined in `testing.md`. Map each relevant new/changed behavior to appropriate existing/new tests or to an explicit, justified exception; a coverage percentage alone does not prove this.
+3. Check for regressions in consumers of changed contracts, not only in the changed files.
+4. Run the smallest set that verifies the changed behavior; `all` covers every area present in the repository.
+5. Failure caused by the task: fix it within scope and rerun only the affected checks.
+6. Preexisting failure: distinguish it from the task and report it without fixing it out of scope.
+7. Missing tool, SDK, service or permission: mark it BLOCKED. Do not install globally, change versions or use a remote environment as a substitute for the local one.
+8. Local services: confirm configuration and target before starting. Reset or recreate data only on a disposable database or with authorized loss.
 
-Do not update lockfiles or format files unrelated to the task just to run a check.
-Documentation or static configuration changes without relevant behavior: validate references and formats; do not require an application build. Executable or security configuration is judged by behavior and risk.
+Do not update lockfiles or format files unrelated to the task just to run a check. Keep durable full output in log files in a safe directory outside the repository (never containing secrets); bring only summaries and failure excerpts into context. If writing logs is denied, say so, report the summary and excerpts you have and do not claim the full output was saved.
 
 ## Review
 
 Before finishing, review the diff against the self-review checklist in `engineering-principles.md`: correctness, security (secrets, authorization, input validation), error handling, unnecessary complexity and overengineering, duplication, dead code and deprecated APIs. Confirm no obvious unjustified violations were introduced. Record relevant findings and tradeoffs without demanding refactors of unrelated code.
 
-## Commit messages
-
-When messages are proposed (or `$ARGUMENTS` asks for `commit`), validate each one against `git-workflow.md`:
-
-- Subject in the format `<emoji> <type>[(scope)][!]: <description>`, with the exact emoji/type pair from the table.
-- Description in English, imperative, lowercase first letter and no final period; short subject.
-- Scope absent or useful; if the project documents preferred scopes, use one or justify a new one.
-- The type matches the diff content (`refactor` does not change behavior; `docs` touches only documentation).
-- One commit per logical change; flag commits mixing refactors with features/fixes.
-- Incompatible changes use `!` and, when needed, a `BREAKING CHANGE:` footer.
-
-Report each message as OK or with the suggested correction. Validating messages does not by itself authorize committing.
+When commit messages are proposed (or `$ARGUMENTS` asks for `commit`), apply [the commit message checks](references/commit-messages.md).
 
 ## Result
 
-For each check: command, directory, result and short evidence of failure, if any.
-Group into PASSED, FAILED, BLOCKED and NOT APPLICABLE. Not executed is not passed.
+For each check: command, directory, exit status and short evidence of failure, if any.
+Group into PASSED, FAILED, BLOCKED, SKIPPED WITH JUSTIFICATION and NOT APPLICABLE, with reasons for the last three. Not executed is not passed.
 Report coverage per behavior, actual results and justified exceptions. Do not report COMPLETE if relevant tests are missing without a justified exception, mandatory tests fail or necessary validation is uncertain; use PARTIAL/BLOCKED as defined in `testing.md`.
-After success, do not repeat the full suite without a new change or a concrete doubt.
+After success, do not repeat the full suite without a new change or a concrete doubt. Reuse a result only within the same run on unchanged relevant inputs; historical successes do not count.

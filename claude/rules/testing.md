@@ -36,14 +36,44 @@ Generated code, trivial declarations, static declarative configuration and frame
 
 When deciding not to add tests for changed executable code, explicitly state the affected behavior, why new tests add no meaningful value or are technically infeasible, any existing coverage or alternative evidence, and residual risk. Convenience or an unavailable runner is not an exemption from writing necessary tests. An exception to adding tests does not excuse required validation failures or uncertainty.
 
+## Impact and check selection
+
+Classify the change by impact before choosing checks, from the actual diff and its consumers rather than file names alone. One change can touch several areas:
+
+| Impact | Typical relevant checks |
+| --- | --- |
+| Documentation only | Link, reference and format checks. |
+| Web application | Its unit/component tests, lint, typecheck and build. |
+| Database (schema, policies, functions, migrations) | Migration and integration tests against a local or disposable database, including allowed and denied access. |
+| Mobile application | Its unit/widget tests, analysis and build. |
+| Shared contracts and their consumers | Contract tests plus the checks of every consumer that depends on the changed contract. |
+| Cross-stack flows | The checks of each affected area plus integration/end-to-end tests when the risk justifies them. |
+
+Record each candidate check with an applicability status, separately from its result:
+
+- **APPLICABLE:** the change can affect what the check verifies; it must run, and its result is PASSED or FAILED.
+- **NOT APPLICABLE:** the check clearly cannot be affected by the change (for example a mobile build for a documentation-only edit). State the reason in a few words.
+- **SKIPPED WITH JUSTIFICATION:** relevant but deliberately not run (for example it duplicates a check that already covers the change); state why the remaining evidence is sufficient.
+- **BLOCKED:** relevant but cannot run safely in this environment (missing tool, service or permission).
+
+A clearly irrelevant check marked NOT APPLICABLE does not reduce COMPLETE to PARTIAL. A relevant check that is BLOCKED, or a skip whose justification leaves real uncertainty, does. Mandatory project checks and test coverage of meaningful behavior stay mandatory regardless of impact classification.
+
 ## Validation and reporting
 
-After implementation, run the relevant tests when the environment safely allows it. Select commands from the project; record command, working directory and actual outcome. Never infer current success from a historical report or claim unexecuted tests passed.
+After implementation, run the relevant tests when the environment safely allows it. Select commands from the project; record command, working directory and actual outcome. Keep full output on disk and report command, directory, exit status and a short summary, adding failure excerpts as needed. Never infer current success from a historical report or claim unexecuted tests passed.
 
-- **COMPLETE:** required tests exist, required validations ran and passed.
+- **COMPLETE:** required tests exist, and every applicable required validation ran and passed.
 - **PARTIAL:** a usable result with environmental validation limitations or remaining uncertainty.
 - **BLOCKED:** unsafe to continue, or implementation problems prevent a usable result.
 
 Do not report COMPLETE when mandatory tests are missing or failing, relevant tests were not written without a justified exception, or necessary validation could not run and its result remains uncertain. Distinguish preexisting failures from regressions without treating either as a green required check.
 
 Map meaningful behavior changes to tests and results (or explicit exceptions) in the final review. Re-run affected checks after fixes; do not repeat a passed full suite without new changes or unresolved concerns.
+
+Allocate checks by phase when implementation and independent review are split (for example Claude implementing under Codex supervision):
+
+- **Implementer, each cycle:** the tests for the changed behavior and the impacted regression and local checks.
+- **Independent reviewer, intermediate reviews:** targeted checks that confirm the findings and affected regressions, not the full gate on every correction.
+- **Independent reviewer, once ready:** the complete relevant final gate, omitting no mandatory check.
+
+A passed result may be reused only within the same run while its relevant inputs are unchanged. The implementer's self-reported results are not independent validation.

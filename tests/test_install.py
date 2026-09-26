@@ -136,6 +136,22 @@ class InstallTests(InstallerTestCase):
         # The link resolves to real content, not only to the right path string.
         self.assertTrue((self.home / ".claude/skills/verify-changes/SKILL.md").is_file())
 
+    def test_skill_references_are_reachable_through_installed_links(self) -> None:
+        self.install()
+
+        for skill_link in (".claude/skills/verify-changes", ".claude/skills/work-session", ".codex/skills/supervise-claude"):
+            source = self.repo / MANAGED[skill_link]
+            references = sorted(p.name for p in (source / "references").glob("*.md"))
+            self.assertTrue(references, skill_link)
+            installed = self.home / skill_link / "references"
+            self.assertFalse(installed.is_symlink(), skill_link)  # rides on the skill directory link
+            for name in references:
+                path = installed / name
+                self.assertEqual(path.read_bytes(), (source / "references" / name).read_bytes(), name)
+            skill_text = (self.home / skill_link / "SKILL.md").read_text()
+            for name in references:
+                self.assertIn(f"references/{name}", skill_text, f"{skill_link} does not link {name}")
+
     def test_existing_file_directory_and_symlinks_are_backed_up(self) -> None:
         self.write_siblings()
         self.write_home(".claude/CLAUDE.md", "user instructions\n")
