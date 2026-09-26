@@ -4,7 +4,7 @@
 
 This repository holds only **global** defaults that make sense for any project: engineering principles, testing and Git rules, general-purpose skills and agents. Product names, business domains, stack-specific business rules, project-specific reviewers and machine-specific paths belong in each project's own `CLAUDE.md` and `.claude/` directory, not here.
 
-Keep instructions concise and non-contradictory. Rules live in one place (`claude/rules/`); skills, agents and `claude/CLAUDE.md` reference them instead of copying them.
+Keep instructions concise and non-contradictory. Rules live in one place (`claude/rules/`); skills, agents and `claude/CLAUDE.md` reference them instead of copying them. Always-loaded files stay short; phase-specific skill procedures go in the skill's `references/` directory. See [Context efficiency](README.md#context-efficiency). Do not claim token or runtime savings that were not measured.
 
 ## Changing scripts
 

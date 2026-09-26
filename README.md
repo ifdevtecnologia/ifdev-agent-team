@@ -20,10 +20,10 @@ claude/
   rules/testing.md                   -> ~/.claude/rules/testing.md
   rules/git-workflow.md              -> ~/.claude/rules/git-workflow.md
   agents/senior-reviewer.md          -> ~/.claude/agents/senior-reviewer.md
-  skills/work-session/               -> ~/.claude/skills/work-session
-  skills/verify-changes/             -> ~/.claude/skills/verify-changes
+  skills/work-session/               -> ~/.claude/skills/work-session (with references/)
+  skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
 codex/
-  skills/supervise-claude/           -> ~/.codex/skills/supervise-claude
+  skills/supervise-claude/           -> ~/.codex/skills/supervise-claude (with references/)
 scripts/
   install.sh, uninstall.sh           link / unlink the eight items above
   lib/common.sh                      managed item list and shared safety helpers
@@ -121,13 +121,61 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 ## Adding content
 
 - **Rule:** add `claude/rules/<name>.md`, reference it from `claude/CLAUDE.md` when it should always apply, add it to `MANAGED_ITEMS` in `scripts/lib/common.sh` and to `REQUIRED_FILES` in `scripts/validate.py`, and extend the tests that enumerate managed links.
-- **Skill:** add `claude/skills/<name>/SKILL.md` (or `codex/skills/<name>/SKILL.md`) with `name: <name>` and a `description` in the frontmatter; register the directory as above. Link the skill directory, never the whole `skills/` directory.
+- **Skill:** add `claude/skills/<name>/SKILL.md` (or `codex/skills/<name>/SKILL.md`) with `name: <name>` and a `description` in the frontmatter; register the directory as above. Link the skill directory, never the whole `skills/` directory. Phase-specific procedures may go in `references/*.md` inside the skill directory (plain Markdown, no frontmatter), linked from `SKILL.md`; add mandatory ones to `REQUIRED_FILES`. They are installed with the directory link and checked like any other content.
 - **Agent:** add `claude/agents/<name>.md` with `name` and `description`; register it as above.
 - Keep content general: no product names, business domains, stack-specific business rules or machine paths. Those belong in each project's own `.claude/`.
 
 ## Claude and Codex supervision
 
-The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
+The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. Codex analyzes and plans once; Claude does a brief sanity check, implements, runs targeted tests and self-reviews; Codex reviews independently, runs the relevant final gate and delivers. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
+
+## Context efficiency
+
+Principle: **load the minimum context required to safely complete the current task.** Safety, testing and Git obligations are never traded for fewer tokens; what changes is when and how much content is read.
+
+### What loads when
+
+According to the official Claude Code documentation ([How Claude remembers your project](https://code.claude.com/docs/en/memory), including [path-specific rules](https://code.claude.com/docs/en/memory#path-specific-rules)):
+
+- `~/.claude/CLAUDE.md` and the `CLAUDE.md` files in the working directory and its ancestor directories load in full at session start, and `@path` imports inside them are expanded eagerly.
+- `CLAUDE.md` files in subdirectories below the working directory load on demand, when Claude reads files in those subdirectories.
+- Rules in `.claude/rules/` and `~/.claude/rules/` without a `paths` frontmatter field load every session.
+- Rules with a `paths` field (a YAML list of glob patterns) load when Claude reads matching files.
+- An ordinary Markdown link is not an import; the linked file is read only when opened.
+
+So `claude/CLAUDE.md` and the three global rules are **always loaded**; they stay concise and canonical, and installing them does not make them lazy. Skills keep purpose, boundaries, the core workflow and stop/report requirements in `SKILL.md` and move phase-specific procedures to `references/` files reached through ordinary links:
+
+| Entrypoint | Read only when needed |
+| --- | --- |
+| `codex/skills/supervise-claude/SKILL.md` | `references/safety-and-preflight.md` (before pre-flight), `references/delegation.md` (before delegating), `references/review.md` (before each review), `references/delivery.md` (only at delivery) |
+| `claude/skills/verify-changes/SKILL.md` | `references/commit-messages.md` (when commit messages are proposed) |
+| `claude/skills/work-session/SKILL.md` | `references/commit-proposal.md` (when delivery is not authorized) |
+
+A reference is binding once its phase starts; every invariant of the former single-file supervisor skill lives either in the entrypoint or in the reference for its phase. Reference directories ride on the existing skill directory links, so the eight managed paths are unchanged.
+
+Static entrypoint sizes in lines (not a token or runtime measurement): `claude/CLAUDE.md` 42 → 39, `verify-changes` 54 → 43, `work-session` 64 → 48, `supervise-claude` 203 → 72. Fewer lines do not always mean fewer bytes: `claude/CLAUDE.md` grew from 3505 to 3645 bytes, so no byte or token saving is claimed for it. Qualitatively, a supervisor run no longer loads lock, prompt, CLI, review, commit, push and PR procedures up front, delegation prompts point to instruction files instead of pasting them, and corrective prompts carry only findings, evidence, instruction-file pointers and correction-specific constraints.
+
+### Scoped project rules
+
+Path scoping belongs in each **project's** `.claude/rules/`, since global files cannot know a project's layout. Keep each area's rules in a separate file whose frontmatter lists its paths, for example `.claude/rules/database.md`:
+
+```yaml
+---
+paths:
+  - "supabase/**"
+---
+```
+
+and likewise `paths: ["apps/web/**"]` in `web.md`, `paths: ["apps/mobile/**"]` in `mobile.md` and `paths: ["packages/contracts/**"]` in `contracts.md`. Do not `@`-import these files from the root `CLAUDE.md`: an import loads them every session and defeats the scoping.
+
+### Tests, sessions and output
+
+- [`claude/rules/testing.md`](claude/rules/testing.md) classifies impact (documentation, web, database, mobile, contracts and consumers, cross-stack) and gives each check an applicability status (APPLICABLE, NOT APPLICABLE, SKIPPED WITH JUSTIFICATION, BLOCKED) separate from its result. Clearly irrelevant checks do not reduce COMPLETE to PARTIAL; relevant uncertainty does. Mandatory checks and behavior coverage stay mandatory.
+- Start a fresh session for each meaningful task, including a fresh Codex supervision session per supervised task; durable knowledge belongs in the repository (instructions, rules, docs), not in long conversation history.
+- Allocate checks by phase as in `testing.md`: the implementer runs impacted checks each cycle, the independent reviewer runs targeted checks on intermediate reviews and the complete final gate once ready. Reuse a passed result only within the same run on unchanged inputs.
+- Inspect Git metadata (`status`, `--stat`, `--name-status`, staged and unstaged) before reading selected diffs; read every relevant safe new file, and lockfiles, generated files and snapshots only as far as needed.
+- Keep durable full logs on disk in a safe directory outside the repository, never containing secrets; the context gets command, working directory, exit status, a short summary and optionally the duration, with failure excerpts expanded as needed.
+- Within one run, CLI help/versions, discovered instructions, the repository root, the base branch and project commands may be reused; invalidate them when their source changes. Never keep a persistent cache of permissions, credentials or safety decisions.
 
 ## Commits and delivery
 
