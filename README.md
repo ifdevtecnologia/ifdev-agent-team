@@ -143,6 +143,8 @@ Codex supervisor
 
 **Mechanical remediation.** When the only remaining failures are formatting, whitespace or line endings, Codex may run an already-inspected deterministic formatter or normalization itself, on task-scope files only, then review the resulting diff independently and rerun the relevant validation. It is not a Claude invocation and does not consume one of the three cycles; after cycle 3 it is allowed only when those failures are the sole remaining ones and no semantic, security or correctness finding is open. Semantic fixes, tests, refactors, SQL/RLS/auth/security code, migrations, dependencies, architecture, behavior changes and suppressions always remain Claude's; in doubt Codex delegates or stops BLOCKED. The deterministic boundaries (eligible operations, scope, cycle accounting, delivery ownership) are encoded and tested in [`scripts/supervision_policy.py`](codex/skills/supervise-claude/scripts/supervision_policy.py); see [the phase reference](codex/skills/supervise-claude/references/mechanical-remediation.md).
 
+**Isolated clone fallback.** When pre-flight finds the original checkout's Git metadata is not writable (probed by actually creating and removing a file, never by mode bits, and without changing permissions or configuration), Codex may continue in a fresh clone instead of blocking, but only when the delivery remote is unambiguous, credential-free and matches the expected repository, the task needs no local-only state (uncommitted, stashed or unpublished work is never copied) and can start from the freshly discovered remote default branch, and the sandbox allows the network clone. The clone lives in a unique directory inside the run directory and becomes the workspace for Claude, validation, commits, the non-force task-branch push and the PR; the original stays inspection-only and is verified unchanged at the end. Anything else is BLOCKED; environmental push/PR failures are PARTIAL. See [`scripts/clone_fallback.py`](codex/skills/supervise-claude/scripts/clone_fallback.py) and [the phase reference](codex/skills/supervise-claude/references/isolated-clone-fallback.md).
+
 **Delivery ownership.** Claude never stages, commits, pushes or opens PRs. Codex commits to the task branch, pushes it and opens the PR. Only a human approves and merges; no agent merges or enables auto-merge.
 
 ### Opt-in Codex profile `ifdev-autonomous`
@@ -177,7 +179,7 @@ So `claude/CLAUDE.md` and the three global rules are **always loaded**; they sta
 
 | Entrypoint | Read only when needed |
 | --- | --- |
-| `codex/skills/supervise-claude/SKILL.md` | `references/safety-and-preflight.md` (before pre-flight), `references/delegation.md` (before delegating), `references/review.md` (before each review), `references/mechanical-remediation.md` (only before Codex changes a file), `references/delivery.md` (only at delivery) |
+| `codex/skills/supervise-claude/SKILL.md` | `references/safety-and-preflight.md` (before pre-flight), `references/delegation.md` (before delegating), `references/review.md` (before each review), `references/mechanical-remediation.md` (only before Codex changes a file), `references/isolated-clone-fallback.md` (only when Git metadata is not writable), `references/delivery.md` (only at delivery) |
 | `claude/skills/verify-changes/SKILL.md` | `references/commit-messages.md` (when commit messages are proposed) |
 | `claude/skills/work-session/SKILL.md` | `references/commit-proposal.md` (when delivery is not authorized) |
 
