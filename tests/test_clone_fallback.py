@@ -44,6 +44,7 @@ TASK_BRANCH = "feat/sample-task"
 SUPPORTED_HELP = """
 --print --output-format --permission-mode "dontAsk" bypassPermissions --permission-prompts "none"
 --restricted --tools --allowedTools --disallowedTools --strict-mcp-config
+--model <model> (e.g. 'sonnet' or 'opus')
 """
 
 

@@ -48,6 +48,7 @@ REQUIRED_FILES = (
     "codex/skills/supervise-claude/references/delivery.md",
     "codex/skills/supervise-claude/references/mechanical-remediation.md",
     "codex/skills/supervise-claude/references/isolated-clone-fallback.md",
+    "codex/skills/supervise-claude/references/model-selection.md",
     "codex/skills/supervise-claude/scripts/run_claude.py",
     "codex/skills/supervise-claude/scripts/supervision_policy.py",
     "codex/skills/supervise-claude/scripts/clone_fallback.py",

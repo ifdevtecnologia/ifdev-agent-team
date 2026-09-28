@@ -22,7 +22,11 @@ REQUIRED_HELP_MARKERS = (
     "--allowedTools",
     "--disallowedTools",
     "--strict-mcp-config",
+    "--model",
 )
+# Stable CLI aliases selected by supervision_policy.select_model; full model IDs are never assumed.
+DEFAULT_MODEL = "sonnet"
+SUPPORTED_MODELS = (DEFAULT_MODEL, "opus")
 FORBIDDEN_ALLOW_PREFIXES = (
     "git add",
     "git commit",
@@ -80,6 +84,15 @@ def require_capabilities(help_text: str) -> None:
         raise ConfigurationError("installed Claude CLI help does not describe bypassPermissions")
 
 
+def require_model(help_text: str, model: str) -> str:
+    # Refuse rather than substitute: an unsupported or unadvertised model never falls back to another.
+    if model not in SUPPORTED_MODELS:
+        raise ConfigurationError(f"unsupported model {model!r}; use one of: " + ", ".join(SUPPORTED_MODELS))
+    if not re.search(rf"(?<![\w-]){re.escape(model)}(?![\w-])", help_text):
+        raise ConfigurationError(f"installed Claude CLI does not advertise the model alias: {model}")
+    return model
+
+
 def normalize_allow_command(command: str) -> str:
     normalized = " ".join(command.split())
     if not normalized or normalized == "*" or normalized.startswith("*"):
@@ -98,17 +111,21 @@ def normalize_allow_command(command: str) -> str:
     return normalized
 
 
-def build_command(claude: str, help_text: str, allow_commands: list[str]) -> list[str]:
+def build_command(claude: str, help_text: str, allow_commands: list[str], model: str = DEFAULT_MODEL) -> list[str]:
     require_capabilities(help_text)
+    model = require_model(help_text, model)
     allowed_bash = [f"Bash({normalize_allow_command(command)})" for command in allow_commands]
     tools = list(BASE_TOOLS)
     if allowed_bash:
         tools.append("Bash")
+    # The model is the only per-cycle variation; permissions, tools and rules never depend on it.
     return [
         claude,
         "--print",
         "--output-format",
         "text",
+        "--model",
+        model,
         "--permission-mode",
         "dontAsk",
         "--permission-prompts",
@@ -132,6 +149,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log", required=True, type=Path)
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument("--claude", default="claude")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="Model alias chosen by supervision_policy.py select-model (default: %(default)s).",
+    )
     parser.add_argument(
         "--allow-command",
         action="append",
@@ -158,7 +180,7 @@ def main() -> int:
     )
     if help_result.returncode != 0:
         raise ConfigurationError("could not inspect installed Claude CLI capabilities")
-    command = build_command(args.claude, help_result.stdout, args.allow_command)
+    command = build_command(args.claude, help_result.stdout, args.allow_command, args.model)
     args.log.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with args.log.open("w", encoding="utf-8") as log:
         try:

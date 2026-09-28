@@ -38,6 +38,7 @@ SUPPORTED_HELP = """
 --tools <tools...>
 --allowedTools <tools...>
 --disallowedTools <tools...>
+--model <model> Provide an alias for the latest model (e.g. 'sonnet' or 'opus')
 """
 
 
@@ -82,6 +83,95 @@ class SupervisedClaudeCommandTests(unittest.TestCase):
         self.assertNotIn("--settings", command)
         self.assertNotIn("--setting-sources", command)
         self.assertEqual(command[0], "claude")
+
+
+def without_model(command: list) -> list:
+    index = command.index("--model")
+    return command[:index] + command[index + 2 :]
+
+
+class SupervisedClaudeModelTests(unittest.TestCase):
+    ALLOW = ["python3 -m unittest discover -s tests -v", "git diff *"]
+
+    def test_defaults_to_the_sonnet_alias(self) -> None:
+        command = run_claude.build_command("claude", SUPPORTED_HELP, self.ALLOW)
+        self.assertEqual(command[command.index("--model") + 1], "sonnet")
+        self.assertEqual(command.count("--model"), 1)
+
+    def test_passes_the_selected_alias(self) -> None:
+        for model in ("sonnet", "opus"):
+            with self.subTest(model=model):
+                command = run_claude.build_command("claude", SUPPORTED_HELP, self.ALLOW, model)
+                self.assertEqual(command[command.index("--model") + 1], model)
+
+    def test_permissions_tools_and_rules_are_identical_for_every_model(self) -> None:
+        commands = [run_claude.build_command("claude", SUPPORTED_HELP, self.ALLOW, model) for model in run_claude.SUPPORTED_MODELS]
+        baseline = without_model(commands[0])
+        for command in commands[1:]:
+            self.assertEqual(without_model(command), baseline)
+        for flag in ("--permission-mode", "--permission-prompts", "--restricted", "--strict-mcp-config", "--tools",
+                     "--allowedTools", "--disallowedTools"):
+            self.assertIn(flag, baseline)
+        self.assertEqual(baseline[baseline.index("--permission-mode") + 1], "dontAsk")
+
+    def test_unsupported_models_fail_without_substitution(self) -> None:
+        for model in ("haiku", "claude-opus-4-1-20250805", "", "Sonnet", "sonnet ", "opus[1m]", "default"):
+            with self.subTest(model=model), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command("claude", SUPPORTED_HELP, [], model)
+
+    def test_fails_closed_when_the_alias_is_not_advertised(self) -> None:
+        help_text = SUPPORTED_HELP.replace("'opus'", "'other'")
+        self.assertIn("--model", run_claude.build_command("claude", help_text, [], "sonnet"))
+        with self.assertRaises(run_claude.ConfigurationError):
+            run_claude.build_command("claude", help_text, [], "opus")
+
+    def test_supported_models_match_the_policy(self) -> None:
+        self.assertEqual(run_claude.SUPPORTED_MODELS, policy.SUPPORTED_MODELS)
+        self.assertEqual(run_claude.DEFAULT_MODEL, policy.DEFAULT_MODEL)
+
+
+FAKE_CLAUDE = """#!{python}
+import sys
+from pathlib import Path
+if sys.argv[1:] == ["--help"]:
+    print({help!r})
+else:
+    Path({record!r}).write_text("\\n".join(sys.argv[1:]), encoding="utf-8")
+"""
+
+
+class RunClaudeCliTests(unittest.TestCase):
+    def run_helper(self, tmp: Path, *extra: str) -> tuple:
+        record = tmp / "argv.txt"
+        fake = tmp / "fake-claude"
+        fake.write_text(FAKE_CLAUDE.format(python=sys.executable, help=SUPPORTED_HELP, record=str(record)), encoding="utf-8")
+        fake.chmod(0o700)
+        prompt = tmp / "prompt.md"
+        prompt.write_text("synthetic task\n", encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(SCRIPTS / "run_claude.py"), "--project", str(tmp), "--prompt", str(prompt),
+             "--log", str(tmp / "logs/claude.log"), "--claude", str(fake), "--timeout-seconds", "30", *extra],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+        argv = record.read_text(encoding="utf-8").split("\n") if record.exists() else None
+        return result, argv
+
+    def test_passes_the_default_and_selected_model(self) -> None:
+        for extra, expected in (((), "sonnet"), (("--model", "opus"), "opus")):
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
+                result, argv = self.run_helper(Path(tmp), *extra)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(argv[argv.index("--model") + 1], expected)
+
+    def test_unsupported_model_is_refused_before_invocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, argv = self.run_helper(Path(tmp), "--model", "haiku")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unsupported model", result.stderr)
+        self.assertIsNone(argv)
 
 
 TASK_PATHS = frozenset({"src/app.py", "tests/test_app.py"})
@@ -206,6 +296,342 @@ class MechanicalRemediationTests(unittest.TestCase):
         self.assertFalse(policy.is_normalization_only("a\nb\n", "a\n\nb\n"))
 
 
+JUSTIFICATION = "Recorded reason for this cycle's model."
+
+
+def model_request(**overrides):
+    fields = dict(justification=JUSTIFICATION)
+    fields.update(overrides)
+    return policy.ModelRequest(**fields)
+
+
+def final_cycle_state(unresolved=("correctness",)):
+    return reviewed(2, unresolved)
+
+
+class ModelSelectionTests(unittest.TestCase):
+    def test_initial_implementation_defaults_to_sonnet(self) -> None:
+        for request in (policy.ModelRequest(), model_request()):
+            with self.subTest(request=request):
+                self.assertEqual(policy.select_model(policy.RunState(), request).model, "sonnet")
+
+    def test_ordinary_corrections_use_sonnet(self) -> None:
+        state = reviewed(1, {"correctness", "semantic"})
+        decision = policy.select_model(state, model_request(reasoning_difficulty=True))
+        self.assertEqual(decision.model, "sonnet")
+        self.assertIn("ordinary correction; escalation is reserved for the final allowed cycle", decision.reasons)
+        # A documented planning assessment applies to the initial cycle only.
+        self.assertEqual(
+            policy.select_model(state, model_request(planning_assessment=frozenset({"high-risk"}))).model, "sonnet"
+        )
+
+    def test_documented_high_complexity_or_risk_planning_may_start_with_opus(self) -> None:
+        for assessment in ({"high-complexity"}, {"high-risk"}, {"high-complexity", "high-risk"}):
+            with self.subTest(assessment=assessment):
+                decision = policy.select_model(policy.RunState(), model_request(planning_assessment=frozenset(assessment)))
+                self.assertEqual(decision, policy.ModelDecision("opus", (f"escalation: {JUSTIFICATION}",)))
+
+    def test_task_size_or_undocumented_assessment_never_escalates(self) -> None:
+        for assessment in ({"large-task"}, {"task-size"}, {"many-files"}, set()):
+            with self.subTest(assessment=assessment):
+                request = model_request(planning_assessment=frozenset(assessment))
+                self.assertEqual(policy.select_model(policy.RunState(), request).model, "sonnet")
+
+    def test_escalation_requires_a_recorded_justification(self) -> None:
+        for justification in ("", "   "):
+            with self.subTest(justification=justification):
+                initial = policy.select_model(
+                    policy.RunState(),
+                    model_request(planning_assessment=frozenset({"high-risk"}), justification=justification),
+                )
+                final = policy.select_model(
+                    final_cycle_state(), model_request(reasoning_difficulty=True, justification=justification)
+                )
+                for decision in (initial, final):
+                    self.assertEqual(decision.model, "sonnet")
+                    self.assertIn("no recorded escalation justification", decision.reasons)
+
+    def test_final_cycle_unresolved_reasoning_issue_may_use_opus(self) -> None:
+        for unresolved in ({"correctness"}, {"semantic"}, {"semantic", "formatting"}):
+            with self.subTest(unresolved=unresolved):
+                decision = policy.select_model(final_cycle_state(unresolved), model_request(reasoning_difficulty=True))
+                self.assertEqual(decision.model, "opus")
+                self.assertIn(JUSTIFICATION, decision.reasons[0])
+
+    def test_final_cycle_without_a_reasoning_semantic_finding_stays_sonnet(self) -> None:
+        cases = (
+            ({"formatting"}, True, "no unresolved semantic or correctness finding"),
+            ({"test", "security"}, True, "no unresolved semantic or correctness finding"),
+            ({"uncertain"}, True, "no unresolved semantic or correctness finding"),
+            ({"correctness"}, False, "finding is not attributed to implementation reasoning difficulty"),
+        )
+        for unresolved, difficulty, reason in cases:
+            with self.subTest(unresolved=unresolved, difficulty=difficulty):
+                decision = policy.select_model(final_cycle_state(unresolved), model_request(reasoning_difficulty=difficulty))
+                self.assertEqual(decision.model, "sonnet")
+                self.assertIn(reason, decision.reasons)
+
+    def test_environment_failures_never_escalate(self) -> None:
+        for failure in sorted(policy.ENVIRONMENT_FAILURES):
+            for unresolved in ({failure}, {failure, "correctness"}):
+                with self.subTest(unresolved=unresolved):
+                    decision = policy.select_model(final_cycle_state(unresolved), model_request(reasoning_difficulty=True))
+                    self.assertEqual(decision.model, "sonnet")
+                    self.assertIn(f"environment failures are never escalated: {failure}", decision.reasons)
+        for expected in ("timeout", "authentication", "quota", "network", "transport", "permission-denied",
+                         "missing-dependency", "missing-sdk", "environment"):
+            self.assertIn(expected, policy.ENVIRONMENT_FAILURES)
+
+    def test_task_level_overrides_are_respected(self) -> None:
+        escalating = model_request(reasoning_difficulty=True)
+        for state in (policy.RunState(), reviewed(1, {"correctness"}), final_cycle_state()):
+            with self.subTest(cycle=state.cycles_started + 1):
+                for override in ("sonnet", "no-escalation"):
+                    request = model_request(override=override, reasoning_difficulty=True,
+                                            planning_assessment=frozenset({"high-risk"}))
+                    self.assertEqual(policy.select_model(state, request).model, "sonnet")
+                self.assertEqual(policy.select_model(state, policy.ModelRequest(override="opus")).model, "opus")
+        self.assertEqual(policy.select_model(final_cycle_state(), escalating).model, "opus")
+        self.assertEqual(
+            policy.select_model(final_cycle_state(), model_request(override="no-escalation")).reasons,
+            ("task-level no-escalation override",),
+        )
+
+    def test_unsupported_override_fails_without_substitution(self) -> None:
+        for override in ("haiku", "claude-opus-4-1-20250805", "Opus", "best", "default"):
+            with self.subTest(override=override), self.assertRaises(policy.PolicyViolation):
+                policy.select_model(policy.RunState(), policy.ModelRequest(override=override))
+
+    def test_model_selection_never_changes_the_cycle_budget(self) -> None:
+        state = final_cycle_state()
+        policy.select_model(state, model_request(reasoning_difficulty=True))
+        self.assertEqual(state.cycles_started, 2)
+        self.assertEqual(policy.start_claude_cycle(state).cycles_started, 3)
+        exhausted = reviewed(3, {"correctness"})
+        for request in (model_request(reasoning_difficulty=True), policy.ModelRequest(override="opus")):
+            with self.subTest(request=request), self.assertRaises(policy.PolicyViolation):
+                policy.select_model(exhausted, request)
+        self.assertEqual(policy.MAX_CLAUDE_CYCLES, 3)
+
+
+class CycleModelHistoryTests(unittest.TestCase):
+    def run_cycle(self, state, request):
+        decision = policy.select_model(state, request)
+        started = policy.start_claude_cycle(state)
+        return policy.record_cycle_model(started, decision), decision
+
+    def test_sonnet_only_run_reports_no_escalation_required(self) -> None:
+        state = policy.RunState(task_paths=TASK_PATHS)
+        state, first = self.run_cycle(state, model_request())
+        state = policy.record_review(state, {"correctness"})
+        state, second = self.run_cycle(state, model_request())
+        state = policy.record_review(state, {"correctness"})
+        state, third = self.run_cycle(state, model_request(reasoning_difficulty=False))
+        report = policy.render_cycles_report(state)
+        self.assertEqual([first.model, second.model, third.model], ["sonnet", "sonnet", "sonnet"])
+        self.assertEqual(len(state.cycle_records), 3)
+        self.assertEqual([record.cycle for record in state.cycle_records], [1, 2, 3])
+        self.assertTrue(report.endswith("No escalation required."))
+        self.assertNotIn("opus", report)
+
+    def test_escalated_final_cycle_reports_its_opus_reason(self) -> None:
+        state = policy.RunState(task_paths=TASK_PATHS)
+        state, _ = self.run_cycle(state, model_request())
+        state = policy.record_review(state, {"correctness"})
+        state, _ = self.run_cycle(state, model_request())
+        state = policy.record_review(state, {"correctness"})
+        state, decision = self.run_cycle(state, model_request(reasoning_difficulty=True))
+        self.assertEqual(decision.model, "opus")
+        report = policy.render_cycles_report(state)
+        self.assertIn(f"- Cycle 3: opus (escalation: {JUSTIFICATION})", report)
+        self.assertIn(f"Escalation occurred in cycle 3: escalation: {JUSTIFICATION}", report)
+        self.assertNotIn("No escalation required.", report)
+
+    def test_cannot_record_before_a_cycle_is_started(self) -> None:
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(policy.RunState(), policy.ModelDecision("sonnet", ("x",)))
+
+    def test_cannot_record_the_same_cycle_twice(self) -> None:
+        state = policy.start_claude_cycle(policy.RunState())
+        decision = policy.ModelDecision("sonnet", ("x",))
+        recorded = policy.record_cycle_model(state, decision)
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(recorded, decision)
+
+    def test_cannot_record_out_of_order(self) -> None:
+        state = policy.start_claude_cycle(policy.RunState())
+        state = policy.start_claude_cycle(state)  # cycles_started == 2, nothing recorded yet
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(state, policy.ModelDecision("sonnet", ("x",)))
+
+    def test_rejects_an_unsupported_model_in_the_decision(self) -> None:
+        state = policy.start_claude_cycle(policy.RunState())
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(state, policy.ModelDecision("haiku", ("x",)))
+
+    def test_rejects_a_forged_prior_record_even_with_a_matching_length(self) -> None:
+        forged = policy.CycleRecord(cycle=99, model="haiku", reason="fabricated")
+        state = policy.RunState(cycles_started=2, cycle_records=(forged,))
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(state, policy.ModelDecision("sonnet", ("x",)))
+
+    def test_rejects_a_decision_with_no_recorded_reason(self) -> None:
+        state = policy.start_claude_cycle(policy.RunState())
+        with self.assertRaises(policy.PolicyViolation):
+            policy.record_cycle_model(state, policy.ModelDecision("sonnet", ()))
+
+    def test_render_cycles_rejects_a_forged_history(self) -> None:
+        forged = policy.CycleRecord(cycle=99, model="haiku", reason="fabricated")
+        state = policy.RunState(cycles_started=1, cycle_records=(forged,))
+        with self.assertRaises(policy.PolicyViolation):
+            policy.render_cycles_report(state)
+
+    def test_render_cycles_requires_exact_agreement_with_cycles_started(self) -> None:
+        state = policy.RunState(task_paths=TASK_PATHS)
+        state, _ = self.run_cycle(state, model_request())
+        mismatched = policy.replace(state, cycles_started=state.cycles_started + 1)
+        with self.assertRaises(policy.PolicyViolation):
+            policy.render_cycles_report(mismatched)
+
+    def test_does_not_change_cycle_limits_or_transitions(self) -> None:
+        state = policy.RunState(task_paths=TASK_PATHS)
+        state, _ = self.run_cycle(state, model_request())
+        self.assertEqual(state.cycles_started, 1)
+        self.assertEqual(policy.next_step(state), "REVIEW")
+        exhausted = reviewed(3, {"correctness"})
+        with self.assertRaises(policy.PolicyViolation):
+            policy.start_claude_cycle(exhausted)
+
+
+class SupervisionPolicyRecordCycleCliTests(unittest.TestCase):
+    def run_cli(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "supervision_policy.py"), *args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+
+    def write(self, directory: Path, name: str, content: str) -> Path:
+        path = directory / name
+        path.write_bytes(content.encode("utf-8"))
+        return path
+
+    def test_record_cycle_and_render_cycles_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            request = {
+                "state": {"cycles_started": 1},
+                "decision": {"model": "sonnet", "reasons": ["task-level model-only override: sonnet"]},
+            }
+            recorded = self.run_cli(
+                "record-cycle", "--request", str(self.write(Path(tmp), "req.json", json.dumps(request)))
+            )
+            self.assertEqual(recorded.returncode, 0, recorded.stderr)
+            cycle_records = json.loads(recorded.stdout)["cycle_records"]
+            self.assertEqual(cycle_records, [{"cycle": 1, "model": "sonnet", "reason": "task-level model-only override: sonnet"}])
+
+            render_request = {"state": {"cycles_started": 1, "cycle_records": cycle_records}}
+            rendered = self.run_cli(
+                "render-cycles", "--request", str(self.write(Path(tmp), "render.json", json.dumps(render_request)))
+            )
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        self.assertIn("No escalation required.", rendered.stdout)
+
+    def test_record_cycle_out_of_order_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            request = {"state": {"cycles_started": 2}, "decision": {"model": "opus", "reasons": ["escalation: x"]}}
+            result = self.run_cli("record-cycle", "--request", str(self.write(Path(tmp), "req.json", json.dumps(request))))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must follow", result.stderr)
+
+    def test_record_cycle_rejects_a_forged_prior_record(self) -> None:
+        # Regression: cycles_started=2 with one prior record used to pass the old
+        # length-only check even though that record was forged (wrong cycle number,
+        # unsupported model). It must now be rejected before cycle 2 is appended.
+        with tempfile.TemporaryDirectory() as tmp:
+            request = {
+                "state": {
+                    "cycles_started": 2,
+                    "cycle_records": [{"cycle": 99, "model": "haiku", "reason": "fabricated"}],
+                },
+                "decision": {"model": "sonnet", "reasons": ["task-level model-only override: sonnet"]},
+            }
+            result = self.run_cli("record-cycle", "--request", str(self.write(Path(tmp), "req.json", json.dumps(request))))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cycle history is not sequential", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_record_cycle_requires_a_recorded_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            request = {"state": {"cycles_started": 1}, "decision": {"model": "sonnet", "reasons": []}}
+            result = self.run_cli("record-cycle", "--request", str(self.write(Path(tmp), "req.json", json.dumps(request))))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("no recorded reason", result.stderr)
+
+    def test_render_cycles_rejects_a_forged_history(self) -> None:
+        # Regression: render-cycles used to print a forged prior record ({"cycle": 99,
+        # "model": "haiku", "reason": "fabricated"}) followed by "No escalation
+        # required." without validating it at all.
+        with tempfile.TemporaryDirectory() as tmp:
+            request = {
+                "state": {
+                    "cycles_started": 1,
+                    "cycle_records": [{"cycle": 99, "model": "haiku", "reason": "fabricated"}],
+                }
+            }
+            result = self.run_cli("render-cycles", "--request", str(self.write(Path(tmp), "req.json", json.dumps(request))))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("cycle history is not sequential", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_render_cycles_rejects_malformed_histories(self) -> None:
+        good = [{"cycle": 1, "model": "sonnet", "reason": "task-level model-only override: sonnet"}]
+        cases = {
+            "duplicate cycle": (
+                good + [{"cycle": 1, "model": "sonnet", "reason": "x"}],
+                1,
+                "cycle history is not sequential",
+            ),
+            "gap": (
+                [{"cycle": 1, "model": "sonnet", "reason": "x"}, {"cycle": 3, "model": "sonnet", "reason": "x"}],
+                1,
+                "cycle history is not sequential",
+            ),
+            "unsupported model": (
+                [{"cycle": 1, "model": "haiku", "reason": "x"}],
+                1,
+                "unsupported model in cycle 1 history",
+            ),
+            "missing reason": (
+                [{"cycle": 1, "model": "sonnet", "reason": ""}],
+                1,
+                "cycle 1 is missing its recorded model reason",
+            ),
+            "too many cycles": (
+                [
+                    {"cycle": 1, "model": "sonnet", "reason": "x"},
+                    {"cycle": 2, "model": "sonnet", "reason": "x"},
+                    {"cycle": 3, "model": "sonnet", "reason": "x"},
+                    {"cycle": 4, "model": "sonnet", "reason": "x"},
+                ],
+                4,
+                "cycle history exceeds the maximum",
+            ),
+            "cycles_started mismatch": (good, 2, "does not match the recorded history"),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, (records, cycles_started, expected) in cases.items():
+                with self.subTest(name=name):
+                    request = {"state": {"cycles_started": cycles_started, "cycle_records": records}}
+                    result = self.run_cli(
+                        "render-cycles", "--request", str(self.write(Path(tmp), f"{name}.json", json.dumps(request)))
+                    )
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn(expected, result.stderr)
+                    self.assertEqual(result.stdout, "")
+
+
 class DeliveryOwnershipTests(unittest.TestCase):
     def test_codex_owns_task_branch_delivery(self) -> None:
         for action in ("stage", "commit", "push-task-branch", "create-pr"):
@@ -270,6 +696,29 @@ class SupervisionPolicyCliTests(unittest.TestCase):
         self.assertIn("forbidden change: assertion", json.loads(denied.stdout)["reasons"])
         self.assertEqual(malformed.returncode, 2)
 
+    def test_select_model_reports_the_model_and_reasons(self) -> None:
+        request = {
+            "state": {"cycles_started": 2, "unresolved": ["correctness"], "validated": True},
+            "model": {"reasoning_difficulty": True, "justification": JUSTIFICATION},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            escalated = self.run_cli("select-model", "--request", str(self.write(Path(tmp), "final.json", json.dumps(request))))
+            request["state"]["unresolved"] = ["correctness", "timeout"]
+            environment = self.run_cli("select-model", "--request", str(self.write(Path(tmp), "env.json", json.dumps(request))))
+            request["model"] = {"override": "haiku"}
+            unsupported = self.run_cli("select-model", "--request", str(self.write(Path(tmp), "bad.json", json.dumps(request))))
+            request["model"] = {}
+            request["state"]["cycles_started"] = 3
+            exhausted = self.run_cli("select-model", "--request", str(self.write(Path(tmp), "four.json", json.dumps(request))))
+        self.assertEqual(escalated.returncode, 0, escalated.stderr)
+        self.assertEqual(json.loads(escalated.stdout), {"model": "opus", "reasons": [f"escalation: {JUSTIFICATION}"]})
+        self.assertEqual(environment.returncode, 0, environment.stderr)
+        self.assertEqual(json.loads(environment.stdout)["model"], "sonnet")
+        self.assertEqual(unsupported.returncode, 2)
+        self.assertIn("unsupported task-level model override: haiku", unsupported.stderr)
+        self.assertEqual(unsupported.stdout, "")
+        self.assertEqual(exhausted.returncode, 2)
+
     def test_check_normalization_compares_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             before = self.write(Path(tmp), "before", "a  \r\n")
@@ -284,6 +733,12 @@ class SkillPhaseReferenceTests(unittest.TestCase):
         skill = (ROOT / "codex/skills/supervise-claude/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("(references/mechanical-remediation.md)", skill)
         self.assertIn("scripts/supervision_policy.py", skill)
+
+    def test_skill_links_the_model_selection_phase(self) -> None:
+        skill = (ROOT / "codex/skills/supervise-claude/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("(references/model-selection.md)", skill)
+        reference = (ROOT / "codex/skills/supervise-claude/references/model-selection.md").read_text(encoding="utf-8")
+        self.assertIn("select-model", reference)
 
 
 if __name__ == "__main__":
