@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -27,6 +29,7 @@ def load(name: str):
 
 run_claude = load("run_claude")
 policy = load("supervision_policy")
+notify_final_status = load("notify_final_status")
 
 SUPPORTED_HELP = """
 --print
@@ -131,20 +134,26 @@ class SupervisedClaudeModelTests(unittest.TestCase):
 
 
 FAKE_CLAUDE = """#!{python}
+import os
 import sys
 from pathlib import Path
 if sys.argv[1:] == ["--help"]:
     print({help!r})
 else:
     Path({record!r}).write_text("\\n".join(sys.argv[1:]), encoding="utf-8")
+    Path({env_record!r}).write_text(os.environ.get("IFDEV_SUPERVISED_CLAUDE", ""), encoding="utf-8")
 """
 
 
 class RunClaudeCliTests(unittest.TestCase):
     def run_helper(self, tmp: Path, *extra: str) -> tuple:
         record = tmp / "argv.txt"
+        env_record = tmp / "env-supervised.txt"
         fake = tmp / "fake-claude"
-        fake.write_text(FAKE_CLAUDE.format(python=sys.executable, help=SUPPORTED_HELP, record=str(record)), encoding="utf-8")
+        fake.write_text(
+            FAKE_CLAUDE.format(python=sys.executable, help=SUPPORTED_HELP, record=str(record), env_record=str(env_record)),
+            encoding="utf-8",
+        )
         fake.chmod(0o700)
         prompt = tmp / "prompt.md"
         prompt.write_text("synthetic task\n", encoding="utf-8")
@@ -157,21 +166,38 @@ class RunClaudeCliTests(unittest.TestCase):
             timeout=60,
         )
         argv = record.read_text(encoding="utf-8").split("\n") if record.exists() else None
-        return result, argv
+        supervised_marker = env_record.read_text(encoding="utf-8") if env_record.exists() else None
+        return result, argv, supervised_marker
 
     def test_passes_the_default_and_selected_model(self) -> None:
         for extra, expected in (((), "sonnet"), (("--model", "opus"), "opus")):
             with self.subTest(expected=expected), tempfile.TemporaryDirectory() as tmp:
-                result, argv = self.run_helper(Path(tmp), *extra)
+                result, argv, _ = self.run_helper(Path(tmp), *extra)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(argv[argv.index("--model") + 1], expected)
 
     def test_unsupported_model_is_refused_before_invocation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            result, argv = self.run_helper(Path(tmp), "--model", "haiku")
+            result, argv, _ = self.run_helper(Path(tmp), "--model", "haiku")
         self.assertEqual(result.returncode, 2)
         self.assertIn("unsupported model", result.stderr)
         self.assertIsNone(argv)
+
+    def test_marks_the_invocation_as_supervised(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, _, env_record = self.run_helper(Path(tmp))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(env_record, "1")
+
+    def test_supervised_marker_does_not_leak_into_this_process(self) -> None:
+        # run_claude.py runs as a separate subprocess of this test, so the marker it
+        # passes via env= to its own child can never mutate this process's os.environ;
+        # comparing snapshots (not asserting absence) keeps this deterministic even
+        # when the ambient environment already carries the variable.
+        before = dict(os.environ)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_helper(Path(tmp))
+        self.assertEqual(dict(os.environ), before)
 
 
 TASK_PATHS = frozenset({"src/app.py", "tests/test_app.py"})
@@ -739,6 +765,138 @@ class SkillPhaseReferenceTests(unittest.TestCase):
         self.assertIn("(references/model-selection.md)", skill)
         reference = (ROOT / "codex/skills/supervise-claude/references/model-selection.md").read_text(encoding="utf-8")
         self.assertIn("select-model", reference)
+
+    def test_skill_requires_the_single_final_status_notification_not_native_turn_complete(self) -> None:
+        skill = (ROOT / "codex/skills/supervise-claude/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("scripts/notify_final_status.py", skill)
+        self.assertIn("exactly once", skill)
+        self.assertIn("agent-turn-complete", skill)
+
+
+class NotifyFinalStatusTests(unittest.TestCase):
+    def fake_notifier(self, tmp: Path, log: Path) -> Path:
+        script = tmp / "fake-agent-notify.sh"
+        script.write_text(
+            "#!/bin/sh\n"
+            'printf \'%s\\n\' "$1" "$2" "$3" >> "' + str(log) + '"\n',
+            encoding="utf-8",
+        )
+        script.chmod(0o700)
+        return script
+
+    def test_maps_each_status_to_the_documented_event_and_default_message(self) -> None:
+        expected = {
+            "COMPLETE": ("codex", "complete", "Task complete — PR ready"),
+            "PARTIAL": ("codex", "attention", "Task needs attention"),
+            "BLOCKED": ("codex", "blocked", "Task blocked"),
+        }
+        for status, lines in expected.items():
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as tmp:
+                run_dir = Path(tmp) / "run"
+                log = Path(tmp) / "log.txt"
+                notifier = self.fake_notifier(Path(tmp), log)
+                sent = notify_final_status.send_final_status(run_dir, status, notifier=notifier)
+                self.assertTrue(sent)
+                self.assertEqual(log.read_text(encoding="utf-8").splitlines(), list(lines))
+
+    def test_concurrent_calls_for_the_same_run_directory_produce_exactly_one_notifier_call(self) -> None:
+        # The marker claim uses an atomic exclusive-create at the OS level, so this is
+        # deterministic regardless of thread scheduling: exactly one of many concurrent
+        # callers ever wins, never zero and never more than one.
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            log = Path(tmp) / "log.txt"
+            notifier = self.fake_notifier(Path(tmp), log)
+            results: list[bool] = []
+            results_lock = threading.Lock()
+            start = threading.Barrier(20)
+
+            def attempt() -> None:
+                start.wait()
+                sent = notify_final_status.send_final_status(run_dir, "COMPLETE", notifier=notifier)
+                with results_lock:
+                    results.append(sent)
+
+            threads = [threading.Thread(target=attempt) for _ in range(20)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(results.count(True), 1)
+            self.assertEqual(results.count(False), 19)
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["codex", "complete", "Task complete — PR ready"])
+
+    def test_second_call_for_the_same_run_directory_never_sends_again(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            log = Path(tmp) / "log.txt"
+            notifier = self.fake_notifier(Path(tmp), log)
+
+            first = notify_final_status.send_final_status(run_dir, "COMPLETE", notifier=notifier)
+            second = notify_final_status.send_final_status(run_dir, "BLOCKED", notifier=notifier)
+
+            self.assertTrue(first)
+            self.assertFalse(second)
+            # Only the first call's single line trio is present; the second never ran.
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["codex", "complete", "Task complete — PR ready"])
+
+    def test_a_custom_message_overrides_the_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            log = Path(tmp) / "log.txt"
+            notifier = self.fake_notifier(Path(tmp), log)
+
+            notify_final_status.send_final_status(run_dir, "PARTIAL", message="custom text", notifier=notifier)
+
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["codex", "attention", "custom text"])
+
+    def test_missing_notifier_is_not_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            missing = Path(tmp) / "does-not-exist.sh"
+
+            sent = notify_final_status.send_final_status(run_dir, "BLOCKED", notifier=missing)
+
+            self.assertTrue(sent)  # counted as this run's one attempt, even though nothing ran
+            self.assertTrue((run_dir / notify_final_status.MARKER_NAME).exists())
+
+    def test_a_failing_notifier_is_not_fatal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            script = Path(tmp) / "failing.sh"
+            script.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            script.chmod(0o700)
+
+            sent = notify_final_status.send_final_status(run_dir, "BLOCKED", notifier=script)
+
+            self.assertTrue(sent)
+
+    def test_unsupported_status_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                notify_final_status.send_final_status(Path(tmp) / "run", "UNKNOWN")
+
+    def test_default_notifier_resolves_to_the_bundled_shared_script(self) -> None:
+        self.assertEqual(notify_final_status.default_notifier(), ROOT / "scripts" / "agent-notify.sh")
+
+    def test_cli_is_idempotent_across_repeated_finalization_attempts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            log = Path(tmp) / "log.txt"
+            notifier = self.fake_notifier(Path(tmp), log)
+            argv = [
+                "--run-dir", str(run_dir),
+                "--status", "COMPLETE",
+                "--notifier", str(notifier),
+            ]
+
+            first = notify_final_status.main(argv)
+            second = notify_final_status.main(argv)
+
+            self.assertEqual(first, 0)
+            self.assertEqual(second, 0)
+            self.assertEqual(log.read_text(encoding="utf-8").splitlines(), ["codex", "complete", "Task complete — PR ready"])
 
 
 if __name__ == "__main__":

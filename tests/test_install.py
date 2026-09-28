@@ -6,6 +6,7 @@ the real scripts in subprocesses with a temporary HOME. The developer's HOME is 
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -25,11 +26,20 @@ MANAGED = {
     ".claude/skills/verify-changes": "claude/skills/verify-changes",
     ".codex/skills/supervise-claude": "codex/skills/supervise-claude",
     ".codex/ifdev-autonomous.config.toml": "codex/profiles/ifdev-autonomous.config.toml",
+    ".claude/hooks/agent-notify.sh": "scripts/agent-notify.sh",
+    ".claude/hooks/agent-notify-hook.sh": "claude/hooks/agent-notify-hook.sh",
+    ".codex/notify/agent-notify-codex.sh": "codex/notify/agent-notify-codex.sh",
 }
 PROFILE = ".codex/ifdev-autonomous.config.toml"
+MANAGED_COUNT = len(MANAGED)
+
+# Not a managed symlink: install.sh/uninstall.sh merge the toolkit's notification
+# hooks into this file in place instead (see scripts/lib/claude_hooks.py), so it is
+# asserted separately from the untouched SIBLINGS below.
+SETTINGS_JSON = ".claude/settings.json"
+SETTINGS_JSON_CONTENT = '{"synthetic": true}\n'
 
 SIBLINGS = {
-    ".claude/settings.json": '{"synthetic": true}\n',
     ".claude/rules/project-extra.md": "# extra rule\n",
     ".claude/skills/other-skill/SKILL.md": "---\nname: other-skill\n---\n",
     ".claude/agents/other-agent.md": "# other agent\n",
@@ -124,6 +134,7 @@ class InstallTests(InstallerTestCase):
     def test_dry_run_changes_nothing(self) -> None:
         self.write_siblings()
         self.write_home(".claude/CLAUDE.md", "user instructions\n")
+        self.write_home(SETTINGS_JSON, SETTINGS_JSON_CONTENT)
         before = snapshot(self.home)
 
         result = self.run_script("install.sh", "--dry-run")
@@ -131,6 +142,9 @@ class InstallTests(InstallerTestCase):
         self.assert_ok(result)
         self.assertIn("would back up ~/.claude/CLAUDE.md", result.stdout)
         self.assertIn("would link: ~/.codex/skills/supervise-claude", result.stdout)
+        self.assertIn("would add: ~/.claude/settings.json Stop hook", result.stdout)
+        self.assertIn("would add: ~/.claude/settings.json StopFailure hook", result.stdout)
+        self.assertIn("would add: ~/.claude/settings.json Notification hook", result.stdout)
         self.assertEqual(snapshot(self.home), before)
 
     def test_fresh_install_links_all_managed_items(self) -> None:
@@ -139,9 +153,14 @@ class InstallTests(InstallerTestCase):
         self.assert_all_links()
         self.assertEqual(self.backup_dirs(), [])
         self.assertFalse((self.home / ".ifdev-ai-tools" / "lock").exists())
-        self.assertIn("9 linked, 0 backed up, 0 unchanged", result.stdout)
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged", result.stdout)
         # The link resolves to real content, not only to the right path string.
         self.assertTrue((self.home / ".claude/skills/verify-changes/SKILL.md").is_file())
+        # Notification hooks are merged into a freshly created settings.json, not linked.
+        self.assertFalse((self.home / SETTINGS_JSON).is_symlink())
+        settings = json.loads((self.home / SETTINGS_JSON).read_text())
+        for event in ("Stop", "StopFailure", "Notification"):
+            self.assertIn(event, settings["hooks"])
 
     def test_skill_references_are_reachable_through_installed_links(self) -> None:
         self.install()
@@ -175,7 +194,10 @@ class InstallTests(InstallerTestCase):
         self.assertEqual(base_config.read_bytes(), before)
         self.assertIn(b'approval_policy = "on-request"', base_config.read_bytes())
         self.assertIn(b'network_access = false', base_config.read_bytes())
-        self.assertEqual(sorted(p.name for p in (self.home / ".codex").iterdir()), ["config.toml", "ifdev-autonomous.config.toml", "skills"])
+        self.assertEqual(
+            sorted(p.name for p in (self.home / ".codex").iterdir()),
+            ["config.toml", "ifdev-autonomous.config.toml", "notify", "skills"],
+        )
 
         self.assert_ok(self.run_script("uninstall.sh"))
         self.assertFalse(profile.exists() or profile.is_symlink())
@@ -196,6 +218,7 @@ class InstallTests(InstallerTestCase):
         self.write_siblings()
         self.write_home(".claude/CLAUDE.md", "user instructions\n")
         self.write_home(".claude/skills/work-session/SKILL.md", "custom skill\n")
+        self.write_home(SETTINGS_JSON, SETTINGS_JSON_CONTENT)
         foreign_target = self.outside / "foreign.md"
         foreign_target.write_text("foreign\n")
         (self.home / ".claude/rules").mkdir(parents=True, exist_ok=True)
@@ -209,9 +232,18 @@ class InstallTests(InstallerTestCase):
         self.assert_all_links()
         self.assert_siblings_intact()
         self.assertIn("4 backed up", result.stdout)
+        # Settings.json is merged in place (not backed up alongside the managed items);
+        # scripts/lib/claude_hooks.py backs it up separately into its own "-hooks" dir.
         backups = self.backup_dirs()
-        self.assertEqual(len(backups), 1)
-        backup = backups[0]
+        self.assertEqual(len(backups), 2)
+        hooks_backup = next(b for b in backups if b.name.endswith("-hooks"))
+        settings = json.loads((hooks_backup / ".claude/settings.json").read_text())
+        self.assertEqual(settings, {"synthetic": True})
+        installed_settings = json.loads((self.home / SETTINGS_JSON).read_text())
+        self.assertEqual(installed_settings["synthetic"], True)
+        for event in ("Stop", "StopFailure", "Notification"):
+            self.assertIn(event, installed_settings["hooks"])
+        backup = next(b for b in backups if not b.name.endswith("-hooks"))
         self.assertRegex(backup.name, r"^\d{8}-\d{6}-")
         self.assertEqual((backup / ".claude/CLAUDE.md").read_text(), "user instructions\n")
         self.assertEqual((backup / ".claude/skills/work-session/SKILL.md").read_text(), "custom skill\n")
@@ -231,14 +263,17 @@ class InstallTests(InstallerTestCase):
 
     def test_second_install_is_idempotent(self) -> None:
         self.write_siblings()
+        self.write_home(SETTINGS_JSON, SETTINGS_JSON_CONTENT)
         self.install()
         before = snapshot(self.home)
+        backups_before = self.backup_dirs()
 
         result = self.install()
 
         self.assertEqual(snapshot(self.home), before)
-        self.assertEqual(self.backup_dirs(), [])
-        self.assertIn("0 linked, 0 backed up, 9 unchanged", result.stdout)
+        self.assertEqual(self.backup_dirs(), backups_before)
+        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
+        self.assertIn("unchanged: ~/.claude/settings.json notification hooks already configured", result.stdout)
 
     def test_symlinked_parent_directory_is_rejected_without_changes(self) -> None:
         (self.home / ".claude").mkdir()
@@ -289,12 +324,55 @@ class InstallTests(InstallerTestCase):
             self.assertIn("unknown argument", result.stderr)
         self.assertEqual(snapshot(self.home), {})
 
+    def test_invalid_settings_json_aborts_before_any_symlink_is_created(self) -> None:
+        self.write_home(SETTINGS_JSON, "{ not json")
+
+        result = self.run_script("install.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not valid JSON", result.stderr)
+        # The hooks preflight runs before apply_install: no managed item was linked.
+        for destination in MANAGED:
+            self.assertFalse((self.home / destination).exists(), destination)
+        self.assertEqual((self.home / SETTINGS_JSON).read_text(), "{ not json")
+
+    def test_symlinked_settings_json_aborts_before_any_symlink_is_created(self) -> None:
+        real = self.outside / "settings.json"
+        real.write_text("{}", encoding="utf-8")
+        (self.home / ".claude").mkdir()
+        os.symlink(real, self.home / SETTINGS_JSON)
+
+        result = self.run_script("install.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing symlinked path", result.stderr)
+        for destination in MANAGED:
+            self.assertFalse((self.home / destination).exists(), destination)
+
+    def test_malformed_managed_hooks_shape_aborts_before_any_symlink_is_created(self) -> None:
+        self.write_home(SETTINGS_JSON, json.dumps({"hooks": {"Stop": "not-a-list"}}))
+
+        result = self.run_script("install.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('"hooks.Stop"', result.stderr)
+        for destination in MANAGED:
+            self.assertFalse((self.home / destination).exists(), destination)
+
 
 class UninstallTests(InstallerTestCase):
     def test_uninstall_removes_only_own_links(self) -> None:
         self.write_siblings()
         self.write_home(".claude/CLAUDE.md", "user instructions\n")
+        self.write_home(SETTINGS_JSON, SETTINGS_JSON_CONTENT)
         self.install()
+        # Simulates a manually added, unrelated hook on the same event this toolkit
+        # manages: surgical uninstall must remove only its own entry.
+        settings_path = self.home / SETTINGS_JSON
+        settings = json.loads(settings_path.read_text())
+        settings["hooks"]["PreToolUse"] = [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo guard"}]}]
+        settings["hooks"]["Stop"].append({"hooks": [{"type": "command", "command": "echo mine"}]})
+        settings_path.write_text(json.dumps(settings))
         foreign_target = self.outside / "foreign.md"
         foreign_target.write_text("foreign\n")
         foreign_link = self.home / ".claude/rules/git-workflow.md"
@@ -303,7 +381,8 @@ class UninstallTests(InstallerTestCase):
         real_file = self.home / ".claude/rules/testing.md"
         real_file.unlink()
         real_file.write_text("local copy\n")
-        backups_before = snapshot(self.home / ".ifdev-ai-tools/backups")
+        backups_root = self.home / ".ifdev-ai-tools/backups"
+        backups_before = snapshot(backups_root)
 
         result = self.run_script("uninstall.sh")
 
@@ -317,9 +396,23 @@ class UninstallTests(InstallerTestCase):
         self.assert_siblings_intact()
         for parent in (".claude/rules", ".claude/agents", ".claude/skills", ".codex/skills"):
             self.assertTrue((self.home / parent).is_dir(), parent)
-        self.assertEqual(snapshot(self.home / ".ifdev-ai-tools/backups"), backups_before)
+        # Every backup that existed before uninstall (from the earlier install) survives
+        # untouched; uninstall's own hooks backup of the pre-removal settings.json adds
+        # exactly one new entry, it never overwrites an existing one.
+        backups_after = snapshot(backups_root)
+        for rel, value in backups_before.items():
+            self.assertEqual(backups_after.get(rel), value, rel)
+        new_entries = set(backups_after) - set(backups_before)
+        self.assertTrue(any(rel.endswith(".claude/settings.json") for rel in new_entries), new_entries)
         self.assertIn("backups kept", result.stdout)
         self.assertIn(str(self.backup_dirs()[0]), result.stdout)
+        settings = json.loads(settings_path.read_text())
+        self.assertEqual(settings["synthetic"], True)
+        self.assertEqual(settings["hooks"]["PreToolUse"], [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo guard"}]}])
+        stop_commands = [entry["command"] for group in settings["hooks"]["Stop"] for entry in group["hooks"]]
+        self.assertEqual(stop_commands, ["echo mine"])
+        self.assertNotIn("StopFailure", settings["hooks"])
+        self.assertNotIn("Notification", settings["hooks"])
 
     def test_uninstall_dry_run_changes_nothing(self) -> None:
         self.write_siblings()
@@ -388,6 +481,106 @@ class UninstallTests(InstallerTestCase):
 
         self.assert_refused_without_traversal(outside_backup)
         self.assert_all_links()
+
+    def test_uninstall_refuses_invalid_settings_json_before_removing_any_link(self) -> None:
+        self.install()
+        (self.home / SETTINGS_JSON).write_text("{ not json", encoding="utf-8")
+
+        result = self.run_script("uninstall.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not valid JSON", result.stderr)
+        self.assert_all_links()
+        self.assertEqual((self.home / SETTINGS_JSON).read_text(), "{ not json")
+
+    def test_uninstall_refuses_malformed_managed_hooks_shape_before_removing_any_link(self) -> None:
+        self.install()
+        settings_path = self.home / SETTINGS_JSON
+        settings = json.loads(settings_path.read_text())
+        settings["hooks"]["Notification"] = [{"hooks": "not-a-list"}]
+        settings_path.write_text(json.dumps(settings))
+
+        result = self.run_script("uninstall.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('"hooks.Notification[0].hooks"', result.stderr)
+        self.assert_all_links()
+
+    def test_uninstall_reruns_hooks_preflight_under_the_lock_before_removing_any_link(self) -> None:
+        # Mirrors install.sh's own re-plan/preflight under its lock: a second, later
+        # settings.json change (simulated here by making the second preflight call
+        # fail) must still abort uninstall.sh before any managed link is removed.
+        self.install()
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3)
+        fake_bin = self.tmp / "fake-bin"
+        fake_bin.mkdir()
+        counter = self.tmp / "hooks-preflight-calls.count"
+        fake_python3 = fake_bin / "python3"
+        fake_python3.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            f'COUNTER="{counter}"\n'
+            "count=0\n"
+            '[[ -f "$COUNTER" ]] && count=$(cat "$COUNTER")\n'
+            "count=$((count + 1))\n"
+            'printf \'%s\\n\' "$count" > "$COUNTER"\n'
+            'if [[ "$1" == *claude_hooks.py && "${2:-}" == "uninstall" && "$count" -ge 2 ]]; then\n'
+            '  echo "fake: simulated hooks preflight failure on second (locked) check" >&2\n'
+            "  exit 1\n"
+            "fi\n"
+            f'exec "{real_python3}" "$@"\n'
+        )
+        fake_python3.chmod(0o700)
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+
+        result = subprocess.run(
+            ["bash", str(self.repo / "scripts" / "uninstall.sh")],
+            env=env,
+            cwd=self.tmp,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("simulated hooks preflight failure", result.stderr)
+        self.assertEqual(int(counter.read_text().strip()), 2)
+        self.assert_all_links()
+
+
+class InstalledHookExecutionTests(InstallerTestCase):
+    """The installed hook script keeps its regular, non-executable tracked file mode
+    (see claude/hooks/agent-notify-hook.sh); Claude Code must still be able to run it
+    through the exact managed command string written into settings.json."""
+
+    def test_installed_stop_hook_runs_via_the_managed_command_despite_default_file_mode(self) -> None:
+        self.install()
+        hook_path = self.home / ".claude/hooks/agent-notify-hook.sh"
+        self.assertFalse(os.access(hook_path, os.X_OK), "hook file must not need its own execute bit")
+        settings = json.loads((self.home / SETTINGS_JSON).read_text())
+        command = settings["hooks"]["Stop"][0]["hooks"][0]["command"]
+        self.assertTrue(command.startswith("bash "), command)
+
+        # Only coreutils the hook adapter needs (cat/grep/sed), never notify-send/paplay:
+        # this exercises the real installed hook end to end without any real notification.
+        safe_bin = self.tmp / "safe-bin"
+        safe_bin.mkdir()
+        for tool in ("cat", "grep", "sed", "bash", "dirname"):
+            os.symlink(shutil.which(tool), safe_bin / tool)
+        env = {"PATH": str(safe_bin), "HOME": str(self.home)}
+        result = subprocess.run(
+            ["bash", "-c", command],
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("\a", result.stdout, result.stderr)  # no desktop/sound backend in PATH: BEL fallback
 
 
 if __name__ == "__main__":
