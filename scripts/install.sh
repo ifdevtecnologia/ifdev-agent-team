@@ -14,9 +14,11 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [--dry-run]
 
-Creates symlinks in $HOME for the nine items managed by this repository.
+Creates symlinks in $HOME for the twelve items managed by this repository.
 Existing files, directories or foreign/dangling symlinks at those exact paths are
-moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking.
+moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking. Also merges
+this toolkit's notification hooks into ~/.claude/settings.json, preserving every
+other setting (requires python3; see README).
 
   --dry-run   print the planned actions without changing anything
   -h, --help  show this help
@@ -141,14 +143,33 @@ apply_install() {
   [[ -z "$backup_dir" ]] || log "backups: $backup_dir (see README for manual restoration)"
 }
 
+manage_claude_hooks() {
+  # No empty-array expansion (kept Bash 3.2 compatible): branch instead of building argv.
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    python3 "$SCRIPT_DIR/lib/claude_hooks.py" install --home "$HOME" --dry-run
+  else
+    python3 "$SCRIPT_DIR/lib/claude_hooks.py" install --home "$HOME"
+  fi
+}
+
+# Read-only: --dry-run never writes, so this is safe to call before any symlink is
+# touched. Surfaces invalid JSON, unsafe paths and malformed hooks/event shapes early
+# so a broken ~/.claude/settings.json can never leave apply_install's symlinks applied
+# with the hooks step failing afterward.
+preflight_claude_hooks() {
+  python3 "$SCRIPT_DIR/lib/claude_hooks.py" install --home "$HOME" --dry-run >/dev/null
+}
+
 main() {
   parse_args "$@"
-  require_commands ln mv mkdir rmdir readlink mktemp date dirname
+  require_commands ln mv mkdir rmdir readlink mktemp date dirname python3
   require_home
   plan_install || die "no changes were made"
+  preflight_claude_hooks || die "no changes were made"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     print_plan
+    manage_claude_hooks
     log "dry run: no changes were made"
     return 0
   fi
@@ -156,7 +177,9 @@ main() {
   acquire_lock
   # Re-plan under the lock: another process may have changed HOME since the first check.
   plan_install || die "no changes were made"
+  preflight_claude_hooks || die "no changes were made"
   apply_install
+  manage_claude_hooks
 }
 
 main "$@"

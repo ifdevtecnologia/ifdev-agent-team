@@ -15,8 +15,10 @@ usage() {
 Usage: scripts/uninstall.sh [--dry-run]
 
 Removes the managed symlinks that point to this repository. Real files, directories,
-foreign symlinks, sibling configuration and backups are left untouched. Backups are
-not restored automatically; see README for manual restoration.
+foreign symlinks, sibling configuration and backups are left untouched. Also removes
+this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
+other setting untouched (requires python3; see README). Backups are not restored
+automatically; see README for manual restoration.
 
   --dry-run   print the planned actions without changing anything
   -h, --help  show this help
@@ -80,6 +82,13 @@ plan_has_removals() {
   return 1
 }
 
+# Read-only: --dry-run never writes, so this is safe to call before acquiring the lock.
+hooks_pending() {
+  local out
+  out=$(python3 "$SCRIPT_DIR/lib/claude_hooks.py" uninstall --home "$HOME" --dry-run 2>&1) || die "hooks preflight failed: $out"
+  [[ "$out" != unchanged:* ]]
+}
+
 apply_uninstall() {
   local item destination_rel destination i=0 prefix=""
   [[ "$DRY_RUN" -eq 0 ]] || prefix="would "
@@ -115,17 +124,41 @@ report_backups() {
   done
 }
 
+manage_claude_hooks() {
+  # No empty-array expansion (kept Bash 3.2 compatible): branch instead of building argv.
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    python3 "$SCRIPT_DIR/lib/claude_hooks.py" uninstall --home "$HOME" --dry-run
+  else
+    python3 "$SCRIPT_DIR/lib/claude_hooks.py" uninstall --home "$HOME"
+  fi
+}
+
 main() {
   parse_args "$@"
-  require_commands rm mkdir rmdir readlink dirname
+  require_commands rm mkdir rmdir readlink dirname python3
   require_home
   plan_uninstall || die "no changes were made"
 
-  if [[ "$DRY_RUN" -eq 0 ]] && plan_has_removals; then
+  # Always preflighted (never short-circuited by plan_has_removals): invalid JSON or
+  # an unsafe settings path must abort before apply_uninstall touches any symlink.
+  local hooks_change=0
+  if hooks_pending; then
+    hooks_change=1
+  fi
+
+  # Locked whenever applying would actually change something (a managed link removal
+  # or a pending hooks change), never for a pure no-op: keeps the lock, and the
+  # ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
+  if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || [[ "$hooks_change" -eq 1 ]]; }; then
     acquire_lock
     plan_uninstall || die "no changes were made"
+    # Re-preflight under the lock, immediately before any link removal: another
+    # process may have changed ~/.claude/settings.json since the first check above
+    # (mirrors install.sh's re-plan/preflight under its own lock).
+    hooks_pending || true
   fi
   apply_uninstall
+  manage_claude_hooks
   report_backups
   [[ "$DRY_RUN" -eq 0 ]] || log "dry run: no changes were made"
 }
