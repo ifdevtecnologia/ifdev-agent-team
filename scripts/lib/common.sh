@@ -15,6 +15,10 @@ MANAGED_ITEMS=(
   "codex/skills/supervise-claude|.codex/skills/supervise-claude"
   # Opt-in profile file only; the base ~/.codex/config.toml is never touched.
   "codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"
+  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters.
+  "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh"
+  "claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh"
+  "codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"
 )
 
 STATE_DIR_REL=".ifdev-ai-tools"

@@ -22,12 +22,16 @@ claude/
   agents/senior-reviewer.md          -> ~/.claude/agents/senior-reviewer.md
   skills/work-session/               -> ~/.claude/skills/work-session (with references/)
   skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
+  hooks/agent-notify-hook.sh         -> ~/.claude/hooks/agent-notify-hook.sh (Stop/StopFailure/Notification adapter)
 codex/
   skills/supervise-claude/           -> ~/.codex/skills/supervise-claude (with references/)
   profiles/ifdev-autonomous.config.toml -> ~/.codex/ifdev-autonomous.config.toml (opt-in profile)
+  notify/agent-notify-codex.sh       -> ~/.codex/notify/agent-notify-codex.sh (opt-in native `notify` adapter)
 scripts/
-  install.sh, uninstall.sh           link / unlink the nine items above
+  install.sh, uninstall.sh           link / unlink the twelve items above and merge/remove Claude hooks
   lib/common.sh                      managed item list and shared safety helpers
+  lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
+  agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
   validate.sh, validate.py           static repository validation
 tests/                               isolated automated tests (Python unittest)
 requirements-dev.txt                 pinned development dependency (PyYAML) for validation/tests
@@ -36,9 +40,10 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 
 ## Prerequisites
 
-- Bash (3.2 or newer), `git` and standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`). This is all the installer needs.
+- Bash (3.2 or newer), `git`, standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`) and `python3` (standard library only). `scripts/install.sh`/`scripts/uninstall.sh` use `python3` to safely merge or remove this toolkit's notification hooks in `~/.claude/settings.json` (a user-owned, mutable file that cannot be symlinked like everything else); no pinned Python dependency is needed for this.
 - For validation and tests only: Python 3.9+ and PyYAML 6.0.3, pinned in [`requirements-dev.txt`](requirements-dev.txt). Install it with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
-- Claude Code and/or Codex installed separately; this toolkit does not install them and, apart from the opt-in Codex profile below, does not configure them.
+- Optional, for [agent notifications](#agent-notifications): `notify-send` (`libnotify-bin` on Debian/Ubuntu) for desktop notifications and `paplay` (`pulseaudio-utils` on Debian/Ubuntu) for a sound cue. Neither is required: a missing or disabled backend falls back to a terminal bell (BEL).
+- Claude Code and/or Codex installed separately; this toolkit does not install them and, apart from the opt-in Codex profile and notify adapter below, does not configure them.
 
 ## Install on a new machine
 
@@ -57,12 +62,13 @@ The clone location is free: links point to wherever the repository lives, so kee
 ### What the installer does
 
 - Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the nine destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
+- Creates symlinks for exactly the twelve destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
-- Is idempotent: a second run reports every item as unchanged and creates no backup.
-- Uses a lock directory (`~/.ifdev-ai-tools/lock`) so concurrent runs cannot collide. If a run is interrupted hard, the message explains how to remove the stale lock after confirming no run is active.
-- `--dry-run` prints the plan and makes no changes at all (no directories, backups or locks).
+- Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
+- Is idempotent: a second run reports every managed item as unchanged, creates no backup and reports the hooks as already configured.
+- Uses a lock directory (`~/.ifdev-ai-tools/lock`) so concurrent runs cannot collide, held only while an actual change (a link or a hooks update) is being applied. If a run is interrupted hard, the message explains how to remove the stale lock after confirming no run is active.
+- `--dry-run` prints the plan, including the hooks that would be added or removed, and makes no changes at all (no directories, backups or locks).
 
 ### Backups and manual restoration
 
@@ -90,7 +96,58 @@ Repeat the check for every item; never move a backup over an existing destinatio
 ./scripts/uninstall.sh
 ```
 
-Removes only symlinks that point exactly to this checkout's managed items. Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and lists existing backups at the end.
+Removes only symlinks that point exactly to this checkout's managed items, and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
+
+## Agent notifications
+
+[`scripts/agent-notify.sh`](scripts/agent-notify.sh) is a standalone, safe cross-agent notifier: `scripts/agent-notify.sh <codex|claude> <attention|complete|blocked> <message>`. It tries a desktop notification (`notify-send`) and a sound cue (`paplay`) when available and enabled, and falls back to a terminal bell (BEL) **only when neither one actually succeeded** (both missing, disabled or failing). The message always reaches every backend as one literal argument; it is never evaluated or interpreted as a command.
+
+- `--no-desktop`, `--no-sound`, `--no-bell` disable one channel for a single call; `--no-bell` also disables the fallback itself.
+- `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` do the same as `--no-desktop`/`--no-sound` for every call in that environment (for example a headless CI shell); a flag always overrides its variable, never the other way around.
+- Ubuntu/Debian: install the `libnotify-bin` and `pulseaudio-utils` packages for the desktop/sound backends through your usual OS package manager; neither is required, the BEL fallback always works in a terminal.
+
+### Claude Code hooks
+
+The installer registers three hooks in `~/.claude/settings.json` (see [What the installer does](#what-the-installer-does)), all routed through `~/.claude/hooks/agent-notify-hook.sh`:
+
+| Claude Code hook | Notifier event | Behavior |
+| --- | --- | --- |
+| `Stop` (successful turn end) | `complete` | Suppressed when `IFDEV_SUPERVISED_CLAUDE=1` (set only for the invocation `codex/skills/supervise-claude/scripts/run_claude.py` launches): the supervisor sends its own single final notification instead of one per cycle. |
+| `StopFailure` | `blocked` | Always fires, supervised or not. |
+| `Notification` | `attention` | Filtered by the payload's structural `notification_type` field only (Claude Code's documented field name; not `type`), **never by reading the free-text message**: a known non-attention system confirmation (currently `auth_success`) is silently skipped; a documented attention-required value (`permission_prompt`, `idle_prompt`, `elicitation_dialog`, `elicitation_url_dialog`, `agent_needs_input`) notifies, and so does anything else, including a payload with no recognizable `notification_type` at all (older or unknown Claude Code versions) — the documented conservative default, so a real request is never silently dropped. |
+
+The installed `Notification` hook also carries a `matcher` narrowed to that same attention-required set, as defense-in-depth alongside the script-side filtering above (see `HOOK_MATCHERS` in [`scripts/lib/claude_hooks.py`](scripts/lib/claude_hooks.py)); the script-side filtering is what actually decides whether to notify and keeps working even against a Claude Code version that ignores the matcher.
+
+The hook script itself keeps the regular, non-executable tracked file mode; the managed command Claude Code runs is `bash ~/.claude/hooks/agent-notify-hook.sh <kind>`, so it never needs its own execute bit.
+
+### Codex
+
+Codex's own built-in `notify` hook is opt-in only; this toolkit never edits the base `~/.codex/config.toml`. Add one line yourself to use [`codex/notify/agent-notify-codex.sh`](codex/notify/agent-notify-codex.sh):
+
+```toml
+notify = ["bash", "-c", '"$HOME/.codex/notify/agent-notify-codex.sh" "$1"', "_"]
+```
+
+Codex execs this array directly (no shell), so a literal `~` in a config-array argument is never expanded and would make Codex fail to even launch the adapter; a plain two-element `["bash", "~/.codex/notify/agent-notify-codex.sh"]` array does not work. The `bash -c` wrapper above is a real shell, so `$HOME` there does expand, and Codex's appended JSON payload reaches the adapter as `$1`, a single literal positional argument, never interpreted as a command. **Honest limitation:** Codex's `notify` hook only fires on turn/task completion, unlike Claude Code's separate Stop/StopFailure/Notification hooks. A standalone (non-supervised) Codex session using only this adapter can therefore only ever report `complete`, never `attention` or `blocked`, even for a malformed or unrecognized turn-complete payload (it falls back to a generic "finished its turn" `complete` message, never to `blocked`).
+
+### Supervised final status
+
+A Codex session running the `supervise-claude` skill sends exactly one final notification per run, via [`scripts/notify_final_status.py`](codex/skills/supervise-claude/scripts/notify_final_status.py), right after `final-report.md` is written (see [its SKILL.md](codex/skills/supervise-claude/SKILL.md)). It is never derived from Codex's native `agent-turn-complete` event above, which cannot express `PARTIAL`/`BLOCKED` at all:
+
+| Status | Event | Default message |
+| --- | --- | --- |
+| COMPLETE | `complete` | "Task complete — PR ready" |
+| PARTIAL | `attention` | "Task needs attention" |
+| BLOCKED | `blocked` | "Task blocked" |
+
+A run-directory marker makes this idempotent: a repeated finalization attempt (for example after a delivery retry) never sends a second notification for the same run. Sending is always best-effort and non-fatal: a missing or failing notifier never changes the run's reported status.
+
+### Troubleshooting
+
+- No popup appears: confirm `notify-send` is installed and a desktop/D-Bus session is available (headless shells and most CI runners have neither); the terminal bell fallback still fires unless `--no-bell`/the terminal has bells disabled.
+- No sound: confirm `paplay` is installed and a PulseAudio/PipeWire-compatible sink is available; a missing sound theme file is not an error, it just skips silently to the next candidate or the bell fallback.
+- Too many pings in an automated/CI shell: set `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` (or `--no-bell` for a single call) in that environment.
+- None of this changes permissions, sandboxing or command authority for Claude or Codex; it only sends best-effort local notifications.
 
 ## Validation and tests
 
@@ -217,4 +274,4 @@ Commits follow the emoji Conventional Commits convention and the branch/PR flow 
 
 ## Scope and ownership
 
-The repository owns only the nine linked items, including the opt-in Codex profile file. It does not version or manage the base Codex `config.toml` or other Claude/Codex settings, permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched.
+The repository owns only the twelve linked items, including the opt-in Codex profile and notify adapter files, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.

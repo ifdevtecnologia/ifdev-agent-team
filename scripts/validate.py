@@ -52,20 +52,28 @@ REQUIRED_FILES = (
     "codex/skills/supervise-claude/scripts/run_claude.py",
     "codex/skills/supervise-claude/scripts/supervision_policy.py",
     "codex/skills/supervise-claude/scripts/clone_fallback.py",
+    "codex/skills/supervise-claude/scripts/notify_final_status.py",
     "codex/profiles/ifdev-autonomous.config.toml",
+    "codex/notify/agent-notify-codex.sh",
+    "claude/hooks/agent-notify-hook.sh",
     "scripts/install.sh",
     "scripts/uninstall.sh",
     "scripts/validate.sh",
     "scripts/validate.py",
     "scripts/lib/common.sh",
+    "scripts/lib/claude_hooks.py",
+    "scripts/agent-notify.sh",
     "tests/test_install.py",
     "tests/test_validate.py",
     "tests/test_supervise_claude.py",
+    "tests/test_agent_notify.py",
+    "tests/test_agent_notify_hook.py",
+    "tests/test_claude_hooks.py",
     ".github/workflows/validate.yml",
 )
 
 # Documented as runnable with `./scripts/<name>.sh`, so they must keep the executable bit.
-EXECUTABLE_SCRIPTS = ("scripts/install.sh", "scripts/uninstall.sh", "scripts/validate.sh")
+EXECUTABLE_SCRIPTS = ("scripts/install.sh", "scripts/uninstall.sh", "scripts/validate.sh", "scripts/agent-notify.sh")
 
 MAX_SCAN_BYTES = 1_000_000
 

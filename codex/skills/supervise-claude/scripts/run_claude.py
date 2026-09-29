@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -182,6 +183,10 @@ def main() -> int:
         raise ConfigurationError("could not inspect installed Claude CLI capabilities")
     command = build_command(args.claude, help_result.stdout, args.allow_command, args.model)
     args.log.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Scoped to this one invocation's environment only: never exported to the Codex
+    # session itself, so it cannot leak into an unrelated, unsupervised Claude run.
+    supervised_env = dict(os.environ)
+    supervised_env["IFDEV_SUPERVISED_CLAUDE"] = "1"
     with args.log.open("w", encoding="utf-8") as log:
         try:
             result = subprocess.run(
@@ -193,6 +198,7 @@ def main() -> int:
                 text=True,
                 timeout=args.timeout_seconds,
                 check=False,
+                env=supervised_env,
             )
         except subprocess.TimeoutExpired:
             log.write(f"\n[supervisor] Claude timed out after {args.timeout_seconds} seconds\n")
