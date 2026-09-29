@@ -10,6 +10,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+SCRIPT_DIR = str(Path(__file__).resolve().parent)
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
+import protected_patch  # noqa: E402  (sibling helper; resolved from this script's directory)
+
 
 BASE_TOOLS = ("Read", "Glob", "Grep", "Edit", "Write")
 REQUIRED_HELP_MARKERS = (
@@ -46,10 +51,6 @@ FORBIDDEN_ALLOW_PREFIXES = (
 )
 UNSAFE_INTERPRETER = re.compile(r"^(?:ba|z|fi)?sh\s+(?:-[^ ]*c\b|\*)|^(?:python\d*|node)\s+(?:-c|-e|\*)\b")
 SHELL_CONTROL = re.compile(r"(?:&&|\|\||[;|`<>]|\$\()")
-# Windows drive letters (e.g. "C:\") are rejected alongside POSIX absolute paths so a
-# path-specific opt-in can never be satisfied by an absolute filesystem location.
-WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
-GLOB_METACHARACTERS = frozenset("*?[]{}")
 
 
 def deny_rule(command: str) -> tuple[str, str]:
@@ -116,46 +117,37 @@ def normalize_allow_command(command: str) -> str:
     return normalized
 
 
-def normalize_claude_path(pattern: str, project: Path) -> str:
-    """Validate a repository-root-relative opt-in path under the project's ``.claude/``.
-
-    Restricted mode's bare Edit/Write tool grant does not satisfy Claude Code's separate
-    protected-path permission decision for settings/git/tool-configuration paths; this
-    produces the one narrow, explicit rule that satisfies it without widening access to
-    anything else.
+def require_project_not_global(project: Path) -> None:
+    """Fail closed before launch if the project root itself is, or lies beneath, global
+    Claude/Codex configuration or the current user's ``~/.ssh``. protected_patch.py enforces
+    this again at patch-apply time; the launcher must not authorize the patch handoff for
+    such a project in the first place.
     """
-    if not isinstance(pattern, str) or not pattern.strip():
-        raise ConfigurationError("--allow-claude-path must not be empty")
-    if "\n" in pattern or "\0" in pattern:
-        raise ConfigurationError("--allow-claude-path cannot contain control characters")
-    normalized = pattern.strip().replace("\\", "/")
-    if normalized.startswith("~"):
-        raise ConfigurationError(f"--allow-claude-path cannot reference a home directory: {pattern}")
-    if normalized.startswith("/") or WINDOWS_DRIVE.match(normalized):
-        raise ConfigurationError(f"--allow-claude-path must be repository-root-relative, not absolute: {pattern}")
-    segments = normalized.split("/")
-    if any(segment in ("", "..") for segment in segments):
-        raise ConfigurationError(f"--allow-claude-path cannot contain empty or parent-directory segments: {pattern}")
-    if segments[0] != ".claude":
-        raise ConfigurationError(f"--allow-claude-path must stay under the project's .claude directory: {pattern}")
-
-    concrete_segments = []
-    for segment in segments:
-        if any(char in GLOB_METACHARACTERS for char in segment):
-            break
-        concrete_segments.append(segment)
-    project_real = project.resolve(strict=True)
-    probe = project.joinpath(*concrete_segments) if concrete_segments else project
-    # os.path.lexists (unlike Path.exists) reports a dangling symlink as present, so the
-    # walk cannot skip past a broken symlink placed to escape the project directory.
-    while not os.path.lexists(probe) and probe != probe.parent:
-        probe = probe.parent
-    resolved = Path(os.path.realpath(probe))
     try:
-        resolved.relative_to(project_real)
-    except ValueError:
-        raise ConfigurationError(f"--allow-claude-path escapes the project directory via a symlink: {pattern}") from None
-    return normalized
+        protected_patch.check_not_global(project)
+    except protected_patch.PatchRejected as exc:
+        raise ConfigurationError(str(exc)) from None
+
+
+def normalize_claude_path(pattern: str, project: Path) -> str:
+    """Validate a supervisor patch-application authorization under the project's ``.claude/``.
+
+    Claude Code never lets a supervised non-interactive run write its protected
+    ``.claude/**`` directly, whatever the permission rules say, so this authorization is
+    not a Claude grant: it only scopes which paths the supervisor may later patch
+    mechanically from Claude's authored artifact (see protected_patch.py).
+    """
+    try:
+        return protected_patch.normalize_authorization(pattern, project)
+    except protected_patch.ConfigurationError as exc:
+        raise ConfigurationError(str(exc)) from None
+
+
+def build_prompt(prompt: str, allow_claude_paths: tuple[str, ...]) -> str:
+    """Append the deterministic protected-path patch contract when handoff is in scope."""
+    if not allow_claude_paths:
+        return prompt
+    return prompt.rstrip("\n") + "\n" + protected_patch.prompt_contract(allow_claude_paths)
 
 
 def build_command(
@@ -172,12 +164,13 @@ def build_command(
     allowed_bash = [f"Bash({normalize_allow_command(command)})" for command in allow_commands]
     if allow_claude_paths and project is None:
         raise ConfigurationError("--allow-claude-path requires a resolved project directory")
-    claude_paths = [normalize_claude_path(pattern, project) for pattern in allow_claude_paths]
-    # Claude Code checks file paths against Edit(path) and Read(path) rules only; a
-    # path-scoped Write(path) rule is accepted but never consulted, and warns at startup.
-    # Edit(path) alone governs both Edit and Write for a protected path, so it is the
-    # single rule this opt-in needs to grant per validated pattern.
-    allowed_claude_paths = [f"Edit({path})" for path in claude_paths]
+    if allow_claude_paths:
+        require_project_not_global(project)
+    # Validated only so that an unsafe authorization fails before invocation; it never
+    # becomes an Edit(path)/Write(path) rule, because protected .claude/** writes are
+    # handed off as an authored patch instead of being attempted directly.
+    for pattern in allow_claude_paths:
+        normalize_claude_path(pattern, project)
     tools = list(BASE_TOOLS)
     if allowed_bash:
         tools.append("Bash")
@@ -200,7 +193,6 @@ def build_command(
         "--allowedTools",
         *BASE_TOOLS,
         *allowed_bash,
-        *allowed_claude_paths,
         "--disallowedTools",
         *DENIED_TOOLS,
     ]
@@ -229,8 +221,9 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help=(
-            "Repository-root-relative path or glob under the project's .claude/ that this "
-            "task is scoped to edit (e.g. '.claude/agents/foo.md'); repeat as needed. Omit "
+            "Repository-root-relative path or glob under the project's .claude/ that the "
+            "supervisor is authorized to patch from Claude's authored artifact (e.g. "
+            "'.claude/agents/foo.md'); repeat as needed. Grants Claude no direct write. Omit "
             "entirely unless project .claude/** is explicitly in task scope."
         ),
     )
@@ -262,6 +255,7 @@ def main() -> int:
         project=project,
         allow_claude_paths=tuple(args.allow_claude_path),
     )
+    prompt = build_prompt(prompt, tuple(normalize_claude_path(p, project) for p in args.allow_claude_path))
     args.log.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     # Scoped to this one invocation's environment only: never exported to the Codex
     # session itself, so it cannot leak into an unrelated, unsupervised Claude run.
