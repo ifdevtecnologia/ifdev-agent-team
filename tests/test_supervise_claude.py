@@ -133,6 +133,156 @@ class SupervisedClaudeModelTests(unittest.TestCase):
         self.assertEqual(run_claude.DEFAULT_MODEL, policy.DEFAULT_MODEL)
 
 
+class ProjectClaudePathPermissionTests(unittest.TestCase):
+    """Regression coverage for the project .claude/** protected-path opt-in.
+
+    Restricted mode's bare Edit/Write tool grant lets Claude edit an ordinary repository
+    file such as src/example.txt but is denied for a protected path such as
+    .claude/agents/example.md unless a path-specific permission rule explicitly allows it.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.project = Path(self._tmp.name).resolve()
+
+    def test_default_invocation_grants_no_project_claude_path(self) -> None:
+        command = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        self.assertFalse(any(rule.startswith(("Edit(", "Write(")) for rule in allowed))
+        self.assertEqual(allowed, list(run_claude.BASE_TOOLS))
+
+    def test_ordinary_edit_and_in_repository_rename_stay_covered_by_the_bare_grant(self) -> None:
+        # src/example.txt (ordinary edit) and renaming it to src/renamed.txt both go
+        # through the unqualified Edit/Write grant; neither needs a path-specific rule.
+        command = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
+        self.assertIn("Edit", command)
+        self.assertIn("Write", command)
+
+    def test_opting_in_allows_a_project_agent_file_edit(self) -> None:
+        command = run_claude.build_command(
+            "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/foo.md",)
+        )
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        self.assertIn("Edit(.claude/agents/foo.md)", allowed)
+        self.assertNotIn("Write(.claude/agents/foo.md)", allowed)
+
+    def test_opting_in_allows_a_project_skill_file_edit(self) -> None:
+        command = run_claude.build_command(
+            "claude",
+            SUPPORTED_HELP,
+            [],
+            project=self.project,
+            allow_claude_paths=(".claude/skills/foo/SKILL.md",),
+        )
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        self.assertIn("Edit(.claude/skills/foo/SKILL.md)", allowed)
+        self.assertNotIn("Write(.claude/skills/foo/SKILL.md)", allowed)
+
+    def test_opting_in_covers_a_rename_within_the_same_claude_glob(self) -> None:
+        # Renaming a file inside .claude/agents/** is an inspected, task-specific `mv`
+        # Bash family; the source and destination are still protected paths, and the
+        # single Edit(.claude/agents/**) glob rule (Claude Code only consults Edit/Read
+        # path rules, never Write) authorizes both without widening scope further.
+        command = run_claude.build_command(
+            "claude",
+            SUPPORTED_HELP,
+            ["mv .claude/agents/old.md .claude/agents/new.md"],
+            project=self.project,
+            allow_claude_paths=(".claude/agents/**",),
+        )
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        self.assertIn("Edit(.claude/agents/**)", allowed)
+        self.assertNotIn("Write(.claude/agents/**)", allowed)
+        self.assertIn("Bash(mv .claude/agents/old.md .claude/agents/new.md)", allowed)
+
+    def test_multiple_claude_paths_are_each_granted_independently(self) -> None:
+        command = run_claude.build_command(
+            "claude",
+            SUPPORTED_HELP,
+            [],
+            project=self.project,
+            allow_claude_paths=(".claude/agents/foo.md", ".claude/skills/foo/SKILL.md"),
+        )
+        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        for path in (".claude/agents/foo.md", ".claude/skills/foo/SKILL.md"):
+            self.assertIn(f"Edit({path})", allowed)
+            self.assertNotIn(f"Write({path})", allowed)
+
+    def test_rejects_global_home_claude_settings_and_instructions(self) -> None:
+        for pattern in ("~/.claude/settings.json", "~/.claude/CLAUDE.md", "~/.codex/config.toml", "~/.ssh/id_ed25519"):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
+
+    def test_rejects_absolute_paths(self) -> None:
+        for pattern in ("/etc/passwd", "/var/lib/example/.claude/settings.json", r"C:\Config\.claude\settings.json"):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
+
+    def test_rejects_traversal_and_foreign_repository_paths(self) -> None:
+        for pattern in (
+            "../other-repo/.claude/agents/foo.md",
+            ".claude/../../other-repo/.claude/foo.md",
+            ".claude/agents/../../../etc/passwd",
+        ):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
+
+    def test_rejects_paths_outside_the_project_dot_claude_directory(self) -> None:
+        for pattern in ("src/example.txt", ".git/config", "CLAUDE.md", "", "   "):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
+
+    def test_rejects_a_symlink_escape_out_of_the_project(self) -> None:
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (self.project / ".claude").symlink_to(Path(outside.name).resolve())
+        with self.assertRaises(run_claude.ConfigurationError):
+            run_claude.build_command(
+                "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/foo.md",)
+            )
+
+    def test_rejects_a_dangling_symlink_escape_out_of_the_project(self) -> None:
+        # A broken symlink still lexists(); the walk-up must not skip past it and treat
+        # the pattern as if .claude were an ordinary, contained directory.
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (self.project / ".claude").symlink_to(Path(outside.name).resolve() / "does-not-exist")
+        with self.assertRaises(run_claude.ConfigurationError):
+            run_claude.build_command(
+                "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/foo.md",)
+            )
+
+    def test_claude_paths_require_a_resolved_project_directory(self) -> None:
+        with self.assertRaises(run_claude.ConfigurationError):
+            run_claude.build_command("claude", SUPPORTED_HELP, [], allow_claude_paths=(".claude/agents/foo.md",))
+
+    def test_opt_in_never_changes_mode_or_denylist_invariants(self) -> None:
+        baseline = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
+        opted_in = run_claude.build_command(
+            "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/foo.md",)
+        )
+        for command in (baseline, opted_in):
+            self.assertIn("dontAsk", command)
+            self.assertIn("none", command)
+            self.assertIn("--restricted", command)
+            self.assertIn("--strict-mcp-config", command)
+            self.assertNotIn("bypassPermissions", command)
+            self.assertNotIn("acceptEdits", command)
+        baseline_denied = baseline[baseline.index("--disallowedTools") + 1 :]
+        opted_in_denied = opted_in[opted_in.index("--disallowedTools") + 1 :]
+        self.assertEqual(baseline_denied, opted_in_denied)
+        self.assertEqual(opted_in_denied, list(run_claude.DENIED_TOOLS))
+
+
 FAKE_CLAUDE = """#!{python}
 import os
 import sys
@@ -198,6 +348,30 @@ class RunClaudeCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.run_helper(Path(tmp))
         self.assertEqual(dict(os.environ), before)
+
+    def test_passes_opted_in_project_claude_path_rules_through_the_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, argv, _ = self.run_helper(
+                Path(tmp), "--allow-claude-path", ".claude/agents/foo.md", "--allow-claude-path", ".claude/skills/foo/SKILL.md"
+            )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Edit(.claude/agents/foo.md)", argv)
+        self.assertNotIn("Write(.claude/agents/foo.md)", argv)
+        self.assertIn("Edit(.claude/skills/foo/SKILL.md)", argv)
+        self.assertNotIn("Write(.claude/skills/foo/SKILL.md)", argv)
+
+    def test_rejects_an_unsafe_claude_path_before_invocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, argv, _ = self.run_helper(Path(tmp), "--allow-claude-path", "../other-repo/.claude/agents/foo.md")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--allow-claude-path", result.stderr)
+        self.assertIsNone(argv)
+
+    def test_omitting_the_flag_grants_no_project_claude_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result, argv, _ = self.run_helper(Path(tmp))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(token.startswith(("Edit(", "Write(")) for token in argv))
 
 
 TASK_PATHS = frozenset({"src/app.py", "tests/test_app.py"})
