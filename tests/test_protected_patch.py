@@ -93,6 +93,35 @@ EDIT_ORDINARY = f"""diff --git a/{ORDINARY} b/{ORDINARY}
 +changed
 """
 
+# A "-U0"-shaped hunk: no leading or trailing context line, only the changed line itself.
+# git apply refuses this without --unidiff-zero even though it is a single, unambiguous hunk.
+ZERO_CONTEXT_TARGET = ".claude/agents/zero.md"
+ZERO_CONTEXT_TEXT = "".join(f"line {n}\n" for n in range(1, 10))
+ZERO_CONTEXT_FINAL = ZERO_CONTEXT_TEXT.replace("line 8\n", "line eight\n")
+EDIT_ZERO_CONTEXT = f"""diff --git a/{ZERO_CONTEXT_TARGET} b/{ZERO_CONTEXT_TARGET}
+--- a/{ZERO_CONTEXT_TARGET}
++++ b/{ZERO_CONTEXT_TARGET}
+@@ -8,1 +8,1 @@
+-line 8
++line eight
+"""
+
+# Rename with an edit expressed as a zero-context hunk, alongside an unrelated second
+# protected file edit, mirroring a real-world rename-plus-zero-context-hunk artifact.
+ZERO_RENAME_SOURCE = ".claude/agents/legacy.md"
+ZERO_RENAME_DEST = ".claude/agents/current.md"
+ZERO_RENAME_SOURCE_TEXT = "---\nname: legacy\n---\nalpha\nbeta\ngamma\ndelta\nepsilon\n"
+ZERO_RENAME_DEST_TEXT = ZERO_RENAME_SOURCE_TEXT.replace("epsilon\n", "omega\n")
+RENAME_WITH_ZERO_CONTEXT_EDIT = f"""diff --git a/{ZERO_RENAME_SOURCE} b/{ZERO_RENAME_DEST}
+rename from {ZERO_RENAME_SOURCE}
+rename to {ZERO_RENAME_DEST}
+--- a/{ZERO_RENAME_SOURCE}
++++ b/{ZERO_RENAME_DEST}
+@@ -8,1 +8,1 @@
+-epsilon
++omega
+"""
+
 
 def edit_patch(path: str) -> str:
     """A syntactically valid one-line edit of an arbitrary (possibly unsafe) path."""
@@ -543,6 +572,90 @@ class ContentRejectionTests(RepoFixture):
             self.apply()
         self.assertIn("untracked", str(caught.exception))
         self.assertEqual(self.read(SKILL), SKILL_TEXT)
+
+
+class ZeroContextPatchTests(RepoFixture):
+    """Coverage for --unidiff-zero: zero-context ("-U0"-shaped) hunks like "@@ -8,1 +8,1 @@"
+    with no leading or trailing context line. Validation here still pins every hunk to its
+    exact stated position before git ever runs, so these fail closed exactly like
+    context-bearing hunks do."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write(ZERO_CONTEXT_TARGET, ZERO_CONTEXT_TEXT)
+
+    def test_check_passes_without_mutation(self) -> None:
+        data = self.author(EDIT_ZERO_CONTEXT)
+        plan = protected_patch.plan_patch(self.project, (ZERO_CONTEXT_TARGET,))
+        self.assertEqual(plan.expected, {ZERO_CONTEXT_TARGET: ZERO_CONTEXT_FINAL})
+        self.assertEqual(self.read(ZERO_CONTEXT_TARGET), ZERO_CONTEXT_TEXT)
+        self.assertEqual((self.project / protected_patch.ARTIFACT_NAME).read_bytes(), data)
+
+    def test_apply_applies_exactly_and_archives_the_artifact(self) -> None:
+        data = self.author(EDIT_ZERO_CONTEXT)
+        plan = self.apply((ZERO_CONTEXT_TARGET,))
+        self.assertEqual(self.read(ZERO_CONTEXT_TARGET), ZERO_CONTEXT_FINAL)
+        self.assertEqual(
+            plan.changes, [{"kind": "modify", "old_path": ZERO_CONTEXT_TARGET, "new_path": ZERO_CONTEXT_TARGET}]
+        )
+        self.assertFalse(os.path.lexists(self.project / protected_patch.ARTIFACT_NAME))
+        self.assertEqual(self.archive.read_bytes(), data)
+
+    def test_wrong_old_content_is_rejected(self) -> None:
+        patch = EDIT_ZERO_CONTEXT.replace("-line 8\n", "-line ate\n")
+        self.assert_rejected(patch, (ZERO_CONTEXT_TARGET,), message="stale or mismatched context")
+
+    def test_wrong_position_is_rejected(self) -> None:
+        patch = EDIT_ZERO_CONTEXT.replace("@@ -8,1 +8,1 @@", "@@ -3,1 +3,1 @@")
+        self.assert_rejected(patch, (ZERO_CONTEXT_TARGET,), message="stale or mismatched context")
+
+    def test_stale_source_is_rejected(self) -> None:
+        # Every line shifts down by one after authoring; the hunk's stated position 8 now
+        # holds different content, so it must be rejected even though it is fully unambiguous.
+        self.write(ZERO_CONTEXT_TARGET, "line 0\n" + ZERO_CONTEXT_TEXT)
+        self.assert_rejected(EDIT_ZERO_CONTEXT, (ZERO_CONTEXT_TARGET,), message="stale or mismatched context")
+
+    def test_unauthorized_path_is_rejected(self) -> None:
+        self.assert_rejected(EDIT_ZERO_CONTEXT, (SKILL,), message="not authorized")
+
+    def test_malformed_hunk_is_rejected(self) -> None:
+        patch = EDIT_ZERO_CONTEXT.replace("-line 8\n+line eight\n", "-line 8\n-line 9\n+line eight\n")
+        self.assert_rejected(patch, (ZERO_CONTEXT_TARGET,), message="more lines than its header declares")
+
+
+class RenameWithZeroContextEditTests(RepoFixture):
+    """A rename with an edit expressed as a zero-context hunk, combined with an unrelated
+    second protected file edit in the same artifact."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write(ZERO_RENAME_SOURCE, ZERO_RENAME_SOURCE_TEXT)
+
+    def test_check_and_apply_rename_plus_second_file_edit(self) -> None:
+        artifact = RENAME_WITH_ZERO_CONTEXT_EDIT + EDIT_SKILL
+        data = self.author(artifact)
+        patterns = (ZERO_RENAME_SOURCE, ZERO_RENAME_DEST, SKILL)
+
+        plan = protected_patch.plan_patch(self.project, patterns)
+        self.assertEqual(
+            plan.changes,
+            [
+                {"kind": "rename", "old_path": ZERO_RENAME_SOURCE, "new_path": ZERO_RENAME_DEST},
+                {"kind": "modify", "old_path": SKILL, "new_path": SKILL},
+            ],
+        )
+        self.assertTrue(os.path.lexists(self.project / ZERO_RENAME_SOURCE))
+        self.assertFalse(os.path.lexists(self.project / ZERO_RENAME_DEST))
+        self.assertEqual(self.read(SKILL), SKILL_TEXT)
+
+        self.apply(patterns)
+        self.assertFalse(os.path.lexists(self.project / ZERO_RENAME_SOURCE))
+        self.assertEqual(self.read(ZERO_RENAME_DEST), ZERO_RENAME_DEST_TEXT)
+        self.assertEqual(self.read(SKILL), SKILL_FINAL)
+        self.assertFalse(os.path.lexists(self.project / protected_patch.ARTIFACT_NAME))
+        self.assertEqual(self.archive.read_bytes(), data)
+        # Unrelated protected content is untouched by the rename-plus-edit artifact.
+        self.assertEqual(self.read(AGENT), AGENT_TEXT)
 
 
 FAKE_GIT = """#!{python}

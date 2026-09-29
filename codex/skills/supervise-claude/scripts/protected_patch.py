@@ -36,7 +36,9 @@ REGULAR_MODE = "100644"
 EXECUTABLE_MODE = "100755"
 GIT_ENV = {"GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
 # Worktree only (no --index); explicit whitespace handling so no config can rewrite content.
-GIT_APPLY = ("apply", "--whitespace=nowarn", "-p1")
+# --unidiff-zero accepts zero-context hunks (e.g. "@@ -8,1 +8,1 @@"); validation above already
+# pins every hunk to its exact stated position, so Git needs no surrounding context to be safe.
+GIT_APPLY = ("apply", "--whitespace=nowarn", "--unidiff-zero", "-p1")
 # Windows drive letters (e.g. "C:\") are rejected alongside POSIX absolute paths so an
 # authorization can never be satisfied by an absolute filesystem location.
 WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
