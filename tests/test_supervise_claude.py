@@ -11,6 +11,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,11 +135,12 @@ class SupervisedClaudeModelTests(unittest.TestCase):
 
 
 class ProjectClaudePathPermissionTests(unittest.TestCase):
-    """Regression coverage for the project .claude/** protected-path opt-in.
+    """Regression coverage for the project .claude/** patch-handoff authorization.
 
     Restricted mode's bare Edit/Write tool grant lets Claude edit an ordinary repository
-    file such as src/example.txt but is denied for a protected path such as
-    .claude/agents/example.md unless a path-specific permission rule explicitly allows it.
+    file such as src/example.txt directly. A protected path such as
+    .claude/agents/example.md is never granted to Claude: --allow-claude-path only
+    authorizes the supervisor to apply Claude's authored patch (protected_patch.py).
     """
 
     def setUp(self) -> None:
@@ -146,68 +148,72 @@ class ProjectClaudePathPermissionTests(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.project = Path(self._tmp.name).resolve()
 
+    def allowed(self, command: list) -> list:
+        return command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+
     def test_default_invocation_grants_no_project_claude_path(self) -> None:
         command = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
-        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
+        allowed = self.allowed(command)
         self.assertFalse(any(rule.startswith(("Edit(", "Write(")) for rule in allowed))
         self.assertEqual(allowed, list(run_claude.BASE_TOOLS))
 
-    def test_ordinary_edit_and_in_repository_rename_stay_covered_by_the_bare_grant(self) -> None:
-        # src/example.txt (ordinary edit) and renaming it to src/renamed.txt both go
-        # through the unqualified Edit/Write grant; neither needs a path-specific rule.
+    def test_ordinary_direct_edit_stays_covered_by_the_bare_grant(self) -> None:
+        # src/example.txt is edited directly through the unqualified Edit/Write grant.
         command = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
         self.assertIn("Edit", command)
         self.assertIn("Write", command)
 
-    def test_opting_in_allows_a_project_agent_file_edit(self) -> None:
-        command = run_claude.build_command(
-            "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/foo.md",)
-        )
-        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
-        self.assertIn("Edit(.claude/agents/foo.md)", allowed)
-        self.assertNotIn("Write(.claude/agents/foo.md)", allowed)
+    def test_authorization_grants_claude_no_direct_protected_write(self) -> None:
+        baseline = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
+        for patterns in (
+            (".claude/agents/foo.md",),
+            (".claude/skills/foo/SKILL.md",),
+            (".claude/agents/**",),
+            (".claude/agents/old.md", ".claude/agents/new.md", ".claude/skills/foo/SKILL.md"),
+        ):
+            with self.subTest(patterns=patterns):
+                command = run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=patterns
+                )
+                self.assertEqual(command, baseline)
+                self.assertFalse(any(rule.startswith(("Edit(", "Write(")) for rule in self.allowed(command)))
 
-    def test_opting_in_allows_a_project_skill_file_edit(self) -> None:
+    def test_protected_rename_needs_no_bash_mv_workaround(self) -> None:
+        # A protected rename is a `rename from`/`rename to` section of the authored patch,
+        # so no Bash tool or `mv` command family is added for it.
         command = run_claude.build_command(
-            "claude",
-            SUPPORTED_HELP,
-            [],
-            project=self.project,
-            allow_claude_paths=(".claude/skills/foo/SKILL.md",),
+            "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(".claude/agents/**",)
         )
-        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
-        self.assertIn("Edit(.claude/skills/foo/SKILL.md)", allowed)
-        self.assertNotIn("Write(.claude/skills/foo/SKILL.md)", allowed)
+        self.assertNotIn("Bash", command[command.index("--tools") + 1].split(","))
+        self.assertFalse(any(rule.startswith("Bash(") for rule in self.allowed(command)))
 
-    def test_opting_in_covers_a_rename_within_the_same_claude_glob(self) -> None:
-        # Renaming a file inside .claude/agents/** is an inspected, task-specific `mv`
-        # Bash family; the source and destination are still protected paths, and the
-        # single Edit(.claude/agents/**) glob rule (Claude Code only consults Edit/Read
-        # path rules, never Write) authorizes both without widening scope further.
-        command = run_claude.build_command(
-            "claude",
-            SUPPORTED_HELP,
-            ["mv .claude/agents/old.md .claude/agents/new.md"],
-            project=self.project,
-            allow_claude_paths=(".claude/agents/**",),
-        )
-        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
-        self.assertIn("Edit(.claude/agents/**)", allowed)
-        self.assertNotIn("Write(.claude/agents/**)", allowed)
-        self.assertIn("Bash(mv .claude/agents/old.md .claude/agents/new.md)", allowed)
+    def test_rejects_unsupported_glob_syntax(self) -> None:
+        for pattern in (".claude/agents/[ab].md", ".claude/{agents,skills}/**", ".claude", ".claude/./a.md"):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
 
-    def test_multiple_claude_paths_are_each_granted_independently(self) -> None:
-        command = run_claude.build_command(
-            "claude",
-            SUPPORTED_HELP,
-            [],
-            project=self.project,
-            allow_claude_paths=(".claude/agents/foo.md", ".claude/skills/foo/SKILL.md"),
-        )
-        allowed = command[command.index("--allowedTools") + 1 : command.index("--disallowedTools")]
-        for path in (".claude/agents/foo.md", ".claude/skills/foo/SKILL.md"):
-            self.assertIn(f"Edit({path})", allowed)
-            self.assertNotIn(f"Write({path})", allowed)
+    def test_one_unsafe_authorization_among_safe_ones_fails_closed(self) -> None:
+        with self.assertRaises(run_claude.ConfigurationError):
+            run_claude.build_command(
+                "claude",
+                SUPPORTED_HELP,
+                [],
+                project=self.project,
+                allow_claude_paths=(".claude/agents/foo.md", "~/.claude/settings.json"),
+            )
+
+    def test_prompt_is_unchanged_without_authorization(self) -> None:
+        self.assertEqual(run_claude.build_prompt("synthetic task\n", ()), "synthetic task\n")
+
+    def test_prompt_carries_the_patch_contract_with_authorization(self) -> None:
+        prompt = run_claude.build_prompt("synthetic task\n", (".claude/agents/foo.md",))
+        self.assertTrue(prompt.startswith("synthetic task\n"))
+        self.assertIn("<protected-path-contract>", prompt)
+        self.assertIn("- .claude/agents/foo.md", prompt)
+        self.assertIn(run_claude.protected_patch.ARTIFACT_NAME, prompt)
+        self.assertIn("direct\nprotected writes are unsupported", prompt)
 
     def test_rejects_global_home_claude_settings_and_instructions(self) -> None:
         for pattern in ("~/.claude/settings.json", "~/.claude/CLAUDE.md", "~/.codex/config.toml", "~/.ssh/id_ed25519"):
@@ -265,6 +271,27 @@ class ProjectClaudePathPermissionTests(unittest.TestCase):
         with self.assertRaises(run_claude.ConfigurationError):
             run_claude.build_command("claude", SUPPORTED_HELP, [], allow_claude_paths=(".claude/agents/foo.md",))
 
+    def test_rejects_a_project_root_under_home_ssh(self) -> None:
+        # The launcher must fail closed before invocation, not rely solely on
+        # protected_patch.py's own check at later patch-apply time.
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp).resolve()
+            nested = home / ".ssh" / "nested-project"
+            nested.mkdir(parents=True)
+            with mock.patch.dict(os.environ, {"HOME": str(home)}):
+                with self.assertRaises(run_claude.ConfigurationError) as caught:
+                    run_claude.build_command(
+                        "claude", SUPPORTED_HELP, [], project=nested, allow_claude_paths=(".claude/agents/foo.md",)
+                    )
+        self.assertIn("global configuration", str(caught.exception))
+
+    def test_rejects_sensitive_allow_claude_path_targets(self) -> None:
+        for pattern in (".claude/credentials.json", ".claude/agents/token.md", ".claude/secrets/api.md"):
+            with self.subTest(pattern=pattern), self.assertRaises(run_claude.ConfigurationError):
+                run_claude.build_command(
+                    "claude", SUPPORTED_HELP, [], project=self.project, allow_claude_paths=(pattern,)
+                )
+
     def test_opt_in_never_changes_mode_or_denylist_invariants(self) -> None:
         baseline = run_claude.build_command("claude", SUPPORTED_HELP, [], project=self.project)
         opted_in = run_claude.build_command(
@@ -292,6 +319,7 @@ if sys.argv[1:] == ["--help"]:
 else:
     Path({record!r}).write_text("\\n".join(sys.argv[1:]), encoding="utf-8")
     Path({env_record!r}).write_text(os.environ.get("IFDEV_SUPERVISED_CLAUDE", ""), encoding="utf-8")
+    Path({stdin_record!r}).write_text(sys.stdin.read(), encoding="utf-8")
 """
 
 
@@ -299,9 +327,16 @@ class RunClaudeCliTests(unittest.TestCase):
     def run_helper(self, tmp: Path, *extra: str) -> tuple:
         record = tmp / "argv.txt"
         env_record = tmp / "env-supervised.txt"
+        stdin_record = tmp / "stdin.txt"
         fake = tmp / "fake-claude"
         fake.write_text(
-            FAKE_CLAUDE.format(python=sys.executable, help=SUPPORTED_HELP, record=str(record), env_record=str(env_record)),
+            FAKE_CLAUDE.format(
+                python=sys.executable,
+                help=SUPPORTED_HELP,
+                record=str(record),
+                env_record=str(env_record),
+                stdin_record=str(stdin_record),
+            ),
             encoding="utf-8",
         )
         fake.chmod(0o700)
@@ -317,6 +352,7 @@ class RunClaudeCliTests(unittest.TestCase):
         )
         argv = record.read_text(encoding="utf-8").split("\n") if record.exists() else None
         supervised_marker = env_record.read_text(encoding="utf-8") if env_record.exists() else None
+        self.last_stdin = stdin_record.read_text(encoding="utf-8") if stdin_record.exists() else None
         return result, argv, supervised_marker
 
     def test_passes_the_default_and_selected_model(self) -> None:
@@ -349,16 +385,19 @@ class RunClaudeCliTests(unittest.TestCase):
             self.run_helper(Path(tmp))
         self.assertEqual(dict(os.environ), before)
 
-    def test_passes_opted_in_project_claude_path_rules_through_the_cli(self) -> None:
+    def test_authorization_adds_the_patch_contract_but_no_protected_grant(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
+            baseline, baseline_argv, _ = self.run_helper(Path(tmp))
             result, argv, _ = self.run_helper(
                 Path(tmp), "--allow-claude-path", ".claude/agents/foo.md", "--allow-claude-path", ".claude/skills/foo/SKILL.md"
             )
+        self.assertEqual(baseline.returncode, 0, baseline.stderr)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Edit(.claude/agents/foo.md)", argv)
-        self.assertNotIn("Write(.claude/agents/foo.md)", argv)
-        self.assertIn("Edit(.claude/skills/foo/SKILL.md)", argv)
-        self.assertNotIn("Write(.claude/skills/foo/SKILL.md)", argv)
+        self.assertEqual(argv, baseline_argv)
+        self.assertFalse(any(token.startswith(("Edit(", "Write(")) for token in argv))
+        self.assertTrue(self.last_stdin.startswith("synthetic task\n"))
+        self.assertIn("<protected-path-contract>", self.last_stdin)
+        self.assertIn("- .claude/agents/foo.md\n- .claude/skills/foo/SKILL.md", self.last_stdin)
 
     def test_rejects_an_unsafe_claude_path_before_invocation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -372,6 +411,7 @@ class RunClaudeCliTests(unittest.TestCase):
             result, argv, _ = self.run_helper(Path(tmp))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any(token.startswith(("Edit(", "Write(")) for token in argv))
+        self.assertEqual(self.last_stdin, "synthetic task\n")
 
 
 TASK_PATHS = frozenset({"src/app.py", "tests/test_app.py"})
