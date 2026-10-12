@@ -14,7 +14,7 @@ Applies to every repository unless the project documents a stricter workflow. Ex
 
 ## Authority
 
-- When the task or an adopted workflow (such as the `supervise-claude` skill) authorizes delivery, create the commits, push the task branch and open the pull request without asking again for each step. Human review and merge is the approval boundary.
+- When the task or an adopted workflow authorizes delivery, create the commits, push the task branch and open the pull request without asking again for each step. Human review and merge is the approval boundary.
 - Without that authorization, propose the commits (files and messages) and wait for explicit approval before committing; do not push without authorization.
 - Stage explicit task paths only. Never stage unrelated preexisting work; stage preexisting changes only when they are explicitly attributed to this task (file proximity alone is not ownership). Do not stage secrets or files excluded from inspection.
 - Never force push (including `--force-with-lease`) or rewrite published history.

@@ -70,7 +70,7 @@ Do not report COMPLETE when mandatory tests are missing or failing, relevant tes
 
 Map meaningful behavior changes to tests and results (or explicit exceptions) in the final review. Re-run affected checks after fixes; do not repeat a passed full suite without new changes or unresolved concerns.
 
-Allocate checks by phase when implementation and independent review are split (for example Claude implementing under Codex supervision):
+Allocate checks by phase when implementation and independent review are split (for example an implementation session followed by a fresh review session or review agent):
 
 - **Implementer, each cycle:** the tests for the changed behavior and the impacted regression and local checks.
 - **Independent reviewer, intermediate reviews:** targeted checks that confirm the findings and affected regressions, not the full gate on every correction.
