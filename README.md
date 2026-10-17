@@ -48,7 +48,7 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 ## Install on a new machine
 
 ```bash
-git clone https://github.com/fagnerlima/ifdev-ai-tools.git
+git clone https://github.com/ifdevtecnologia/ifdev-ai-tools.git
 cd ifdev-ai-tools
 ./scripts/install.sh --dry-run   # review the plan; changes nothing
 ./scripts/install.sh
