@@ -1,7 +1,7 @@
 """Tests for scripts/agent-notify.sh: the standalone cross-agent notifier.
 
 Runs the real script in a subprocess with a synthetic PATH containing fake
-notify-send/paplay stubs that only log their argv; no real desktop or audio backend
+notify-send/paplay/pw-play stubs that only log their argv; no real desktop or audio backend
 is ever exercised.
 """
 
@@ -42,7 +42,7 @@ class AgentNotifyTestCase(unittest.TestCase):
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
         # Only `cat` (used by usage()) resolved from the real host, deliberately never
-        # notify-send/paplay: those must come solely from self.bin (or be absent) so
+        # notify-send/paplay/pw-play: those must come solely from self.bin (or be absent) so
         # every test is deterministic regardless of what the host has installed.
         self.safe_bin = self.tmp / "safe-bin"
         self.safe_bin.mkdir()
@@ -62,7 +62,7 @@ class AgentNotifyTestCase(unittest.TestCase):
 
     def run_notify(self, *args: str, with_stubs: bool = True, env_extra: dict | None = None) -> subprocess.CompletedProcess:
         # self.bin (fakes) is always searched first, then self.safe_bin (cat only):
-        # notify-send/paplay are only ever found here if a test explicitly faked them.
+        # notify-send/paplay/pw-play are only ever found here if a test explicitly faked them.
         path = f"{self.bin}:{self.safe_bin}" if with_stubs else str(self.safe_bin)
         env = {"PATH": path, "LOG": str(self.log), "HOME": str(self.tmp)}
         env.update(env_extra or {})
@@ -199,6 +199,43 @@ class BackendDispatchTests(AgentNotifyTestCase):
         (call,) = self.calls()
         self.assertIn(str(candidate), call)
         self.assertNotIn(str(missing), call)
+
+    def test_pw_play_is_used_when_paplay_is_missing(self) -> None:
+        self.install_fake("pw-play")
+        candidate = self.tmp / "sound.oga"
+        candidate.write_text("", encoding="utf-8")
+        script = self.script_with_sound_candidates(str(candidate))
+
+        result = self.run_script(script, "codex", "complete", "hi")
+
+        self.assertEqual(result.returncode, 0)
+        (call,) = self.calls()
+        self.assertEqual(Path(call[0]).name, "pw-play")
+        self.assertEqual(call[1:], ["--", str(candidate)])
+        self.assertNotIn("\a", result.stdout)
+
+    def test_paplay_is_preferred_when_both_players_exist(self) -> None:
+        self.install_fake("paplay")
+        self.install_fake("pw-play")
+        candidate = self.tmp / "sound.oga"
+        candidate.write_text("", encoding="utf-8")
+        script = self.script_with_sound_candidates(str(candidate))
+
+        self.run_script(script, "codex", "complete", "hi")
+
+        (call,) = self.calls()
+        self.assertEqual(Path(call[0]).name, "paplay")
+
+    def test_failing_pw_play_falls_back_to_the_bell(self) -> None:
+        self.install_fake("pw-play", failing=True)
+        candidate = self.tmp / "sound.oga"
+        candidate.write_text("", encoding="utf-8")
+        script = self.script_with_sound_candidates(str(candidate))
+
+        result = self.run_script(script, "codex", "complete", "hi")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("\a", result.stdout)
 
     def test_no_sound_switch_skips_paplay_even_with_a_candidate_present(self) -> None:
         self.install_fake("paplay")

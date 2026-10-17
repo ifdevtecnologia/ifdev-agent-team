@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Safe, standalone cross-agent notifier: desktop (notify-send), audio (paplay) and a
+# Safe, standalone cross-agent notifier: desktop (notify-send), audio (paplay or pw-play) and a
 # terminal bell (BEL), each independently switchable. Never evaluates the message or
 # event text; every value reaches backend commands only as a literal argument.
 # Kept compatible with Bash 3.2 (macOS default): no associative arrays, no mapfile.
@@ -10,6 +10,10 @@ EVENTS="attention complete blocked"
 
 # Freedesktop sound theme candidates, tried in order; the first that exists is played.
 # None existing is not an error: sound is best-effort, like every other backend here.
+# Audio players tried in order; only the first one installed is used. paplay covers
+# PulseAudio (and PipeWire with its Pulse layer); pw-play covers plain PipeWire setups.
+SOUND_PLAYERS="paplay pw-play"
+
 SOUND_CANDIDATES="
 /usr/share/sounds/freedesktop/stereo/complete.oga
 /usr/share/sounds/freedesktop/stereo/dialog-information.oga
@@ -21,13 +25,13 @@ usage() {
 Usage: scripts/agent-notify.sh <codex|claude> <attention|complete|blocked> <message> [switches]
 
 Sends a best-effort notification: a desktop notifier (notify-send) and an audio cue
-(paplay) when available and enabled, falling back to a terminal bell (BEL) only when
+(paplay, or pw-play without it) when available and enabled, falling back to a terminal bell (BEL) only when
 neither one actually succeeded. A missing or disabled backend is skipped silently;
 only invalid usage is an error. The message is never evaluated or interpreted as a
 command: it always reaches backends as a single literal argument.
 
   --no-desktop  skip notify-send even when available
-  --no-sound    skip paplay even when available
+  --no-sound    skip the audio cue even when a player is available
   --no-bell     never fall back to the terminal bell
   -h, --help    show this help
 
@@ -79,15 +83,27 @@ notify_desktop() {
   notify-send --urgency="$urgency" --app-name=agent-notify -- "$title" "$message"
 }
 
-# Returns success only when paplay actually played a candidate and exited zero; see
+# Prints the first installed player from SOUND_PLAYERS; fails when none is installed.
+sound_player() {
+  local player
+  for player in $SOUND_PLAYERS; do
+    if command -v "$player" >/dev/null 2>&1; then
+      printf '%s' "$player"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Returns success only when a player actually played a candidate and exited zero; see
 # notify_desktop for why the real exit status (not a forced 0) is preserved.
 notify_sound() {
-  local event=$1 enabled=$2 sound
+  local event=$1 enabled=$2 player sound
   [[ "$enabled" -eq 1 ]] || return 1
-  command -v paplay >/dev/null 2>&1 || return 1
+  player=$(sound_player) || return 1
   for sound in $SOUND_CANDIDATES; do
     if [[ -r "$sound" ]]; then
-      paplay -- "$sound" >/dev/null 2>&1
+      "$player" -- "$sound" >/dev/null 2>&1
       return $?
     fi
   done
