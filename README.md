@@ -42,7 +42,7 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 
 - Bash (3.2 or newer), `git`, standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`) and `python3` (standard library only). `scripts/install.sh`/`scripts/uninstall.sh` use `python3` to safely merge or remove this toolkit's notification hooks in `~/.claude/settings.json` (a user-owned, mutable file that cannot be symlinked like everything else); no pinned Python dependency is needed for this.
 - For validation and tests only: Python 3.9+ and PyYAML 6.0.3, pinned in [`requirements-dev.txt`](requirements-dev.txt). Install it with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
-- Optional, for [agent notifications](#agent-notifications): `notify-send` (`libnotify-bin` on Debian/Ubuntu) for desktop notifications and `paplay` (`pulseaudio-utils` on Debian/Ubuntu) for a sound cue. Neither is required: a missing or disabled backend falls back to a terminal bell (BEL).
+- Optional, for [agent notifications](#agent-notifications): `notify-send` (`libnotify-bin` on Debian/Ubuntu) for desktop notifications and `paplay` (`pulseaudio-utils` on Debian/Ubuntu) or `pw-play` (`pipewire-bin`) for a sound cue. Neither is required: a missing or disabled backend falls back to a terminal bell (BEL).
 - Claude Code and/or Codex installed separately; this toolkit does not install them and, apart from the opt-in Codex profile and notify adapter below, does not configure them.
 
 ## Install on a new machine
@@ -100,7 +100,7 @@ Removes only symlinks that point exactly to this checkout's managed items, and o
 
 ## Agent notifications
 
-[`scripts/agent-notify.sh`](scripts/agent-notify.sh) is a standalone, safe cross-agent notifier: `scripts/agent-notify.sh <codex|claude> <attention|complete|blocked> <message>`. It tries a desktop notification (`notify-send`) and a sound cue (`paplay`) when available and enabled, and falls back to a terminal bell (BEL) **only when neither one actually succeeded** (both missing, disabled or failing). The message always reaches every backend as one literal argument; it is never evaluated or interpreted as a command.
+[`scripts/agent-notify.sh`](scripts/agent-notify.sh) is a standalone, safe cross-agent notifier: `scripts/agent-notify.sh <codex|claude> <attention|complete|blocked> <message>`. It tries a desktop notification (`notify-send`) and a sound cue (`paplay`, or `pw-play` when `paplay` is missing) when available and enabled, and falls back to a terminal bell (BEL) **only when neither one actually succeeded** (both missing, disabled or failing). The message always reaches every backend as one literal argument; it is never evaluated or interpreted as a command.
 
 - `--no-desktop`, `--no-sound`, `--no-bell` disable one channel for a single call; `--no-bell` also disables the fallback itself.
 - `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` do the same as `--no-desktop`/`--no-sound` for every call in that environment (for example a headless CI shell); a flag always overrides its variable, never the other way around.
@@ -145,7 +145,7 @@ A run-directory marker makes this idempotent: a repeated finalization attempt (f
 ### Troubleshooting
 
 - No popup appears: confirm `notify-send` is installed and a desktop/D-Bus session is available (headless shells and most CI runners have neither); the terminal bell fallback still fires unless `--no-bell`/the terminal has bells disabled.
-- No sound: confirm `paplay` is installed and a PulseAudio/PipeWire-compatible sink is available; a missing sound theme file is not an error, it just skips silently to the next candidate or the bell fallback.
+- No sound: confirm `paplay` or `pw-play` is installed and a PulseAudio/PipeWire sink is available; a missing sound theme file is not an error, it just skips silently to the next candidate or the bell fallback.
 - Too many pings in an automated/CI shell: set `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` (or `--no-bell` for a single call) in that environment.
 - None of this changes permissions, sandboxing or command authority for Claude or Codex; it only sends best-effort local notifications.
 
