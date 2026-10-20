@@ -211,6 +211,10 @@ TOML_TABLE = re.compile(r"^\[([A-Za-z0-9_-]+)\]\s*(?:#.*)?$")
 TOML_ENTRY = re.compile(r'^([A-Za-z0-9_-]+)\s*=\s*("[^"\\]*"|true|false)\s*(?:#.*)?$')
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# Read-only roles of the Dev -> Reviewer -> QA team: they must block Write and Edit and never
+# list them as allowed tools.
+READ_ONLY_AGENTS = ("claude/agents/senior-reviewer.md", "claude/agents/qa.md")
+WRITE_TOOLS = ("Write", "Edit")
 SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")
 AGENT_PATH = re.compile(r"^claude/agents/([^/]+)\.md$")
 
@@ -463,6 +467,31 @@ def check_definitions(texts: dict[str, str], candidates: list[str], report: Repo
         check_definition(rel, match.group(1), texts, seen, "claude agent", report)
 
 
+def tool_names(value: object) -> set[str]:
+    """Tool lists may be a comma-separated string or a YAML sequence."""
+    if isinstance(value, str):
+        return {part.strip() for part in value.split(",") if part.strip()}
+    if isinstance(value, list):
+        return {str(part).strip() for part in value}
+    return set()
+
+
+def check_read_only_agents(texts: dict[str, str], report: Report) -> None:
+    for rel in READ_ONLY_AGENTS:
+        if rel not in texts:
+            continue
+        fields = parse_frontmatter(rel, texts[rel], Report())
+        if fields is None:
+            continue
+        allowed = tool_names(fields.get("tools"))
+        blocked = tool_names(fields.get("disallowedTools"))
+        for tool in WRITE_TOOLS:
+            if tool in allowed:
+                report.add(rel, f"read-only agent must not allow '{tool}'")
+            if tool not in blocked:
+                report.add(rel, f"read-only agent must list '{tool}' in disallowedTools")
+
+
 def markdown_prose_blocks(text: str):
     """Yields (line, text) paragraphs; list items, headings, table rows and fences start new ones."""
     start, buffer = 0, []
@@ -689,6 +718,7 @@ def validate(root: Path) -> Report:
     check_required(root, texts, report)
     check_executable_scripts(root, report)
     check_definitions(texts, candidates, report)
+    check_read_only_agents(texts, report)
     check_commit_table(texts, report)
     check_managed_items(root, texts, candidates, report)
     check_codex_profiles(texts, report)

@@ -17,13 +17,13 @@ Load the minimum context required to safely complete the current task: read the 
 
 ## Team: Dev → Reviewer → QA
 
-Every implementation task that changes executable behavior goes through three roles, each in its own context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
+Every change that alters executable behavior goes through three roles, Reviewer and QA always in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
 
-1. **Dev** (`dev` agent): implements the planned change with its tests and runs the affected checks. For a small, mechanical change the main agent may act as Dev itself.
-2. **Reviewer** (`senior-reviewer` agent): independent read-only review of the actual diff.
-3. **QA** (`qa` agent): independent end-to-end verification against the objective and acceptance criteria, rerunning the checks.
+1. **Dev**: the `dev` agent implements the planned change with its tests and runs the affected checks. The main agent may implement itself; it then holds the Dev role.
+2. **Reviewer**: the `senior-reviewer` agent reviews the actual diff, read-only.
+3. **QA**: the `qa` agent verifies end to end against the objective and acceptance criteria, rerunning the checks.
 
-Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. Documentation-only changes need only the reviewer. Project-specific reviewers (`.claude/agents/`) complement, never replace, these roles.
+Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. The only exception: documentation-only or trivial changes (typos, comments, formatting without behavior change) need at least the Reviewer; say so in the report. If an agent is unavailable (for example the installer was not rerun after an update), report it and run that role in a separate context following its definition; never skip a role silently. When working delegated by a supervisor, the supervisor's flow defines review, QA and delivery: act as Dev only. Project-specific reviewers (`.claude/agents/`) complement these roles.
 
 ## Changelog
 

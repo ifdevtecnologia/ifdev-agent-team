@@ -186,7 +186,6 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 - **Agent:** add `claude/agents/<name>.md` with `name` and `description`; register it as above.
 - Keep content general: no product names, business domains, stack-specific business rules or machine paths. Those belong in each project's own `.claude/`.
 
-
 ## Dev, Reviewer and QA agents
 
 Three global agents form the implementation team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-dev--reviewer--qa):
@@ -199,9 +198,11 @@ Three global agents form the implementation team described in [`claude/CLAUDE.md
 
 The main agent orchestrates the three, fixes material findings and delivers through the Git workflow. Projects can add specialized reviewers in their own `.claude/agents/`.
 
+Updating with `git pull` refreshes existing links, but a release that adds managed items (such as these agents) needs `./scripts/install.sh` again to create the new links; it is idempotent. Until then the global instructions tell the main agent to report the missing agent and run its role in a separate context.
+
 ## Claude and Codex supervision
 
-**Optional.** The Claude side of this toolkit works on its own: a Claude Code session follows `claude/CLAUDE.md` and the rules, runs a bounded task with [`work-session`](claude/skills/work-session/SKILL.md), gets an independent review from the [`senior-reviewer`](claude/agents/senior-reviewer.md) agent in a fresh context and delivers through commits, a task-branch push and a pull request for human review and merge. Nothing under `claude/` requires Codex. The Codex supervisor below remains installed and tested for machines that use it; removing it is a separate, explicit migration (managed paths, validator, tests and this README).
+**Optional.** The Claude side of this toolkit works on its own: a Claude Code session follows `claude/CLAUDE.md` and the rules, runs a bounded task with [`work-session`](claude/skills/work-session/SKILL.md), runs the Dev, Reviewer and QA roles ([`dev`](claude/agents/dev.md), [`senior-reviewer`](claude/agents/senior-reviewer.md) and [`qa`](claude/agents/qa.md), the last two in fresh contexts) and delivers through commits, a task-branch push and a pull request for human review and merge. Nothing under `claude/` requires Codex. The Codex supervisor below remains installed and tested for machines that use it; removing it is a separate, explicit migration (managed paths, validator, tests and this README).
 
 The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. Codex analyzes and plans once; Claude runs non-interactively in restricted `dontAsk` mode with basic implementation tools and only the inspected task-specific command families, implements, runs targeted tests and self-reviews; denied operations fail for Claude to report instead of opening an approval prompt. Codex then reviews independently, runs the relevant final gate and delivers. The helper passes permissions only to supervised invocations and does not modify interactive Claude settings. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
 

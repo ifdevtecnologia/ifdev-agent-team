@@ -14,8 +14,10 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules for the changed areas;
 
 1. Turn the objective into a short list of scenarios: happy paths, validation failures, error paths, boundaries, authorization (allowed and denied access), state transitions and regressions of nearby behavior.
 2. Map each scenario to existing automated tests. Mark scenarios with no test as gaps; do not count unrelated tests as coverage.
-3. Run the project's local verification for every affected area (formatting, linting, type checks, unit/component/integration tests, builds), using the project's own commands and keeping full logs on disk.
+3. Run the project's local verification for every affected area (formatting, linting, type checks, unit/component/integration tests, builds), using the project's own commands in check-only mode (for example `--check`, `--set-exit-if-changed`; never `--write`, `--fix` or snapshot/golden updates) and keeping full logs on disk.
 4. When it is safe and local, exercise the change beyond the unit tests (for example a build of each affected client or a run of the integration suite).
+5. When the project keeps a `CHANGELOG.md`, check that the Unreleased section covers the user-visible changes.
+6. Finish with `git status` and report any tracked file the checks changed; build outputs and caches already ignored by Git are acceptable.
 
 ## Limits
 
