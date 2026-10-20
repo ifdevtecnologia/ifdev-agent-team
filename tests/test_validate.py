@@ -163,6 +163,21 @@ def definition(name: str) -> str:
 
 
 class FrontmatterTests(ValidatorTestCase):
+    def test_read_only_agents_must_block_write_and_edit(self) -> None:
+        self.replace("claude/agents/qa.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
+        self.replace("claude/agents/senior-reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
+        output = self.assert_fails_with()
+        self.assert_reported(output, "claude/agents/qa.md", "read-only agent must list 'Edit' in disallowedTools")
+        self.assert_reported(output, "claude/agents/senior-reviewer.md", "read-only agent must not allow 'Edit'")
+
+    def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
+        self.replace(
+            "claude/agents/qa.md",
+            "tools: Read, Glob, Grep, Bash\ndisallowedTools: Write, Edit",
+            "tools: [Read, Glob, Grep, Bash]\ndisallowedTools: [Write, Edit]",
+        )
+        self.assert_passes()
+
     def test_name_mismatch_missing_description_and_duplicate_key_fail(self) -> None:
         self.replace("claude/skills/work-session/SKILL.md", "name: work-session", "name: other-session")
         self.replace("claude/skills/verify-changes/SKILL.md", "description:", "summary:")

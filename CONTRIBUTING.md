@@ -28,6 +28,8 @@ for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
 python3 -m unittest discover -s tests -v
 ```
 
+Add an entry under **Unreleased** in `CHANGELOG.md` for every user-visible change; a change that adds a managed item also adds an **Upgrade** note telling installed machines to rerun `./scripts/install.sh`.
+
 All must pass locally; CI runs the same commands.
 
 ## Commits and pull requests

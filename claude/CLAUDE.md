@@ -13,7 +13,21 @@ Load the minimum context required to safely complete the current task: read the 
 3. **Implement:** the smallest coherent change. No unrelated refactors, dependencies or architecture changes.
 4. **Test:** add or update automated tests and run the relevant local checks.
 5. **Review:** review the actual diff for correctness, security, regressions and unnecessary complexity; fix material findings and rerun affected checks.
-6. **Document:** update in-scope docs; report what changed, what was verified (command and result) and limitations.
+6. **Document:** update in-scope docs and the changelog (below); report what changed, what was verified (command and result) and limitations.
+
+## Team: Dev → Reviewer → QA
+
+Every change that alters executable behavior goes through three roles, Reviewer and QA always in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
+
+1. **Dev**: the `dev` agent implements the planned change with its tests and runs the affected checks. The main agent may implement itself; it then holds the Dev role.
+2. **Reviewer**: the `senior-reviewer` agent reviews the actual diff, read-only.
+3. **QA**: the `qa` agent verifies end to end against the objective and acceptance criteria, rerunning the checks.
+
+Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. The only exception: documentation-only or trivial changes (typos, comments, formatting without behavior change) need at least the Reviewer; say so in the report. If an agent is unavailable (for example the installer was not rerun after an update), report it and run that role in a separate context following its definition; never skip a role silently. When working delegated by a supervisor, the supervisor's flow defines review, QA and delivery: act as Dev only. Project-specific reviewers (`.claude/agents/`) complement these roles.
+
+## Changelog
+
+When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/) format, [Semantic Versioning](https://semver.org/)), every user-visible change adds an entry under **Unreleased** in the same branch, written for users, grouped as Added, Changed, Fixed, Removed, Security. Releasing moves Unreleased into a dated version section; before an official 1.0.0, versions stay in `0.y.z`. Do not create a release or tag without explicit authorization.
 
 ## Code and tests
 
@@ -36,4 +50,4 @@ Load the minimum context required to safely complete the current task: read the 
 ## Reporting
 
 - Report COMPLETE, PARTIAL or BLOCKED as defined in `~/.claude/rules/testing.md`. A test that was not executed is not a passing test.
-- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agent: `senior-reviewer` (independent read-only review).
+- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `dev` (implementation), `senior-reviewer` (independent read-only review) and `qa` (independent verification).
