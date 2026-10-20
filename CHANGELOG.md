@@ -21,7 +21,7 @@ before this file existed and has no Git tag.
 ### Upgrade
 - Run `./scripts/install.sh` again after pulling: it links the two new agents (idempotent).
 
-## 0.1.0
+## 0.1.0 - 2026-10-17
 
 ### Added
 - Global `CLAUDE.md`, engineering, testing and Git workflow rules.
