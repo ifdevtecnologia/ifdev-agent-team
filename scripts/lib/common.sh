@@ -10,6 +10,8 @@ MANAGED_ITEMS=(
   "claude/rules/testing.md|.claude/rules/testing.md"
   "claude/rules/git-workflow.md|.claude/rules/git-workflow.md"
   "claude/agents/senior-reviewer.md|.claude/agents/senior-reviewer.md"
+  "claude/agents/dev.md|.claude/agents/dev.md"
+  "claude/agents/qa.md|.claude/agents/qa.md"
   "claude/skills/work-session|.claude/skills/work-session"
   "claude/skills/verify-changes|.claude/skills/verify-changes"
   "codex/skills/supervise-claude|.codex/skills/supervise-claude"

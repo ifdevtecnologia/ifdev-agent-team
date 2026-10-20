@@ -13,7 +13,21 @@ Load the minimum context required to safely complete the current task: read the 
 3. **Implement:** the smallest coherent change. No unrelated refactors, dependencies or architecture changes.
 4. **Test:** add or update automated tests and run the relevant local checks.
 5. **Review:** review the actual diff for correctness, security, regressions and unnecessary complexity; fix material findings and rerun affected checks.
-6. **Document:** update in-scope docs; report what changed, what was verified (command and result) and limitations.
+6. **Document:** update in-scope docs and the changelog (below); report what changed, what was verified (command and result) and limitations.
+
+## Team: Dev → Reviewer → QA
+
+Every implementation task that changes executable behavior goes through three roles, each in its own context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
+
+1. **Dev** (`dev` agent): implements the planned change with its tests and runs the affected checks. For a small, mechanical change the main agent may act as Dev itself.
+2. **Reviewer** (`senior-reviewer` agent): independent read-only review of the actual diff.
+3. **QA** (`qa` agent): independent end-to-end verification against the objective and acceptance criteria, rerunning the checks.
+
+Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. Documentation-only changes need only the reviewer. Project-specific reviewers (`.claude/agents/`) complement, never replace, these roles.
+
+## Changelog
+
+When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/) format, [Semantic Versioning](https://semver.org/)), every user-visible change adds an entry under **Unreleased** in the same branch, written for users, grouped as Added, Changed, Fixed, Removed, Security. Releasing moves Unreleased into a dated version section; before an official 1.0.0, versions stay in `0.y.z`. Do not create a release or tag without explicit authorization.
 
 ## Code and tests
 
@@ -36,4 +50,4 @@ Load the minimum context required to safely complete the current task: read the 
 ## Reporting
 
 - Report COMPLETE, PARTIAL or BLOCKED as defined in `~/.claude/rules/testing.md`. A test that was not executed is not a passing test.
-- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agent: `senior-reviewer` (independent read-only review).
+- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `dev` (implementation), `senior-reviewer` (independent read-only review) and `qa` (independent verification).

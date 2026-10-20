@@ -37,6 +37,8 @@ REQUIRED_FILES = (
     "claude/rules/testing.md",
     "claude/rules/git-workflow.md",
     "claude/agents/senior-reviewer.md",
+    "claude/agents/dev.md",
+    "claude/agents/qa.md",
     "claude/skills/work-session/SKILL.md",
     "claude/skills/work-session/references/commit-proposal.md",
     "claude/skills/verify-changes/SKILL.md",

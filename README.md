@@ -19,7 +19,9 @@ claude/
   rules/engineering-principles.md    -> ~/.claude/rules/engineering-principles.md
   rules/testing.md                   -> ~/.claude/rules/testing.md
   rules/git-workflow.md              -> ~/.claude/rules/git-workflow.md
-  agents/senior-reviewer.md          -> ~/.claude/agents/senior-reviewer.md
+  agents/senior-reviewer.md          -> ~/.claude/agents/senior-reviewer.md (Reviewer)
+  agents/dev.md                      -> ~/.claude/agents/dev.md (Dev)
+  agents/qa.md                       -> ~/.claude/agents/qa.md (QA)
   skills/work-session/               -> ~/.claude/skills/work-session (with references/)
   skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
   hooks/agent-notify-hook.sh         -> ~/.claude/hooks/agent-notify-hook.sh (Stop/StopFailure/Notification adapter)
@@ -28,7 +30,7 @@ codex/
   profiles/ifdev-autonomous.config.toml -> ~/.codex/ifdev-autonomous.config.toml (opt-in profile)
   notify/agent-notify-codex.sh       -> ~/.codex/notify/agent-notify-codex.sh (opt-in native `notify` adapter)
 scripts/
-  install.sh, uninstall.sh           link / unlink the twelve items above and merge/remove Claude hooks
+  install.sh, uninstall.sh           link / unlink the fourteen items above and merge/remove Claude hooks
   lib/common.sh                      managed item list and shared safety helpers
   lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
   agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
@@ -62,7 +64,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 ### What the installer does
 
 - Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the twelve destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
+- Creates symlinks for exactly the fourteen destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
 - Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
@@ -184,6 +186,19 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 - **Agent:** add `claude/agents/<name>.md` with `name` and `description`; register it as above.
 - Keep content general: no product names, business domains, stack-specific business rules or machine paths. Those belong in each project's own `.claude/`.
 
+
+## Dev, Reviewer and QA agents
+
+Three global agents form the implementation team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-dev--reviewer--qa):
+
+| Role | Agent | Does | Never does |
+|---|---|---|---|
+| Dev | [`dev`](claude/agents/dev.md) | Implements the planned change with tests and runs the affected checks | Commit, push, deploy, remote changes |
+| Reviewer | [`senior-reviewer`](claude/agents/senior-reviewer.md) | Independent read-only review of the diff | Edit or run application scripts |
+| QA | [`qa`](claude/agents/qa.md) | Derives scenarios, reruns the local verification end to end, reports gaps and a verdict | Edit, destructive or remote operations |
+
+The main agent orchestrates the three, fixes material findings and delivers through the Git workflow. Projects can add specialized reviewers in their own `.claude/agents/`.
+
 ## Claude and Codex supervision
 
 **Optional.** The Claude side of this toolkit works on its own: a Claude Code session follows `claude/CLAUDE.md` and the rules, runs a bounded task with [`work-session`](claude/skills/work-session/SKILL.md), gets an independent review from the [`senior-reviewer`](claude/agents/senior-reviewer.md) agent in a fresh context and delivers through commits, a task-branch push and a pull request for human review and merge. Nothing under `claude/` requires Codex. The Codex supervisor below remains installed and tested for machines that use it; removing it is a separate, explicit migration (managed paths, validator, tests and this README).
@@ -278,4 +293,4 @@ Commits follow the emoji Conventional Commits convention and the branch/PR flow 
 
 ## Scope and ownership
 
-The repository owns only the twelve linked items, including the opt-in Codex profile and notify adapter files, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+The repository owns only the fourteen linked items, including the opt-in Codex profile and notify adapter files, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
