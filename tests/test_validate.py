@@ -165,10 +165,10 @@ def definition(name: str) -> str:
 class FrontmatterTests(ValidatorTestCase):
     def test_read_only_agents_must_block_write_and_edit(self) -> None:
         self.replace("claude/agents/qa.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
-        self.replace("claude/agents/senior-reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
+        self.replace("claude/agents/reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
         output = self.assert_fails_with()
         self.assert_reported(output, "claude/agents/qa.md", "read-only agent must list 'Edit' in disallowedTools")
-        self.assert_reported(output, "claude/agents/senior-reviewer.md", "read-only agent must not allow 'Edit'")
+        self.assert_reported(output, "claude/agents/reviewer.md", "read-only agent must not allow 'Edit'")
 
     def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
         self.replace(
@@ -181,13 +181,13 @@ class FrontmatterTests(ValidatorTestCase):
     def test_name_mismatch_missing_description_and_duplicate_key_fail(self) -> None:
         self.replace("claude/skills/work-session/SKILL.md", "name: work-session", "name: other-session")
         self.replace("claude/skills/verify-changes/SKILL.md", "description:", "summary:")
-        self.replace("claude/agents/senior-reviewer.md", "tools: Read", "name: senior-reviewer\ntools: Read")
+        self.replace("claude/agents/reviewer.md", "tools: Read", "name: reviewer\ntools: Read")
         output = self.assert_fails_with()
         self.assert_reported(output, "claude/skills/work-session/SKILL.md", "name 'other-session' must match 'work-session'")
         self.assert_reported(
             output, "claude/skills/verify-changes/SKILL.md", "frontmatter 'description' must be a non-empty string"
         )
-        self.assert_reported(output, "claude/agents/senior-reviewer.md", "duplicate frontmatter key 'name'")
+        self.assert_reported(output, "claude/agents/reviewer.md", "duplicate frontmatter key 'name'")
 
     def test_invalid_yaml_frontmatter_fails(self) -> None:
         self.write("claude/agents/bad-quote.md", '---\nname: bad-quote\ndescription: "unclosed\n---\n')
@@ -213,13 +213,13 @@ class FrontmatterTests(ValidatorTestCase):
         self.assert_reported(output, "claude/agents/sequence.md", "frontmatter must be a YAML mapping")
 
     def test_duplicate_definition_names_fail(self) -> None:
-        self.write("claude/agents/copy-reviewer.md", definition("senior-reviewer"))
+        self.write("claude/agents/copy-reviewer.md", definition("reviewer"))
         self.write("codex/skills/copy-supervisor/SKILL.md", definition("supervise-claude"))
         output = self.assert_fails_with(
-            "duplicate claude agent name 'senior-reviewer'",
+            "duplicate claude agent name 'reviewer'",
             "duplicate codex skill name 'supervise-claude'",
         )
-        self.assert_reported(output, "claude/agents/copy-reviewer.md", "name 'senior-reviewer' must match 'copy-reviewer'")
+        self.assert_reported(output, "claude/agents/copy-reviewer.md", "name 'reviewer' must match 'copy-reviewer'")
 
     def test_multiline_and_typed_yaml_frontmatter_passes(self) -> None:
         self.write(
@@ -422,6 +422,43 @@ class ManagedItemsTests(ValidatorTestCase):
     def test_missing_managed_items_array_fails(self) -> None:
         self.replace(self.COMMON, "MANAGED_ITEMS=(", "OTHER_ITEMS=(")
         self.assert_fails_with("MANAGED_ITEMS array not found")
+
+    RETIRED_ITEM = '"claude/agents/senior-reviewer.md|.claude/agents/senior-reviewer.md"'
+
+    def test_retired_source_that_still_exists_fails(self) -> None:
+        self.write("claude/agents/senior-reviewer.md", "---\nname: senior-reviewer\ndescription: Synthetic.\n---\n")
+        output = self.assert_fails_with()
+        self.assert_reported(
+            output, self.COMMON, "retired source 'claude/agents/senior-reviewer.md' still exists in the checkout"
+        )
+
+    def test_retired_destination_colliding_with_managed_destination_fails(self) -> None:
+        self.replace(self.COMMON, self.RETIRED_ITEM, '"claude/agents/old-reviewer.md|.claude/agents/reviewer.md"')
+        output = self.assert_fails_with()
+        self.assert_reported(
+            output, self.COMMON, "retired destination '.claude/agents/reviewer.md' collides with a managed destination"
+        )
+
+    def test_malformed_retired_entry_and_missing_array_fail(self) -> None:
+        self.replace(self.COMMON, self.RETIRED_ITEM, self.RETIRED_ITEM + "\n  unquoted|entry")
+        self.assert_fails_with("malformed RETIRED_ITEMS entry")
+        self.replace(self.COMMON, "RETIRED_ITEMS=(", "OTHER_RETIRED=(")
+        self.assert_fails_with("RETIRED_ITEMS array not found")
+
+    def test_retired_items_with_gone_source_and_free_destination_pass(self) -> None:
+        self.replace(
+            self.COMMON,
+            self.RETIRED_ITEM,
+            self.RETIRED_ITEM + '\n  # A second synthetic retired item.\n  "claude/rules/old-rule.md|.claude/rules/old-rule.md"',
+        )
+        self.assert_passes()
+
+    def test_empty_retired_items_array_passes(self) -> None:
+        content = (self.root / self.COMMON).read_text(encoding="utf-8")
+        start = content.index("RETIRED_ITEMS=(")
+        end = content.index("\n)\n", start) + 3
+        (self.root / self.COMMON).write_text(content[:start] + "RETIRED_ITEMS=()\n" + content[end:], encoding="utf-8")
+        self.assert_passes()
 
 
 class ContentTests(ValidatorTestCase):
