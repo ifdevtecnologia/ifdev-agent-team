@@ -15,15 +15,18 @@ Load the minimum context required to safely complete the current task: read the 
 5. **Review:** review the actual diff for correctness, security, regressions and unnecessary complexity; fix material findings and rerun affected checks.
 6. **Document:** update in-scope docs and the changelog (below); report what changed, what was verified (command and result) and limitations.
 
-## Team: Dev → Reviewer → QA
+## Team: Analyst → Dev → Reviewer → QA
 
-Every change that alters executable behavior goes through three senior roles, Reviewer and QA always in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
+Every change that alters executable behavior goes through the Dev, Reviewer and QA senior roles, preceded by the Analyst when the request needs requirements. Analyst, Reviewer and QA always run in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
 
-1. **Dev**: the `dev` agent implements the planned change with its tests and runs the affected checks. The main agent may implement itself; it then holds the Dev role.
-2. **Reviewer**: the `reviewer` agent reviews the actual diff, read-only.
-3. **QA**: the `qa` agent verifies end to end against the objective and acceptance criteria, rerunning the checks.
+1. **Analyst**: the `analyst` agent turns a new feature, a business-rule change or an ambiguous request into requirements with numbered, testable acceptance criteria, read-only. The main agent takes the blocking questions to the user before implementing. If the user is not available, record the questions, continue only with the slices whose acceptance criteria they do not block and report PARTIAL, or BLOCKED when nothing can proceed (see `~/.claude/rules/testing.md`). The confirmed acceptance criteria become the reference for the Dev's plan and for QA. Skip it for small fixes, text or style adjustments, refactors without behavior change, and when the user already gave clear acceptance criteria; say so in the report.
+2. **Dev**: the `dev` agent implements the planned change with its tests and runs the affected checks. The main agent may implement itself; it then holds the Dev role.
+3. **Reviewer**: the `reviewer` agent reviews the actual diff, read-only. Specialized reviewers run alongside it, each in its own fresh context, only when the diff meets their criterion (state which ran, or why none did, in the report):
+   - `ux-reviewer` when the diff changes a user interface: screens, components, layout, styles, user-facing text or navigation in any client.
+   - `security-reviewer` when the diff touches authentication or sessions, authorization or data-access rules (server checks, database policies or grants), secrets or tokens, native or platform permissions, backup or transfer configuration, or adds or upgrades a dependency.
+4. **QA**: the `qa` agent verifies end to end against the objective and acceptance criteria (the Analyst's, when it ran), rerunning the checks.
 
-Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. The only exception: documentation-only or trivial changes (typos, comments, formatting without behavior change) need at least the Reviewer; say so in the report. If an agent is unavailable (for example the installer was not rerun after an update), report it and run that role in a separate context following its definition; never skip a role silently. When working delegated by a supervisor, the supervisor's flow defines review, QA and delivery: act as Dev only. Project-specific reviewers (`.claude/agents/`) complement these roles.
+Fix material findings from the reviewers and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. The only exception to Reviewer + QA: documentation-only or trivial changes (typos, comments, formatting without behavior change) need at least the Reviewer and do not trigger the specialized reviewers (a typo fix in a user-facing string does not call the `ux-reviewer`); say so in the report. If an agent is unavailable (for example the installer was not rerun after an update), report it and run that role in a separate context following its definition; never skip a role silently. When working delegated by a supervisor, the supervisor's flow defines review, QA and delivery: act as Dev only. Project-specific reviewers (`.claude/agents/`), including security or access reviewers, complement these roles and do not replace them.
 
 ## Changelog
 
@@ -50,4 +53,4 @@ When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangel
 ## Reporting
 
 - Report COMPLETE, PARTIAL or BLOCKED as defined in `~/.claude/rules/testing.md`. A test that was not executed is not a passing test.
-- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `dev` (implementation), `reviewer` (independent read-only review) and `qa` (independent verification).
+- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `analyst` (read-only requirements analysis), `dev` (implementation), `reviewer` (independent read-only review), `ux-reviewer` and `security-reviewer` (specialized read-only reviews) and `qa` (independent verification).

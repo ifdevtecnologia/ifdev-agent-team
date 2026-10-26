@@ -35,7 +35,10 @@ REQUIRED_FILES = (
     "claude/rules/engineering-principles.md",
     "claude/rules/testing.md",
     "claude/rules/git-workflow.md",
+    "claude/agents/analyst.md",
     "claude/agents/reviewer.md",
+    "claude/agents/ux-reviewer.md",
+    "claude/agents/security-reviewer.md",
     "claude/agents/dev.md",
     "claude/agents/qa.md",
     "claude/skills/work-session/SKILL.md",
@@ -177,9 +180,15 @@ MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
 BASE_CODEX_CONFIG = ".codex/config.toml"
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-# Read-only roles of the Dev -> Reviewer -> QA team: they must block Write and Edit and never
-# list them as allowed tools.
-READ_ONLY_AGENTS = ("claude/agents/reviewer.md", "claude/agents/qa.md")
+# Read-only roles of the Analyst -> Dev -> Reviewer -> QA team, including the specialized reviewers:
+# they must block Write and Edit and never list them as allowed tools.
+READ_ONLY_AGENTS = (
+    "claude/agents/analyst.md",
+    "claude/agents/reviewer.md",
+    "claude/agents/ux-reviewer.md",
+    "claude/agents/security-reviewer.md",
+    "claude/agents/qa.md",
+)
 WRITE_TOOLS = ("Write", "Edit")
 SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")
 AGENT_PATH = re.compile(r"^claude/agents/([^/]+)\.md$")
@@ -614,6 +623,16 @@ def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str]
         if destination == BASE_CODEX_CONFIG:
             report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
     check_retired_items(candidates, texts, destinations, report)
+    check_managed_agents(dict(items), report)
+
+
+def check_managed_agents(managed: dict[str, str], report: Report) -> None:
+    """A required or read-only agent outside MANAGED_ITEMS would never be installed."""
+    agents = {rel for rel in (*REQUIRED_FILES, *READ_ONLY_AGENTS) if AGENT_PATH.match(rel)}
+    for rel in sorted(agents):
+        expected = "." + rel
+        if managed.get(rel) != expected:
+            report.add(MANAGED_ITEMS_FILE, f"agent '{rel}' must be managed as '{expected}'")
 
 
 def check_bash_syntax(root: Path, texts: dict[str, str], report: Report) -> None:

@@ -170,6 +170,39 @@ class FrontmatterTests(ValidatorTestCase):
         self.assert_reported(output, "claude/agents/qa.md", "read-only agent must list 'Edit' in disallowedTools")
         self.assert_reported(output, "claude/agents/reviewer.md", "read-only agent must not allow 'Edit'")
 
+    NEW_READ_ONLY_AGENTS = (
+        "claude/agents/analyst.md",
+        "claude/agents/ux-reviewer.md",
+        "claude/agents/security-reviewer.md",
+    )
+
+    def test_analyst_and_specialized_reviewers_must_stay_read_only(self) -> None:
+        for rel in self.NEW_READ_ONLY_AGENTS:
+            with self.subTest(agent=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.replace(
+                    rel,
+                    "tools: Read, Glob, Grep, Bash\ndisallowedTools: Write, Edit",
+                    "tools: Read, Glob, Grep, Bash, Write\ndisallowedTools: Edit",
+                )
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(output, rel, "read-only agent must not allow 'Write'")
+                    self.assert_reported(output, rel, "read-only agent must list 'Write' in disallowedTools")
+                finally:
+                    (self.root / rel).write_text(original, encoding="utf-8")
+
+    def test_analyst_and_specialized_reviewers_are_required(self) -> None:
+        for rel in self.NEW_READ_ONLY_AGENTS:
+            with self.subTest(agent=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                (self.root / rel).unlink()
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(output, rel, "required file is missing or is not a regular file")
+                finally:
+                    (self.root / rel).write_text(original, encoding="utf-8")
+
     def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
         self.replace(
             "claude/agents/qa.md",
@@ -327,6 +360,26 @@ class SkillReferenceTests(ValidatorTestCase):
 class ManagedItemsTests(ValidatorTestCase):
     COMMON = "scripts/lib/common.sh"
     NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
+
+    def test_required_agents_must_be_managed(self) -> None:
+        for agent in ("analyst", "security-reviewer", "dev"):
+            with self.subTest(agent=agent):
+                item = f'  "claude/agents/{agent}.md|.claude/agents/{agent}.md"\n'
+                original = (self.root / self.COMMON).read_text(encoding="utf-8")
+                self.replace(self.COMMON, item, "")
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(
+                        output,
+                        self.COMMON,
+                        f"agent 'claude/agents/{agent}.md' must be managed as '.claude/agents/{agent}.md'",
+                    )
+                finally:
+                    (self.root / self.COMMON).write_text(original, encoding="utf-8")
+
+    def test_agent_managed_at_wrong_destination_fails(self) -> None:
+        self.replace(self.COMMON, "|.claude/agents/ux-reviewer.md", "|.claude/agents/other.md")
+        self.assert_fails_with("agent 'claude/agents/ux-reviewer.md' must be managed as '.claude/agents/ux-reviewer.md'")
 
     def test_base_codex_config_can_never_be_managed(self) -> None:
         self.replace(self.COMMON, self.NOTIFY_ITEM, '"codex/notify/agent-notify-codex.sh|.codex/config.toml"')
