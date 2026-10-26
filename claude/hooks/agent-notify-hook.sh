@@ -5,12 +5,6 @@
 #
 # Always exits 0: a nonzero exit on the Stop hook tells Claude Code to keep going
 # instead of stopping, which this notifier must never trigger by accident.
-#
-# A successful Stop is suppressed when IFDEV_SUPERVISED_CLAUDE=1 (set only for the
-# invocation launched by codex/skills/supervise-claude/scripts/run_claude.py): the
-# supervisor sends its own single final COMPLETE/PARTIAL/BLOCKED notification instead,
-# so a per-cycle "complete" ping would be redundant and potentially misleading mid-run.
-# StopFailure and Notification still fire even when supervised.
 set -uo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -69,7 +63,6 @@ main() {
 
   case "$kind" in
     stop-success)
-      [[ "${IFDEV_SUPERVISED_CLAUDE:-}" == "1" ]] && exit 0
       "$NOTIFY" claude complete "Claude Code finished responding" || true
       ;;
     stop-failure)

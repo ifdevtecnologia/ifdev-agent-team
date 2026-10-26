@@ -17,9 +17,6 @@ MANAGED_ITEMS=(
   "claude/agents/qa.md|.claude/agents/qa.md"
   "claude/skills/work-session|.claude/skills/work-session"
   "claude/skills/verify-changes|.claude/skills/verify-changes"
-  "codex/skills/supervise-claude|.codex/skills/supervise-claude"
-  # Opt-in profile file only; the base ~/.codex/config.toml is never touched.
-  "codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"
   # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters.
   "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh"
   "claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh"
@@ -31,6 +28,10 @@ MANAGED_ITEMS=(
 # old source, and leave anything else at that path untouched.
 RETIRED_ITEMS=(
   "claude/agents/senior-reviewer.md|.claude/agents/senior-reviewer.md"
+  # Codex supervision, removed together with its opt-in profile. A directory link is removed
+  # as a link only; whatever the old source directory still holds is never followed.
+  "codex/skills/supervise-claude|.codex/skills/supervise-claude"
+  "codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"
 )
 RETIRED_PLAN=()
 RETIRED_REMOVED=0

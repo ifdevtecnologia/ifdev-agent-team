@@ -4,8 +4,7 @@
 Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter, local
 Markdown links, references to installed global files, machine-specific paths, product/domain
 content, sensitive paths, credential patterns, unsafe prescriptions, obsolete delivery
-instructions, commit convention consistency, managed items, managed Codex profile settings and
-Bash syntax.
+instructions, commit convention consistency, managed and retired items and Bash syntax.
 
 This is a heuristic gate, not a comprehensive semantic or security review. Sensitive
 paths are classified by name before any file is opened and are never read. Every diagnostic
@@ -46,21 +45,6 @@ REQUIRED_FILES = (
     "claude/skills/work-session/references/commit-proposal.md",
     "claude/skills/verify-changes/SKILL.md",
     "claude/skills/verify-changes/references/commit-messages.md",
-    "codex/skills/supervise-claude/SKILL.md",
-    "codex/skills/supervise-claude/references/safety-and-preflight.md",
-    "codex/skills/supervise-claude/references/delegation.md",
-    "codex/skills/supervise-claude/references/review.md",
-    "codex/skills/supervise-claude/references/delivery.md",
-    "codex/skills/supervise-claude/references/mechanical-remediation.md",
-    "codex/skills/supervise-claude/references/isolated-clone-fallback.md",
-    "codex/skills/supervise-claude/references/model-selection.md",
-    "codex/skills/supervise-claude/references/protected-path-handoff.md",
-    "codex/skills/supervise-claude/scripts/run_claude.py",
-    "codex/skills/supervise-claude/scripts/protected_patch.py",
-    "codex/skills/supervise-claude/scripts/supervision_policy.py",
-    "codex/skills/supervise-claude/scripts/clone_fallback.py",
-    "codex/skills/supervise-claude/scripts/notify_final_status.py",
-    "codex/profiles/ifdev-autonomous.config.toml",
     "codex/notify/agent-notify-codex.sh",
     "claude/hooks/agent-notify-hook.sh",
     "scripts/install.sh",
@@ -72,7 +56,6 @@ REQUIRED_FILES = (
     "scripts/agent-notify.sh",
     "tests/test_install.py",
     "tests/test_validate.py",
-    "tests/test_supervise_claude.py",
     "tests/test_agent_notify.py",
     "tests/test_agent_notify_hook.py",
     "tests/test_claude_hooks.py",
@@ -160,9 +143,6 @@ PUSH_EXCEPTIONS = re.compile(
     _NARROWER_RESTRICTION + r"|\bforce\b|\bwithout\s+(?:[\w-]+\s+){0,3}(?:authori[sz]ation|approval)", re.IGNORECASE
 )
 DELIVERY_RULE_SCOPE = ("claude/", "codex/")
-# Only the supervisor skill may forbid Claude, the delegated implementer, from delivering.
-IMPLEMENTER_ONLY_SCOPE = "codex/skills/supervise-claude/"
-IMPLEMENTER_ACTOR = re.compile(r"\bClaude\b")
 
 BLOCK_START = re.compile(r"^\s*(?:$|#|[-*+]\s|\d+\.\s|\||```|~~~)")
 SENTENCE_END = re.compile(r"(?<=[.!?;])\s+")
@@ -198,21 +178,6 @@ MANAGED_ITEMS_FILE = "scripts/lib/common.sh"
 ITEMS_BLOCK = r"^{name}=\((?:\)|(.*?)^\))"
 MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
 BASE_CODEX_CONFIG = ".codex/config.toml"
-
-# Managed opt-in Codex profiles and their exact settings. Profiles live beside the base config
-# as $CODEX_HOME/<name>.config.toml and are selected with `codex --profile <name>`.
-CODEX_PROFILES_DIR = "codex/profiles/"
-CODEX_PROFILES = {
-    "codex/profiles/ifdev-autonomous.config.toml": {
-        "approval_policy": "never",
-        "sandbox_mode": "workspace-write",
-        "sandbox_workspace_write.network_access": True,
-    },
-}
-FORBIDDEN_PROFILE_VALUES = {("sandbox_mode", "danger-full-access")}
-# A deliberately small TOML subset: comments, simple tables, string and boolean values.
-TOML_TABLE = re.compile(r"^\[([A-Za-z0-9_-]+)\]\s*(?:#.*)?$")
-TOML_ENTRY = re.compile(r'^([A-Za-z0-9_-]+)\s*=\s*("[^"\\]*"|true|false)\s*(?:#.*)?$')
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # Read-only roles of the Analyst -> Dev -> Reviewer -> QA team, including the specialized reviewers:
@@ -535,10 +500,7 @@ def check_unsafe_prescriptions(rel: str, text: str, report: Report) -> None:
 
 
 def check_obsolete_delivery_rules(rel: str, text: str, report: Report) -> None:
-    implementer_scope = rel.startswith(IMPLEMENTER_ONLY_SCOPE)
     for line, sentence in prose_sentences(text):
-        if implementer_scope and IMPLEMENTER_ACTOR.search(sentence):
-            continue
         if PER_COMMIT_APPROVAL.search(sentence) and not PER_COMMIT_EXCEPTIONS.search(sentence):
             report.add(rel, "obsolete delivery instruction (per-commit approval); see claude/rules/git-workflow.md", line)
         if PUSH_PROHIBITION.search(sentence) and not PUSH_EXCEPTIONS.search(sentence):
@@ -625,11 +587,22 @@ def parse_item_array(texts: dict[str, str], name: str, report: Report) -> list[t
     return items
 
 
-def check_retired_items(root: Path, texts: dict[str, str], managed_destinations: set[str], report: Report) -> None:
+def has_inventoried_content(source: str, candidates: list[str]) -> bool:
+    """True when the inventory holds the file itself or anything below the directory."""
+    prefix = source.rstrip("/") + "/"
+    return any(rel == source or rel.startswith(prefix) for rel in candidates)
+
+
+def check_retired_items(
+    candidates: list[str], texts: dict[str, str], managed_destinations: set[str], report: Report
+) -> None:
     """A retired source must be gone (otherwise it is still managed) and its destination must
-    not collide with a managed one (install would link it and uninstall would fight over it)."""
+    not collide with a managed one (install would link it and uninstall would fight over it).
+
+    "Gone" means absent from the inventory: Git-ignored leftovers such as `__pycache__/` stay
+    on disk after the tracked files are removed and are not toolkit content."""
     for source, destination in parse_item_array(texts, "RETIRED_ITEMS", report):
-        if (root / source).exists() or (root / source).is_symlink():
+        if has_inventoried_content(source, candidates):
             report.add(MANAGED_ITEMS_FILE, f"retired source '{source}' still exists in the checkout")
         if destination in managed_destinations:
             report.add(MANAGED_ITEMS_FILE, f"retired destination '{destination}' collides with a managed destination")
@@ -642,23 +615,15 @@ def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str]
         path = root / source
         if path.is_symlink() or not (path.is_file() or path.is_dir()) or has_unsafe_parent(root, source):
             report.add(MANAGED_ITEMS_FILE, f"managed source '{source}' is missing or unsafe")
-        elif path.is_dir() and not any(c.startswith(source.rstrip("/") + "/") for c in candidates):
+        elif path.is_dir() and not has_inventoried_content(source, candidates):
             report.add(MANAGED_ITEMS_FILE, f"managed source directory '{source}' has no tracked content")
         if destination in destinations:
             report.add(MANAGED_ITEMS_FILE, f"duplicate managed destination '{destination}'")
         destinations.add(destination)
         if destination == BASE_CODEX_CONFIG:
             report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
-    check_retired_items(root, texts, destinations, report)
-    managed = dict(items)
-    for rel in candidates:
-        if rel.startswith(CODEX_PROFILES_DIR) and rel not in CODEX_PROFILES:
-            report.add(rel, "unmanaged Codex profile (add it to CODEX_PROFILES in scripts/validate.py)")
-    for rel in CODEX_PROFILES:
-        expected = ".codex/" + PurePosixPath(rel).name
-        if managed.get(rel) != expected:
-            report.add(MANAGED_ITEMS_FILE, f"Codex profile '{rel}' must be managed as '{expected}'")
-    check_managed_agents(managed, report)
+    check_retired_items(candidates, texts, destinations, report)
+    check_managed_agents(dict(items), report)
 
 
 def check_managed_agents(managed: dict[str, str], report: Report) -> None:
@@ -668,49 +633,6 @@ def check_managed_agents(managed: dict[str, str], report: Report) -> None:
         expected = "." + rel
         if managed.get(rel) != expected:
             report.add(MANAGED_ITEMS_FILE, f"agent '{rel}' must be managed as '{expected}'")
-
-
-def parse_profile(rel: str, text: str, report: Report) -> dict | None:
-    settings: dict = {}
-    table = ""
-    ok = True
-    for number, raw in enumerate(text.split("\n"), start=1):
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        header = TOML_TABLE.match(line)
-        entry = TOML_ENTRY.match(line)
-        if header:
-            table = header.group(1) + "."
-            continue
-        if entry is None:
-            report.add(rel, "unsupported profile syntax (only comments, simple tables, strings and booleans)", number)
-            ok = False
-            continue
-        key, value = table + entry.group(1), entry.group(2)
-        if key in settings:
-            report.add(rel, f"duplicate profile setting '{key}'", number)
-            ok = False
-        settings[key] = value.strip('"') if value.startswith('"') else value == "true"
-    return settings if ok else None
-
-
-def check_codex_profiles(texts: dict[str, str], report: Report) -> None:
-    for rel, expected in CODEX_PROFILES.items():
-        if rel not in texts:
-            continue  # reported by check_required
-        settings = parse_profile(rel, texts[rel], report)
-        if settings is None:
-            continue
-        for key, value in sorted(settings.items()):
-            if (key, value) in FORBIDDEN_PROFILE_VALUES:
-                report.add(rel, f"forbidden profile setting '{key} = {value}'")
-            elif key not in expected:
-                report.add(rel, f"unexpected profile setting '{key}'")
-            elif value != expected[key]:
-                report.add(rel, f"profile setting '{key}' must be {expected[key]!r}")
-        for key in sorted(set(expected) - set(settings)):
-            report.add(rel, f"missing profile setting '{key}'")
 
 
 def check_bash_syntax(root: Path, texts: dict[str, str], report: Report) -> None:
@@ -756,7 +678,6 @@ def validate(root: Path) -> Report:
     check_read_only_agents(texts, report)
     check_commit_table(texts, report)
     check_managed_items(root, texts, candidates, report)
-    check_codex_profiles(texts, report)
     for rel, text in sorted(texts.items()):
         check_text(root, rel, text, report)
     check_bash_syntax(root, texts, report)

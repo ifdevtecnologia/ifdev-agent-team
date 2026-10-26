@@ -66,21 +66,23 @@ class HookAdapterTestCase(unittest.TestCase):
 
 
 class ClaudeHookAdapterTests(HookAdapterTestCase):
-    def test_stop_success_notifies_complete_when_not_supervised(self) -> None:
+    def test_stop_success_notifies_complete(self) -> None:
         result = self.run_hook("stop-success")
 
         self.assertEqual(result.returncode, 0)
         (call,) = self.calls()
         self.assertEqual(call, ["claude", "complete", "Claude Code finished responding"])
 
-    def test_stop_success_is_suppressed_when_supervised(self) -> None:
+    def test_stop_success_ignores_the_retired_supervision_variable(self) -> None:
+        # The Codex supervisor used to set it to replace per-cycle pings; it no longer exists.
         result = self.run_hook("stop-success", extra_env={"IFDEV_SUPERVISED_CLAUDE": "1"})
 
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(self.calls(), [])
+        (call,) = self.calls()
+        self.assertEqual(call, ["claude", "complete", "Claude Code finished responding"])
 
-    def test_stop_failure_always_notifies_blocked_even_when_supervised(self) -> None:
-        result = self.run_hook("stop-failure", extra_env={"IFDEV_SUPERVISED_CLAUDE": "1"})
+    def test_stop_failure_notifies_blocked(self) -> None:
+        result = self.run_hook("stop-failure")
 
         self.assertEqual(result.returncode, 0)
         (call,) = self.calls()

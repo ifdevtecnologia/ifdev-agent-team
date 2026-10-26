@@ -247,10 +247,11 @@ class FrontmatterTests(ValidatorTestCase):
 
     def test_duplicate_definition_names_fail(self) -> None:
         self.write("claude/agents/copy-reviewer.md", definition("reviewer"))
-        self.write("codex/skills/copy-supervisor/SKILL.md", definition("supervise-claude"))
+        self.write("codex/skills/alpha/SKILL.md", definition("alpha"))
+        self.write("codex/skills/copy-alpha/SKILL.md", definition("alpha"))
         output = self.assert_fails_with(
             "duplicate claude agent name 'reviewer'",
-            "duplicate codex skill name 'supervise-claude'",
+            "duplicate codex skill name 'alpha'",
         )
         self.assert_reported(output, "claude/agents/copy-reviewer.md", "name 'reviewer' must match 'copy-reviewer'")
 
@@ -319,13 +320,13 @@ class ReferenceTests(ValidatorTestCase):
 
 
 class SkillReferenceTests(ValidatorTestCase):
-    SKILL = "codex/skills/supervise-claude/SKILL.md"
-    REFERENCE = "codex/skills/supervise-claude/references/review.md"
+    SKILL = "claude/skills/work-session/SKILL.md"
+    REFERENCE = "claude/skills/work-session/references/commit-proposal.md"
 
     def test_missing_mandatory_reference_fails(self) -> None:
         (self.root / self.REFERENCE).unlink()
         output = self.assert_fails_with(f"{self.REFERENCE}: required file is missing")
-        self.assert_reported(output, self.SKILL, "broken local link 'references/review.md'")
+        self.assert_reported(output, self.SKILL, "broken local link 'references/commit-proposal.md'")
 
     def test_broken_link_to_reference_fails(self) -> None:
         self.append(self.SKILL, "\nSee [extra steps](references/missing-steps.md).\n")
@@ -340,7 +341,7 @@ class SkillReferenceTests(ValidatorTestCase):
         self.assert_reported(output, self.REFERENCE, "symlink points outside the repository")
 
     def test_reference_prose_needs_no_frontmatter(self) -> None:
-        self.write("codex/skills/supervise-claude/references/extra.md", "# Extra\n\nPlain reference prose.\n")
+        self.write("claude/skills/work-session/references/extra.md", "# Extra\n\nPlain reference prose.\n")
         self.write("claude/skills/verify-changes/references/extra.md", "Plain reference prose.\n")
         self.assert_passes()
 
@@ -356,81 +357,9 @@ class SkillReferenceTests(ValidatorTestCase):
         )
 
 
-class CodexProfileTests(ValidatorTestCase):
-    PROFILE = "codex/profiles/ifdev-autonomous.config.toml"
-
-    def test_repository_profile_matches_the_safe_settings(self) -> None:
-        validator = self.load_validator()
-        report = validator.Report()
-        settings = validator.parse_profile(self.PROFILE, (self.root / self.PROFILE).read_text(), report)
-        self.assertEqual(report.errors, [])
-        self.assertEqual(settings, validator.CODEX_PROFILES[self.PROFILE])
-        self.assertEqual(settings["approval_policy"], "never")
-        self.assertEqual(settings["sandbox_mode"], "workspace-write")
-        self.assertIs(settings["sandbox_workspace_write.network_access"], True)
-        self.assertNotIn("approvals_reviewer", settings)
-        self.assertNotIn("danger-full-access", settings.values())
-
-    def test_autonomous_supervision_keeps_dangerous_operations_prohibited(self) -> None:
-        policy = (self.root / "codex/skills/supervise-claude/SKILL.md").read_text().lower()
-        for prohibition in (
-            "force push",
-            "rewrite remote history",
-            "git reset --hard",
-            "destructive `git clean`",
-            "sudo",
-            "ssh/scp",
-            "deploy",
-            "production",
-            "extract real project secrets",
-            "approve/merge a pr",
-            "auto-merge",
-        ):
-            with self.subTest(prohibition=prohibition):
-                self.assertIn(prohibition, policy)
-
-    @unittest.skipUnless(importlib.util.find_spec("tomllib"), "tomllib requires Python 3.11+")
-    def test_profile_subset_parser_agrees_with_real_toml(self) -> None:
-        import tomllib
-
-        data = tomllib.loads((self.root / self.PROFILE).read_text())
-        flat = {k: v for k, v in data.items() if not isinstance(v, dict)}
-        flat.update({f"{t}.{k}": v for t, table in data.items() if isinstance(table, dict) for k, v in table.items()})
-        self.assertEqual(flat, self.load_validator().CODEX_PROFILES[self.PROFILE])
-
-    def test_dangerous_profile_values_fail(self) -> None:
-        self.replace(self.PROFILE, 'sandbox_mode = "workspace-write"', 'sandbox_mode = "danger-full-access"')
-        output = self.assert_fails_with()
-        self.assert_reported(output, self.PROFILE, "forbidden profile setting 'sandbox_mode = danger-full-access'")
-
-    def test_changed_missing_extra_or_duplicate_settings_fail(self) -> None:
-        self.replace(self.PROFILE, 'approval_policy = "never"\n', "")
-        self.replace(self.PROFILE, "network_access = true", "network_access = false")
-        self.append(self.PROFILE, 'writable_roots = "/"\nnetwork_access = true\n')
-        output = self.assert_fails_with()
-        self.assert_reported(output, self.PROFILE, "duplicate profile setting 'sandbox_workspace_write.network_access'")
-        self.replace(self.PROFILE, "network_access = true\n", "")
-        output = self.assert_fails_with()
-        self.assert_reported(output, self.PROFILE, "missing profile setting 'approval_policy'")
-        self.assert_reported(output, self.PROFILE, "profile setting 'sandbox_workspace_write.network_access' must be True")
-        self.assert_reported(output, self.PROFILE, "unexpected profile setting 'sandbox_workspace_write.writable_roots'")
-
-    def test_unsupported_profile_syntax_fails(self) -> None:
-        self.append(self.PROFILE, "shell_environment_policy.inherit = [\"all\"]\n")
-        self.assert_fails_with(f"{self.PROFILE}", "unsupported profile syntax")
-
-    def test_unknown_profile_file_fails(self) -> None:
-        self.write("codex/profiles/other.config.toml", 'sandbox_mode = "read-only"\n')
-        self.assert_fails_with("codex/profiles/other.config.toml: unmanaged Codex profile")
-
-
 class ManagedItemsTests(ValidatorTestCase):
     COMMON = "scripts/lib/common.sh"
-    PROFILE_ITEM = '"codex/profiles/ifdev-autonomous.config.toml|.codex/ifdev-autonomous.config.toml"'
-
-    def test_unmanaged_profile_fails(self) -> None:
-        self.replace(self.COMMON, self.PROFILE_ITEM, "")
-        self.assert_fails_with("must be managed as '.codex/ifdev-autonomous.config.toml'")
+    NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
 
     def test_required_agents_must_be_managed(self) -> None:
         for agent in ("analyst", "security-reviewer", "dev"):
@@ -453,19 +382,14 @@ class ManagedItemsTests(ValidatorTestCase):
         self.assert_fails_with("agent 'claude/agents/ux-reviewer.md' must be managed as '.claude/agents/ux-reviewer.md'")
 
     def test_base_codex_config_can_never_be_managed(self) -> None:
-        self.replace(
-            self.COMMON, self.PROFILE_ITEM, '"codex/profiles/ifdev-autonomous.config.toml|.codex/config.toml"'
-        )
-        self.assert_fails_with(
-            "managed items must never replace the base Codex config",
-            "must be managed as '.codex/ifdev-autonomous.config.toml'",
-        )
+        self.replace(self.COMMON, self.NOTIFY_ITEM, '"codex/notify/agent-notify-codex.sh|.codex/config.toml"')
+        self.assert_fails_with("managed items must never replace the base Codex config")
 
     def test_missing_source_duplicate_destination_and_malformed_entry_fail(self) -> None:
         self.replace(
             self.COMMON,
-            self.PROFILE_ITEM,
-            self.PROFILE_ITEM + '\n  "claude/missing.md|.claude/CLAUDE.md"\n  unquoted|entry',
+            self.NOTIFY_ITEM,
+            self.NOTIFY_ITEM + '\n  "claude/missing.md|.claude/CLAUDE.md"\n  unquoted|entry',
         )
         output = self.assert_fails_with()
         self.assert_reported(output, self.COMMON, "managed source 'claude/missing.md' is missing or unsafe")
@@ -484,6 +408,20 @@ class ManagedItemsTests(ValidatorTestCase):
         self.assert_reported(
             output, self.COMMON, "retired source 'claude/agents/senior-reviewer.md' still exists in the checkout"
         )
+
+    def test_retired_supervision_sources_with_content_fail(self) -> None:
+        self.write("codex/skills/supervise-claude/SKILL.md", definition("supervise-claude"))
+        self.write("codex/profiles/ifdev-autonomous.config.toml", 'sandbox_mode = "read-only"\n')
+        output = self.assert_fails_with()
+        for source in ("codex/skills/supervise-claude", "codex/profiles/ifdev-autonomous.config.toml"):
+            self.assert_reported(output, self.COMMON, f"retired source '{source}' still exists in the checkout")
+
+    def test_retired_directory_with_only_ignored_leftovers_passes(self) -> None:
+        # Git keeps ignored caches after the tracked files of a retired directory are removed.
+        cache = self.root / "codex/skills/supervise-claude/scripts/__pycache__/run_claude.cpython-312.pyc"
+        cache.parent.mkdir(parents=True)
+        cache.write_bytes(b"synthetic cache")
+        self.assert_passes()
 
     def test_retired_destination_colliding_with_managed_destination_fails(self) -> None:
         self.replace(self.COMMON, self.RETIRED_ITEM, '"claude/agents/old-reviewer.md|.claude/agents/reviewer.md"')
@@ -535,10 +473,10 @@ class ContentTests(ValidatorTestCase):
             "\nCommit somente com aprovação explícita.\n"
             "\nNever push automatically.\n"
             "\nNunca faça push automaticamente.\n"
-            # The implementer-only allowance is limited to the supervisor skill.
             "\nClaude must never push.\n",
         )
-        self.append("codex/skills/supervise-claude/SKILL.md", "\nCodex must never push the task branch.\n")
+        # Installed Codex content has no implementer-only allowance either.
+        self.write("codex/skills/other/SKILL.md", definition("other") + "\nClaude must never push.\n")
         output = self.assert_fails_with()
 
         def count(rel: str, label: str) -> int:
@@ -546,7 +484,7 @@ class ContentTests(ValidatorTestCase):
 
         self.assertEqual(count("claude/CLAUDE.md", "per-commit approval"), 3, output)
         self.assertEqual(count("claude/CLAUDE.md", "unconditional push prohibition"), 3, output)
-        self.assertEqual(count("codex/skills/supervise-claude/SKILL.md", "unconditional push prohibition"), 1, output)
+        self.assertEqual(count("codex/skills/other/SKILL.md", "unconditional push prohibition"), 1, output)
 
     def test_narrower_delivery_restrictions_pass(self) -> None:
         self.append(
@@ -556,7 +494,6 @@ class ContentTests(ValidatorTestCase):
             "\nDo not push without authorization.\n"
             "\nNever force push.\n",
         )
-        self.append("codex/skills/supervise-claude/SKILL.md", "\nClaude must never push or commit; Codex delivers.\n")
         self.assert_passes()
 
     def test_unsafe_prescriptions_fail(self) -> None:

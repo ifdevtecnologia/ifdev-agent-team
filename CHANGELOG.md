@@ -41,12 +41,28 @@ before this file existed and has no Git tag.
 - `work-session` runs the Analyst before planning when the request needs requirements, and the
   `dev` and `qa` agents use the Analyst's acceptance criteria when it ran.
 
+- The Claude Code `Stop` hook always sends its "complete" notification; the
+  `IFDEV_SUPERVISED_CLAUDE` variable no longer silences it.
+- The validator treats a retired item's source as gone when only Git-ignored leftovers (such as
+  `__pycache__/`) remain in the checkout.
+
+### Removed
+- Codex supervision: the `supervise-claude` Codex skill (with its references and helper scripts)
+  and the opt-in `ifdev-autonomous` Codex profile. Complete deliveries now run in Claude Code with
+  the Analyst → Dev → Reviewer → QA team. The Codex `notify` adapter and the shared notifier stay.
+- Validator checks that only applied to the supervision: the `codex/profiles/` settings checks and
+  the exception that let the supervisor skill forbid Claude from delivering.
+
 ### Upgrade
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the new `analyst`, `dev`,
-  `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/` and
-  removes the old `senior-reviewer.md` link there when it points to this checkout. Until then the
-  old link is dangling and the main agent reports the missing agents and runs their roles in a
-  separate context.
+- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `dev`,
+  `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/`, and
+  removes old links that still point to this checkout: `senior-reviewer.md` in
+  `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
+  `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those
+  paths is kept and reported. Until then the main agent reports the missing agents and runs their
+  roles in a separate context. Stop selecting `codex --profile ifdev-autonomous`. A leftover
+  `codex/skills/supervise-claude/` directory with only ignored `__pycache__/` files may remain in
+  the checkout; it is unused and safe to delete.
 
 ## 0.1.0 - 2026-10-17
 
