@@ -17,10 +17,10 @@ Load the minimum context required to safely complete the current task: read the 
 
 ## Team: Dev → Reviewer → QA
 
-Every change that alters executable behavior goes through three roles, Reviewer and QA always in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
+Every change that alters executable behavior goes through three senior roles, Reviewer and QA always in their own fresh context. The main agent orchestrates, owns the plan and the delivery, and relays the findings:
 
 1. **Dev**: the `dev` agent implements the planned change with its tests and runs the affected checks. The main agent may implement itself; it then holds the Dev role.
-2. **Reviewer**: the `senior-reviewer` agent reviews the actual diff, read-only.
+2. **Reviewer**: the `reviewer` agent reviews the actual diff, read-only.
 3. **QA**: the `qa` agent verifies end to end against the objective and acceptance criteria, rerunning the checks.
 
 Fix material findings from Reviewer and QA (via Dev or directly), rerun the affected checks and, when the fix is not trivial, ask the role that raised the finding to confirm. The only exception: documentation-only or trivial changes (typos, comments, formatting without behavior change) need at least the Reviewer; say so in the report. If an agent is unavailable (for example the installer was not rerun after an update), report it and run that role in a separate context following its definition; never skip a role silently. When working delegated by a supervisor, the supervisor's flow defines review, QA and delivery: act as Dev only. Project-specific reviewers (`.claude/agents/`) complement these roles.
@@ -50,4 +50,4 @@ When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangel
 ## Reporting
 
 - Report COMPLETE, PARTIAL or BLOCKED as defined in `~/.claude/rules/testing.md`. A test that was not executed is not a passing test.
-- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `dev` (implementation), `senior-reviewer` (independent read-only review) and `qa` (independent verification).
+- Global skills: `verify-changes` (local verification) and `work-session` (bounded work session). Global agents: `dev` (implementation), `reviewer` (independent read-only review) and `qa` (independent verification).

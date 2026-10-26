@@ -16,7 +16,8 @@ Usage: scripts/install.sh [--dry-run]
 
 Creates symlinks in $HOME for the fourteen items managed by this repository.
 Existing files, directories or foreign/dangling symlinks at those exact paths are
-moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking. Also merges
+moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking. Links left by
+retired items are removed only when they still point to this checkout. Also merges
 this toolkit's notification hooks into ~/.claude/settings.json, preserving every
 other setting (requires python3; see README).
 
@@ -82,11 +83,14 @@ plan_install() {
     error "$problem"
     failed=1
   fi
+  plan_retired || failed=1
   return "$failed"
 }
 
+# Same order as apply_install: retired links first, then the managed items.
 print_plan() {
   local item destination_rel i=0
+  apply_retired 1
   for item in "${MANAGED_ITEMS[@]}"; do
     destination_rel=$(item_destination "$item")
     case "${PLAN[$i]}" in
@@ -108,6 +112,7 @@ create_backup_dir() {
 apply_install() {
   local item source_rel destination_rel target destination backup_dir="" i=0
   local linked=0 backed_up=0 unchanged=0
+  apply_retired 0
   for item in "${MANAGED_ITEMS[@]}"; do
     source_rel=$(item_source "$item")
     destination_rel=$(item_destination "$item")
@@ -139,7 +144,7 @@ apply_install() {
     esac
     i=$((i + 1))
   done
-  log "done: $linked linked, $backed_up backed up, $unchanged unchanged"
+  log "done: $linked linked, $backed_up backed up, $unchanged unchanged, $RETIRED_REMOVED retired removed"
   [[ -z "$backup_dir" ]] || log "backups: $backup_dir (see README for manual restoration)"
 }
 
@@ -162,7 +167,7 @@ preflight_claude_hooks() {
 
 main() {
   parse_args "$@"
-  require_commands ln mv mkdir rmdir readlink mktemp date dirname python3
+  require_commands ln mv rm mkdir rmdir readlink mktemp date dirname python3
   require_home
   plan_install || die "no changes were made"
   preflight_claude_hooks || die "no changes were made"

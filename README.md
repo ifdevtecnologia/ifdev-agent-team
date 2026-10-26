@@ -19,7 +19,7 @@ claude/
   rules/engineering-principles.md    -> ~/.claude/rules/engineering-principles.md
   rules/testing.md                   -> ~/.claude/rules/testing.md
   rules/git-workflow.md              -> ~/.claude/rules/git-workflow.md
-  agents/senior-reviewer.md          -> ~/.claude/agents/senior-reviewer.md (Reviewer)
+  agents/reviewer.md                 -> ~/.claude/agents/reviewer.md (Reviewer)
   agents/dev.md                      -> ~/.claude/agents/dev.md (Dev)
   agents/qa.md                       -> ~/.claude/agents/qa.md (QA)
   skills/work-session/               -> ~/.claude/skills/work-session (with references/)
@@ -68,6 +68,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
 - Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
+- Removes links left by retired (renamed or removed) items, listed in `RETIRED_ITEMS` in `scripts/lib/common.sh`, only when the link still points exactly to this checkout's old source; a file, a directory or a link to anywhere else at that path is kept and reported. For example, the old `senior-reviewer.md` link in `~/.claude/agents/` is removed after its rename to `reviewer.md`.
 - Is idempotent: a second run reports every managed item as unchanged, creates no backup and reports the hooks as already configured.
 - Uses a lock directory (`~/.ifdev-ai-tools/lock`) so concurrent runs cannot collide, held only while an actual change (a link or a hooks update) is being applied. If a run is interrupted hard, the message explains how to remove the stale lock after confirming no run is active.
 - `--dry-run` prints the plan, including the hooks that would be added or removed, and makes no changes at all (no directories, backups or locks).
@@ -98,7 +99,7 @@ Repeat the check for every item; never move a backup over an existing destinatio
 ./scripts/uninstall.sh
 ```
 
-Removes only symlinks that point exactly to this checkout's managed items, and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
+Removes only symlinks that point exactly to this checkout's managed items (and to retired items' old sources), and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
 
 ## Agent notifications
 
@@ -170,7 +171,7 @@ python3 -m unittest discover -s tests -v
 - unsafe prescriptions (permission or hook bypasses, destructive commands, privileged execution, protected-branch bypasses) that appear without a prohibition in the same sentence;
 - obsolete delivery instructions in the installed `claude/` and `codex/` content that contradict `claude/rules/git-workflow.md`: requiring approval for every commit, or forbidding pushes even when delivery is authorized. Narrower restrictions are not reported: conditional wording (such as "without authorization" or "unless"), explicit user restrictions, prohibitions limited to force pushes or default/protected branches, and prohibitions aimed at Claude inside the `supervise-claude` skill;
 - consistency of the commit emoji/type convention;
-- `MANAGED_ITEMS` in `scripts/lib/common.sh`: every source exists, destinations are unique and none replaces `~/.codex/config.toml`; every file in `codex/profiles/` is a known, managed profile whose settings exactly match the expected safe values (a small TOML subset is parsed, so no TOML dependency is needed);
+- `MANAGED_ITEMS` in `scripts/lib/common.sh`: every source exists, destinations are unique and none replaces `~/.codex/config.toml`; `RETIRED_ITEMS` sources no longer exist and their destinations do not collide with a managed one; every file in `codex/profiles/` is a known, managed profile whose settings exactly match the expected safe values (a small TOML subset is parsed, so no TOML dependency is needed);
 - Bash syntax of every `*.sh` file.
 
 The file inventory comes from `git ls-files --cached --others --exclude-standard`, so it works on a fresh clone and on an uncommitted working tree. Paths that look like secrets are classified by name before anything is opened, checking every path component (so a matching directory covers everything below it): `.env*`, `credential*`, `secret*` and `token*` (also dot-prefixed, such as `.credentials.json`), `auth` and `auth.*` (such as `auth.json`, `auth.yaml`), private keys and key stores (`id_rsa*`, `id_ed25519*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.ppk`, `*.jks`, `*.keystore`), credential files (`.netrc`, `.git-credentials`, `.pypirc`, `.npmrc`) and cloud/tool credential directories (`.aws`, `.azure`, `.gcloud`, `.kube`, `.docker`, `.oci`, `.ssh`, `.gnupg`, `.config/gcloud`, `.config/gh`). They are never read, hashed or copied, and their index content is never inspected; untracked ones are left untouched.
@@ -188,21 +189,21 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 
 ## Dev, Reviewer and QA agents
 
-Three global agents form the implementation team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-dev--reviewer--qa):
+Three global agents, all senior, form the implementation team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-dev--reviewer--qa):
 
 | Role | Agent | Does | Never does |
 |---|---|---|---|
 | Dev | [`dev`](claude/agents/dev.md) | Implements the planned change with tests and runs the affected checks | Commit, push, deploy, remote changes |
-| Reviewer | [`senior-reviewer`](claude/agents/senior-reviewer.md) | Independent read-only review of the diff | Edit or run application scripts |
+| Reviewer | [`reviewer`](claude/agents/reviewer.md) | Independent read-only review of the diff | Edit or run application scripts |
 | QA | [`qa`](claude/agents/qa.md) | Derives scenarios, reruns the local verification end to end, reports gaps and a verdict | Edit, destructive or remote operations |
 
-The main agent orchestrates the three, fixes material findings and delivers through the Git workflow. Projects can add specialized reviewers in their own `.claude/agents/`.
+The main agent orchestrates the three, fixes material findings and delivers through the Git workflow. Projects can add specialized reviewers in their own `.claude/agents/`, but must not name them `dev`, `reviewer` or `qa`: a project agent takes precedence over a global one with the same name and would hide it.
 
 Updating with `git pull` refreshes existing links, but a release that adds managed items (such as these agents) needs `./scripts/install.sh` again to create the new links; it is idempotent. Until then the global instructions tell the main agent to report the missing agent and run its role in a separate context.
 
 ## Claude and Codex supervision
 
-**Optional.** The Claude side of this toolkit works on its own: a Claude Code session follows `claude/CLAUDE.md` and the rules, runs a bounded task with [`work-session`](claude/skills/work-session/SKILL.md), runs the Dev, Reviewer and QA roles ([`dev`](claude/agents/dev.md), [`senior-reviewer`](claude/agents/senior-reviewer.md) and [`qa`](claude/agents/qa.md), the last two in fresh contexts) and delivers through commits, a task-branch push and a pull request for human review and merge. Nothing under `claude/` requires Codex. The Codex supervisor below remains installed and tested for machines that use it; removing it is a separate, explicit migration (managed paths, validator, tests and this README).
+**Optional.** The Claude side of this toolkit works on its own: a Claude Code session follows `claude/CLAUDE.md` and the rules, runs a bounded task with [`work-session`](claude/skills/work-session/SKILL.md), runs the Dev, Reviewer and QA roles ([`dev`](claude/agents/dev.md), [`reviewer`](claude/agents/reviewer.md) and [`qa`](claude/agents/qa.md), the last two in fresh contexts) and delivers through commits, a task-branch push and a pull request for human review and merge. Nothing under `claude/` requires Codex. The Codex supervisor below remains installed and tested for machines that use it; removing it is a separate, explicit migration (managed paths, validator, tests and this README).
 
 The Codex skill `supervise-claude` lets a Codex session plan a task, delegate the implementation to Claude Code, review the diff and tests independently (at most three implementation cycles), and deliver through logical commits, a task-branch push and a pull request left open for human review and merge. Codex analyzes and plans once; Claude runs non-interactively in restricted `dontAsk` mode with basic implementation tools and only the inspected task-specific command families, implements, runs targeted tests and self-reviews; denied operations fail for Claude to report instead of opening an approval prompt. Codex then reviews independently, runs the relevant final gate and delivers. The helper passes permissions only to supervised invocations and does not modify interactive Claude settings. See [its SKILL.md](codex/skills/supervise-claude/SKILL.md).
 

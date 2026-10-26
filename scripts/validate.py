@@ -36,7 +36,7 @@ REQUIRED_FILES = (
     "claude/rules/engineering-principles.md",
     "claude/rules/testing.md",
     "claude/rules/git-workflow.md",
-    "claude/agents/senior-reviewer.md",
+    "claude/agents/reviewer.md",
     "claude/agents/dev.md",
     "claude/agents/qa.md",
     "claude/skills/work-session/SKILL.md",
@@ -191,7 +191,8 @@ MANAGED_REFERENCE_PREFIXES = {
 }
 
 MANAGED_ITEMS_FILE = "scripts/lib/common.sh"
-MANAGED_ITEMS_BLOCK = re.compile(r"^MANAGED_ITEMS=\((.*?)^\)", re.MULTILINE | re.DOTALL)
+# Matches a multi-line "<NAME>=(\n...\n)" array or an empty one-line "<NAME>=()".
+ITEMS_BLOCK = r"^{name}=\((?:\)|(.*?)^\))"
 MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
 BASE_CODEX_CONFIG = ".codex/config.toml"
 
@@ -213,7 +214,7 @@ TOML_ENTRY = re.compile(r'^([A-Za-z0-9_-]+)\s*=\s*("[^"\\]*"|true|false)\s*(?:#.
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # Read-only roles of the Dev -> Reviewer -> QA team: they must block Write and Edit and never
 # list them as allowed tools.
-READ_ONLY_AGENTS = ("claude/agents/senior-reviewer.md", "claude/agents/qa.md")
+READ_ONLY_AGENTS = ("claude/agents/reviewer.md", "claude/agents/qa.md")
 WRITE_TOOLS = ("Write", "Edit")
 SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")
 AGENT_PATH = re.compile(r"^claude/agents/([^/]+)\.md$")
@@ -593,11 +594,15 @@ def check_text(root: Path, rel: str, text: str, report: Report) -> None:
         check_links(root, rel, text, report)
 
 
-def parse_managed_items(texts: dict[str, str], report: Report) -> list[tuple[str, str]]:
+def parse_item_array(texts: dict[str, str], name: str, report: Report) -> list[tuple[str, str]]:
+    """Parses a "<source>|<destination>" Bash array such as MANAGED_ITEMS or RETIRED_ITEMS."""
     text = texts.get(MANAGED_ITEMS_FILE)
-    match = MANAGED_ITEMS_BLOCK.search(text) if text is not None else None
+    pattern = re.compile(ITEMS_BLOCK.format(name=name), re.MULTILINE | re.DOTALL)
+    match = pattern.search(text) if text is not None else None
     if match is None:
-        report.add(MANAGED_ITEMS_FILE, "MANAGED_ITEMS array not found")
+        report.add(MANAGED_ITEMS_FILE, f"{name} array not found")
+        return []
+    if match.group(1) is None:
         return []
     items = []
     for offset, line in enumerate(match.group(1).split("\n")):
@@ -605,14 +610,24 @@ def parse_managed_items(texts: dict[str, str], report: Report) -> list[tuple[str
             continue
         entry = MANAGED_ITEM.match(line)
         if entry is None:
-            report.add(MANAGED_ITEMS_FILE, "malformed MANAGED_ITEMS entry", line_of(text, match.start(1)) + offset)
+            report.add(MANAGED_ITEMS_FILE, f"malformed {name} entry", line_of(text, match.start(1)) + offset)
             continue
         items.append(entry.groups())
     return items
 
 
+def check_retired_items(root: Path, texts: dict[str, str], managed_destinations: set[str], report: Report) -> None:
+    """A retired source must be gone (otherwise it is still managed) and its destination must
+    not collide with a managed one (install would link it and uninstall would fight over it)."""
+    for source, destination in parse_item_array(texts, "RETIRED_ITEMS", report):
+        if (root / source).exists() or (root / source).is_symlink():
+            report.add(MANAGED_ITEMS_FILE, f"retired source '{source}' still exists in the checkout")
+        if destination in managed_destinations:
+            report.add(MANAGED_ITEMS_FILE, f"retired destination '{destination}' collides with a managed destination")
+
+
 def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str], report: Report) -> None:
-    items = parse_managed_items(texts, report)
+    items = parse_item_array(texts, "MANAGED_ITEMS", report)
     destinations: set[str] = set()
     for source, destination in items:
         path = root / source
@@ -625,6 +640,7 @@ def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str]
         destinations.add(destination)
         if destination == BASE_CODEX_CONFIG:
             report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
+    check_retired_items(root, texts, destinations, report)
     managed = dict(items)
     for rel in candidates:
         if rel.startswith(CODEX_PROFILES_DIR) and rel not in CODEX_PROFILES:

@@ -14,8 +14,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/uninstall.sh [--dry-run]
 
-Removes the managed symlinks that point to this repository. Real files, directories,
-foreign symlinks, sibling configuration and backups are left untouched. Also removes
+Removes the managed symlinks that point to this repository, including links left by
+retired items. Real files, directories, foreign symlinks, sibling configuration and
+backups are left untouched. Also removes
 this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
 other setting untouched (requires python3; see README). Backups are not restored
 automatically; see README for manual restoration.
@@ -71,6 +72,7 @@ plan_uninstall() {
     error "$problem"
     failed=1
   fi
+  plan_retired || failed=1
   return "$failed"
 }
 
@@ -90,7 +92,7 @@ hooks_pending() {
 }
 
 apply_uninstall() {
-  local item destination_rel destination i=0 prefix=""
+  local item destination_rel destination i=0 prefix="" removed=0
   [[ "$DRY_RUN" -eq 0 ]] || prefix="would "
   for item in "${MANAGED_ITEMS[@]}"; do
     destination_rel=$(item_destination "$item")
@@ -101,6 +103,7 @@ apply_uninstall() {
           is_managed_link "$destination" "$REPO_ROOT/$(item_source "$item")" ||
             die "~/$destination_rel changed during uninstallation; stopping"
           rm -- "$destination"
+          removed=$((removed + 1))
         fi
         log "${prefix}remove: ~/$destination_rel"
         ;;
@@ -109,6 +112,8 @@ apply_uninstall() {
     esac
     i=$((i + 1))
   done
+  apply_retired "$DRY_RUN"
+  [[ "$DRY_RUN" -eq 1 ]] || log "done: $removed removed, $RETIRED_REMOVED retired removed"
 }
 
 report_backups() {
@@ -146,10 +151,10 @@ main() {
     hooks_change=1
   fi
 
-  # Locked whenever applying would actually change something (a managed link removal
-  # or a pending hooks change), never for a pure no-op: keeps the lock, and the
+  # Locked whenever applying would actually change something (a managed or retired link
+  # removal or a pending hooks change), never for a pure no-op: keeps the lock, and the
   # ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
-  if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || [[ "$hooks_change" -eq 1 ]]; }; then
+  if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || retired_has_removals || [[ "$hooks_change" -eq 1 ]]; }; then
     acquire_lock
     plan_uninstall || die "no changes were made"
     # Re-preflight under the lock, immediately before any link removal: another

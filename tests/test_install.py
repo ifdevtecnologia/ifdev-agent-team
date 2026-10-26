@@ -21,7 +21,7 @@ MANAGED = {
     ".claude/rules/engineering-principles.md": "claude/rules/engineering-principles.md",
     ".claude/rules/testing.md": "claude/rules/testing.md",
     ".claude/rules/git-workflow.md": "claude/rules/git-workflow.md",
-    ".claude/agents/senior-reviewer.md": "claude/agents/senior-reviewer.md",
+    ".claude/agents/reviewer.md": "claude/agents/reviewer.md",
     ".claude/agents/dev.md": "claude/agents/dev.md",
     ".claude/agents/qa.md": "claude/agents/qa.md",
     ".claude/skills/work-session": "claude/skills/work-session",
@@ -34,6 +34,9 @@ MANAGED = {
 }
 PROFILE = ".codex/ifdev-autonomous.config.toml"
 MANAGED_COUNT = len(MANAGED)
+# Formerly managed destination and its old source; the source no longer exists in the checkout.
+RETIRED = ".claude/agents/senior-reviewer.md"
+RETIRED_SOURCE = "claude/agents/senior-reviewer.md"
 
 # Not a managed symlink: install.sh/uninstall.sh merge the toolkit's notification
 # hooks into this file in place instead (see scripts/lib/claude_hooks.py), so it is
@@ -131,6 +134,56 @@ class InstallerTestCase(unittest.TestCase):
         self.assert_ok(result)
         return result
 
+    def link_retired_to_checkout(self) -> Path:
+        """Simulates a machine that installed the toolkit before the item was retired."""
+        path = self.home / RETIRED
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(self.repo_real / RETIRED_SOURCE, path)
+        return path
+
+    def run_with_retired_link_swapped(self, foreign: Path, script: str) -> subprocess.CompletedProcess:
+        """Runs <script> with a readlink wrapper that, on the third read of the retired path
+        (after the initial plan and the re-plan under the lock), replaces that link with one
+        to <foreign>: a concurrent change between planning and removal."""
+        real_readlink = shutil.which("readlink")
+        self.assertIsNotNone(real_readlink)
+        fake_bin = self.tmp / "fake-bin"
+        fake_bin.mkdir()
+        counter = self.tmp / "retired-readlink.count"
+        wrapper = fake_bin / "readlink"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'last="${*: -1}"\n'
+            f'if [[ "$last" == */{RETIRED} ]]; then\n'
+            "  count=0\n"
+            f'  [[ -f "{counter}" ]] && count=$(cat "{counter}")\n'
+            "  count=$((count + 1))\n"
+            f'  printf \'%s\\n\' "$count" > "{counter}"\n'
+            '  if [[ "$count" -eq 3 ]]; then\n'
+            '    rm -- "$last"\n'
+            f'    ln -s -- "{foreign}" "$last"\n'
+            "  fi\n"
+            "fi\n"
+            f'exec "{real_readlink}" "$@"\n'
+        )
+        wrapper.chmod(0o700)
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+        result = subprocess.run(
+            ["bash", str(self.repo / "scripts" / script)],
+            env=env,
+            cwd=self.tmp,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(int(counter.read_text().strip()), 3, result.stdout + result.stderr)
+        return result
+
+    def assert_absent(self, path: Path) -> None:
+        self.assertFalse(path.exists() or path.is_symlink(), path)
+
 
 class InstallTests(InstallerTestCase):
     def test_dry_run_changes_nothing(self) -> None:
@@ -227,7 +280,7 @@ class InstallTests(InstallerTestCase):
         os.symlink(foreign_target, self.home / ".claude/rules/testing.md")
         (self.home / ".claude/agents").mkdir(parents=True, exist_ok=True)
         missing = self.outside / "missing.md"
-        os.symlink(missing, self.home / ".claude/agents/senior-reviewer.md")
+        os.symlink(missing, self.home / ".claude/agents/reviewer.md")
 
         result = self.install()
 
@@ -250,7 +303,7 @@ class InstallTests(InstallerTestCase):
         self.assertEqual((backup / ".claude/CLAUDE.md").read_text(), "user instructions\n")
         self.assertEqual((backup / ".claude/skills/work-session/SKILL.md").read_text(), "custom skill\n")
         self.assertEqual(os.readlink(backup / ".claude/rules/testing.md"), str(foreign_target))
-        self.assertEqual(os.readlink(backup / ".claude/agents/senior-reviewer.md"), str(missing))
+        self.assertEqual(os.readlink(backup / ".claude/agents/reviewer.md"), str(missing))
         self.assertEqual(foreign_target.read_text(), "foreign\n")
         manifest = (backup / "MANIFEST").read_text().splitlines()
         self.assertEqual(
@@ -258,7 +311,7 @@ class InstallTests(InstallerTestCase):
             sorted([
                 ".claude/CLAUDE.md",
                 ".claude/rules/testing.md",
-                ".claude/agents/senior-reviewer.md",
+                ".claude/agents/reviewer.md",
                 ".claude/skills/work-session",
             ]),
         )
@@ -360,6 +413,185 @@ class InstallTests(InstallerTestCase):
         self.assertIn('"hooks.Stop"', result.stderr)
         for destination in MANAGED:
             self.assertFalse((self.home / destination).exists(), destination)
+
+
+class RetiredItemInstallTests(InstallerTestCase):
+    def test_install_removes_retired_link_to_this_checkout(self) -> None:
+        retired = self.link_retired_to_checkout()
+
+        result = self.install()
+
+        self.assert_absent(retired)
+        self.assert_all_links()
+        self.assertEqual(self.backup_dirs(), [])
+        self.assertIn(f"removed retired link: ~/{RETIRED}", result.stdout)
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged, 1 retired removed", result.stdout)
+
+    def test_install_keeps_retired_path_that_is_not_a_link_to_this_checkout(self) -> None:
+        other_checkout = self.outside / RETIRED_SOURCE
+        retired = self.home / RETIRED
+        # Resolves to this checkout's old source but is not the exact literal target.
+        relative_to_checkout = os.path.relpath(self.repo_real / RETIRED_SOURCE, retired.parent)
+        cases = {
+            "user file": lambda path: path.write_text("my own reviewer\n"),
+            "directory": lambda path: (path.mkdir(), (path / "notes.md").write_text("mine\n")),
+            "foreign link": lambda path: os.symlink(other_checkout, path),
+            "relative link to this checkout": lambda path: os.symlink(relative_to_checkout, path),
+        }
+        for label, create in cases.items():
+            with self.subTest(label):
+                if retired.is_symlink() or retired.is_file():
+                    retired.unlink()
+                elif retired.is_dir():
+                    shutil.rmtree(retired)
+                retired.parent.mkdir(parents=True, exist_ok=True)
+                create(retired)
+                before = {rel: value for rel, value in snapshot(self.home).items() if rel.startswith(RETIRED)}
+
+                result = self.install()
+
+                after = {rel: value for rel, value in snapshot(self.home).items() if rel.startswith(RETIRED)}
+                self.assertEqual(after, before)
+                self.assertIn(f"kept retired path (not a link to this repository): ~/{RETIRED}", result.stdout)
+                self.assertIn("0 retired removed", result.stdout)
+                self.assertNotIn("removed retired link", result.stdout)
+                self.assert_all_links()
+
+    def test_install_dry_run_reports_retired_link_without_changes(self) -> None:
+        self.link_retired_to_checkout()
+        before = snapshot(self.home)
+
+        result = self.run_script("install.sh", "--dry-run")
+
+        self.assert_ok(result)
+        self.assertIn(f"would remove retired link: ~/{RETIRED}", result.stdout)
+        # Same order as a real run: the retired removal precedes the managed links.
+        self.assertLess(result.stdout.index("would remove retired link"), result.stdout.index("would link:"))
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_second_install_after_retired_removal_has_no_actions(self) -> None:
+        self.link_retired_to_checkout()
+        self.install()
+        before = snapshot(self.home)
+
+        result = self.install()
+
+        self.assertEqual(snapshot(self.home), before)
+        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged, 0 retired removed", result.stdout)
+        self.assertNotIn(RETIRED, result.stdout)
+
+    def test_install_stops_when_retired_link_changes_before_removal(self) -> None:
+        retired = self.link_retired_to_checkout()
+        foreign = self.outside / "foreign.md"
+
+        result = self.run_with_retired_link_swapped(foreign, "install.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("changed while removing retired links", result.stderr)
+        self.assertEqual(os.readlink(retired), str(foreign))
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assertFalse((self.home / ".ifdev-ai-tools/lock").exists())
+
+    def test_install_and_uninstall_accept_an_empty_retired_list(self) -> None:
+        common = self.repo / "scripts/lib/common.sh"
+        content = common.read_text()
+        start = content.index("RETIRED_ITEMS=(")
+        end = content.index("\n)\n", start) + 3
+        common.write_text(content[:start] + "RETIRED_ITEMS=()\n" + content[end:])
+
+        result = self.install()
+
+        self.assertIn("0 retired removed", result.stdout)
+        uninstall = self.run_script("uninstall.sh")
+        self.assert_ok(uninstall)
+        self.assertIn(f"done: {MANAGED_COUNT} removed, 0 retired removed", uninstall.stdout)
+
+    def test_install_refuses_symlinked_parent_of_retired_link(self) -> None:
+        # The retired destination shares ~/.claude/agents; a symlinked parent could make a
+        # link outside HOME look like this checkout's.
+        (self.outside / "agents").mkdir()
+        os.symlink(self.repo_real / RETIRED_SOURCE, self.outside / "agents/senior-reviewer.md")
+        (self.home / ".claude").mkdir()
+        os.symlink(self.outside / "agents", self.home / ".claude/agents")
+        before_outside = snapshot(self.outside)
+
+        result = self.run_script("install.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing symlinked parent directory", result.stderr)
+        self.assertEqual(snapshot(self.outside), before_outside)
+
+
+class RetiredItemUninstallTests(InstallerTestCase):
+    def test_uninstall_removes_retired_link_to_this_checkout(self) -> None:
+        # Nothing else installed: the retired link alone must be enough to run the removal.
+        retired = self.link_retired_to_checkout()
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        self.assert_absent(retired)
+        self.assertTrue((self.home / ".claude/agents").is_dir())
+        self.assertIn(f"removed retired link: ~/{RETIRED}", result.stdout)
+        self.assertIn("done: 0 removed, 1 retired removed", result.stdout)
+        self.assertFalse((self.home / ".ifdev-ai-tools/lock").exists())
+
+    def test_uninstall_removes_retired_and_managed_links_together(self) -> None:
+        self.install()
+        retired = self.link_retired_to_checkout()
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        self.assert_absent(retired)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assertIn(f"done: {MANAGED_COUNT} removed, 1 retired removed", result.stdout)
+
+    def test_uninstall_dry_run_reports_retired_link_without_changes(self) -> None:
+        self.link_retired_to_checkout()
+        before = snapshot(self.home)
+
+        result = self.run_script("uninstall.sh", "--dry-run")
+
+        self.assert_ok(result)
+        self.assertIn(f"would remove retired link: ~/{RETIRED}", result.stdout)
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_uninstall_keeps_retired_path_that_is_not_a_link_to_this_checkout(self) -> None:
+        self.write_home(RETIRED, "my own reviewer\n")
+        before = snapshot(self.home)
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        self.assertEqual(snapshot(self.home), before)
+        self.assertIn(f"kept retired path (not a link to this repository): ~/{RETIRED}", result.stdout)
+        self.assertIn("0 retired removed", result.stdout)
+
+    def test_uninstall_stops_when_retired_link_changes_before_removal(self) -> None:
+        retired = self.link_retired_to_checkout()
+        foreign = self.outside / "foreign.md"
+
+        result = self.run_with_retired_link_swapped(foreign, "uninstall.sh")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("changed while removing retired links", result.stderr)
+        self.assertEqual(os.readlink(retired), str(foreign))
+        self.assertFalse((self.home / ".ifdev-ai-tools/lock").exists())
+
+    def test_second_uninstall_has_no_retired_actions(self) -> None:
+        self.link_retired_to_checkout()
+        self.assert_ok(self.run_script("uninstall.sh"))
+        before = snapshot(self.home)
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        self.assertEqual(snapshot(self.home), before)
+        self.assertIn("done: 0 removed, 0 retired removed", result.stdout)
+        self.assertNotIn(RETIRED, result.stdout)
 
 
 class UninstallTests(InstallerTestCase):
