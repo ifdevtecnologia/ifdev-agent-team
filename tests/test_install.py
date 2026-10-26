@@ -26,17 +26,19 @@ MANAGED = {
     ".claude/agents/qa.md": "claude/agents/qa.md",
     ".claude/skills/work-session": "claude/skills/work-session",
     ".claude/skills/verify-changes": "claude/skills/verify-changes",
-    ".codex/skills/supervise-claude": "codex/skills/supervise-claude",
-    ".codex/ifdev-autonomous.config.toml": "codex/profiles/ifdev-autonomous.config.toml",
     ".claude/hooks/agent-notify.sh": "scripts/agent-notify.sh",
     ".claude/hooks/agent-notify-hook.sh": "claude/hooks/agent-notify-hook.sh",
     ".codex/notify/agent-notify-codex.sh": "codex/notify/agent-notify-codex.sh",
 }
-PROFILE = ".codex/ifdev-autonomous.config.toml"
 MANAGED_COUNT = len(MANAGED)
 # Formerly managed destination and its old source; the source no longer exists in the checkout.
 RETIRED = ".claude/agents/senior-reviewer.md"
 RETIRED_SOURCE = "claude/agents/senior-reviewer.md"
+# Retired Codex supervision items: a skill directory link and a profile file link.
+RETIRED_SUPERVISION = {
+    ".codex/skills/supervise-claude": "codex/skills/supervise-claude",
+    ".codex/ifdev-autonomous.config.toml": "codex/profiles/ifdev-autonomous.config.toml",
+}
 
 # Not a managed symlink: install.sh/uninstall.sh merge the toolkit's notification
 # hooks into this file in place instead (see scripts/lib/claude_hooks.py), so it is
@@ -196,7 +198,7 @@ class InstallTests(InstallerTestCase):
 
         self.assert_ok(result)
         self.assertIn("would back up ~/.claude/CLAUDE.md", result.stdout)
-        self.assertIn("would link: ~/.codex/skills/supervise-claude", result.stdout)
+        self.assertIn("would link: ~/.codex/notify/agent-notify-codex.sh", result.stdout)
         self.assertIn("would add: ~/.claude/settings.json Stop hook", result.stdout)
         self.assertIn("would add: ~/.claude/settings.json StopFailure hook", result.stdout)
         self.assertIn("would add: ~/.claude/settings.json Notification hook", result.stdout)
@@ -220,7 +222,7 @@ class InstallTests(InstallerTestCase):
     def test_skill_references_are_reachable_through_installed_links(self) -> None:
         self.install()
 
-        for skill_link in (".claude/skills/verify-changes", ".claude/skills/work-session", ".codex/skills/supervise-claude"):
+        for skill_link in (".claude/skills/verify-changes", ".claude/skills/work-session"):
             source = self.repo / MANAGED[skill_link]
             references = sorted(p.name for p in (source / "references").glob("*.md"))
             self.assertTrue(references, skill_link)
@@ -233,41 +235,22 @@ class InstallTests(InstallerTestCase):
             for name in references:
                 self.assertIn(f"references/{name}", skill_text, f"{skill_link} does not link {name}")
 
-    def test_codex_profile_is_opt_in_and_base_config_is_untouched(self) -> None:
+    def test_base_codex_config_and_codex_skills_are_untouched(self) -> None:
         self.write_siblings()
         base_config = self.home / ".codex/config.toml"
         before = base_config.read_bytes()
 
         self.install()
 
-        profile = self.home / PROFILE
-        self.assertTrue(profile.is_symlink())
-        self.assertEqual(profile.read_bytes(), (self.repo / MANAGED[PROFILE]).read_bytes())
-        self.assertIn(b'approval_policy = "never"', profile.read_bytes())
-        self.assertIn(b'network_access = true', profile.read_bytes())
         self.assertFalse(base_config.is_symlink())
         self.assertEqual(base_config.read_bytes(), before)
-        self.assertIn(b'approval_policy = "on-request"', base_config.read_bytes())
-        self.assertIn(b'network_access = false', base_config.read_bytes())
-        self.assertEqual(
-            sorted(p.name for p in (self.home / ".codex").iterdir()),
-            ["config.toml", "ifdev-autonomous.config.toml", "notify", "skills"],
-        )
+        # Only the opt-in notify adapter is managed below ~/.codex; the user's skills stay.
+        self.assertEqual(sorted(p.name for p in (self.home / ".codex").iterdir()), ["config.toml", "notify", "skills"])
+        self.assertEqual(sorted(p.name for p in (self.home / ".codex/skills").iterdir()), ["other"])
 
         self.assert_ok(self.run_script("uninstall.sh"))
-        self.assertFalse(profile.exists() or profile.is_symlink())
         self.assertEqual(base_config.read_bytes(), before)
-
-    def test_existing_local_profile_is_backed_up_not_overwritten(self) -> None:
-        self.write_home(PROFILE, 'sandbox_mode = "read-only"\n')
-
-        result = self.install()
-
-        self.assertIn("1 backed up", result.stdout)
-        (backup,) = self.backup_dirs()
-        self.assertEqual((backup / PROFILE).read_text(), 'sandbox_mode = "read-only"\n')
-        self.assertEqual((backup / "MANIFEST").read_text().splitlines(), [PROFILE])
-        self.assert_all_links()
+        self.assert_siblings_intact()
 
     def test_existing_file_directory_and_symlinks_are_backed_up(self) -> None:
         self.write_siblings()
@@ -594,6 +577,127 @@ class RetiredItemUninstallTests(InstallerTestCase):
         self.assertNotIn(RETIRED, result.stdout)
 
 
+class RetiredSupervisionTests(InstallerTestCase):
+    """Machines that installed the Codex supervision keep a skill directory link and a profile
+    file link. After the pull the tracked sources are gone, but Git leaves ignored files such
+    as `__pycache__/` behind, so the old skill directory may still exist."""
+
+    LEFTOVER = "codex/skills/supervise-claude/scripts/__pycache__/run_claude.cpython-312.pyc"
+
+    def setUp(self) -> None:
+        super().setUp()
+        for source in RETIRED_SUPERVISION.values():
+            path = self.repo / source
+            if path.is_dir():
+                shutil.rmtree(path)
+            elif path.exists():
+                path.unlink()
+
+    def leave_ignored_cache(self) -> Path:
+        leftover = self.repo / self.LEFTOVER
+        leftover.parent.mkdir(parents=True)
+        leftover.write_bytes(b"synthetic cache")
+        return leftover
+
+    def link_supervision_to_checkout(self) -> None:
+        self.write_siblings()
+        for destination, source in RETIRED_SUPERVISION.items():
+            path = self.home / destination
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.symlink(self.repo_real / source, path)
+
+    def assert_supervision_removed(self, result: subprocess.CompletedProcess) -> None:
+        for destination in RETIRED_SUPERVISION:
+            self.assert_absent(self.home / destination)
+            self.assertIn(f"removed retired link: ~/{destination}", result.stdout)
+        # Only the links go: the parent directory and the user's other Codex skills stay.
+        self.assertTrue((self.home / ".codex/skills").is_dir())
+        self.assert_siblings_intact()
+
+    def test_install_removes_dangling_supervision_links(self) -> None:
+        self.link_supervision_to_checkout()
+
+        result = self.install()
+
+        self.assert_supervision_removed(result)
+        self.assert_all_links()
+        self.assertEqual(self.backup_dirs(), [])
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged, 2 retired removed", result.stdout)
+
+    def test_install_removes_directory_link_without_touching_the_leftover_directory(self) -> None:
+        leftover = self.leave_ignored_cache()
+        self.link_supervision_to_checkout()
+        self.assertTrue((self.home / ".codex/skills/supervise-claude").is_dir())  # still resolves via the leftover
+
+        result = self.install()
+
+        self.assert_supervision_removed(result)
+        self.assertEqual(leftover.read_bytes(), b"synthetic cache")
+        self.assertEqual(self.backup_dirs(), [])
+        self.assertIn("2 retired removed", result.stdout)
+
+    def test_uninstall_removes_supervision_links_with_the_managed_links(self) -> None:
+        leftover = self.leave_ignored_cache()
+        self.install()
+        self.link_supervision_to_checkout()
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        self.assert_supervision_removed(result)
+        self.assertEqual(leftover.read_bytes(), b"synthetic cache")
+        self.assertIn(f"done: {MANAGED_COUNT} removed, 2 retired removed", result.stdout)
+
+    def test_dry_runs_report_supervision_links_without_changes(self) -> None:
+        self.link_supervision_to_checkout()
+        before = snapshot(self.home)
+
+        for script in ("install.sh", "uninstall.sh"):
+            with self.subTest(script):
+                result = self.run_script(script, "--dry-run")
+
+                self.assert_ok(result)
+                for destination in RETIRED_SUPERVISION:
+                    self.assertIn(f"would remove retired link: ~/{destination}", result.stdout)
+                self.assertEqual(snapshot(self.home), before)
+
+    def test_foreign_supervision_paths_are_kept(self) -> None:
+        self.write_siblings()
+        own_skill = self.write_home(".codex/skills/supervise-claude/SKILL.md", "my own skill\n")
+        self.write_home(".codex/ifdev-autonomous.config.toml", 'sandbox_mode = "read-only"\n')
+        other_checkout = self.outside / "codex/skills/supervise-claude"
+        other_checkout.mkdir(parents=True)
+        cases = {
+            "user directory and profile file": None,
+            "links to another checkout": lambda: (
+                shutil.rmtree(own_skill.parent),
+                os.symlink(other_checkout, self.home / ".codex/skills/supervise-claude"),
+            ),
+        }
+        for label, change in cases.items():
+            with self.subTest(label):
+                if change:
+                    change()
+                before = self.supervision_snapshot()
+                self.assertTrue(before)
+
+                for script in ("install.sh", "uninstall.sh"):
+                    result = self.run_script(script)
+
+                    self.assert_ok(result)
+                    for destination in RETIRED_SUPERVISION:
+                        self.assertIn(f"kept retired path (not a link to this repository): ~/{destination}", result.stdout)
+                    self.assertIn("0 retired removed", result.stdout)
+                self.assertEqual(self.supervision_snapshot(), before)
+
+    def supervision_snapshot(self) -> dict:
+        return {
+            rel: value
+            for rel, value in snapshot(self.home).items()
+            if any(rel == d or rel.startswith(d + "/") for d in RETIRED_SUPERVISION)
+        }
+
+
 class UninstallTests(InstallerTestCase):
     def test_uninstall_removes_only_own_links(self) -> None:
         self.write_siblings()
@@ -674,10 +778,10 @@ class UninstallTests(InstallerTestCase):
 
     def test_uninstall_refuses_symlinked_parent(self) -> None:
         # A parent symlink could make a matching link outside HOME look managed.
-        (self.outside / "skills").mkdir()
-        os.symlink(self.repo_real / "codex/skills/supervise-claude", self.outside / "skills/supervise-claude")
+        (self.outside / "notify").mkdir()
+        os.symlink(self.repo_real / "codex/notify/agent-notify-codex.sh", self.outside / "notify/agent-notify-codex.sh")
         (self.home / ".codex").mkdir()
-        os.symlink(self.outside / "skills", self.home / ".codex/skills")
+        os.symlink(self.outside / "notify", self.home / ".codex/notify")
         before_outside = snapshot(self.outside)
 
         result = self.run_script("uninstall.sh")
