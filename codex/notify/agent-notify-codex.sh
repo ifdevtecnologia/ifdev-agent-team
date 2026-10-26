@@ -12,14 +12,10 @@
 #
 # Honest limitation: Codex's built-in `notify` hook only fires on turn/task
 # completion, unlike Claude Code's separate Stop/StopFailure/Notification hooks. A
-# standalone (non-supervised) Codex session using only this adapter can therefore only
-# ever report "complete", never "attention" or "blocked", and cannot infer a PARTIAL or
-# BLOCKED outcome from a malformed or otherwise unrecognized turn-complete payload
-# either: an unparsable payload still falls back to a plain "complete" ping below, never
-# to "blocked". Only Codex sessions running the supervise-claude skill ever send
-# "attention" or "blocked", and only once per run from
-# scripts/notify_final_status.py's own single explicit final notification (see
-# codex/skills/supervise-claude/SKILL.md), never from this generic turn-complete adapter.
+# Codex session using this adapter can therefore only ever report "complete", never
+# "attention" or "blocked", and cannot infer a PARTIAL or BLOCKED outcome from a
+# malformed or otherwise unrecognized turn-complete payload either: an unparsable
+# payload still falls back to a plain "complete" ping below, never to "blocked".
 set -uo pipefail
 
 NOTIFY="$HOME/.claude/hooks/agent-notify.sh"

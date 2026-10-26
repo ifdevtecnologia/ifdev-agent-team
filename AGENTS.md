@@ -1,11 +1,11 @@
 # Toolkit development instructions
 
-These instructions are for working **on** this repository. They are not installed; the installed global instructions live in `claude/` and `codex/` (see README).
+These instructions are for working **on** this repository. They are not installed; the installed global instructions live in `claude/`, with the opt-in Codex notify adapter in `codex/` (see README).
 
 ## Principles
 
 - This repository is the global source of truth for the files listed in `MANAGED_ITEMS` (`scripts/lib/common.sh`). Keep content general: no product names, business domains, project-specific reviewers or machine-specific paths.
-- Preserve compatibility for machines that already installed the toolkit. Renaming or removing a managed path requires updating the installer, the validator's required files, the tests and the README, and explaining the migration in the pull request.
+- Preserve compatibility for machines that already installed the toolkit. Renaming or removing a managed path requires moving it to `RETIRED_ITEMS`, updating the validator's required files, the tests and the README, and explaining the migration in the pull request.
 - Rules are defined once in `claude/rules/`; other files reference them instead of duplicating content.
 
 ## Scripts
@@ -13,7 +13,7 @@ These instructions are for working **on** this repository. They are not installe
 - Installation and uninstallation must stay safe and idempotent: validate before mutating, move replaced content to backups, never replace whole parent directories, never remove anything that is not an exact managed link to this checkout, and refuse symlinked parents.
 - Never run `scripts/install.sh` or `scripts/uninstall.sh` against your real home directory while developing; tests use a temporary `HOME` passed only to subprocesses.
 - Every behavior change needs automated tests in `tests/`, following `claude/rules/testing.md`.
-- Every user-visible change adds an entry under **Unreleased** in `CHANGELOG.md`; adding a managed item also adds an **Upgrade** note (rerun the installer).
+- Every user-visible change adds an entry under **Unreleased** in `CHANGELOG.md`; adding or retiring a managed item also adds an **Upgrade** note (rerun the installer).
 
 ## Validation
 
