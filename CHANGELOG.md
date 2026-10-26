@@ -40,7 +40,6 @@ before this file existed and has no Git tag.
   documentation-only or trivial changes.
 - `work-session` runs the Analyst before planning when the request needs requirements, and the
   `dev` and `qa` agents use the Analyst's acceptance criteria when it ran.
-
 - The Claude Code `Stop` hook always sends its "complete" notification; the
   `IFDEV_SUPERVISED_CLAUDE` variable no longer silences it.
 - The validator treats a retired item's source as gone when only Git-ignored leftovers (such as
