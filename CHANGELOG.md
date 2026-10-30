@@ -8,6 +8,13 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `ux` global agent: a senior UX designer that turns the objective and acceptance criteria of a
+  new or redesigned user-facing flow into flows, a screen inventory with every state, interaction
+  and accessibility notes, copy and, when asked, a low/mid-fidelity prototype. It writes only design
+  files in the location the main agent names and never edits production code, tests or
+  configuration. The team in `claude/CLAUDE.md` and `work-session` run it after the Analyst when a
+  request creates or substantially changes screens or navigation, and the `ux-reviewer` checks the
+  implementation against the confirmed design.
 - `dev` and `qa` global agents. Together with `reviewer` they form the Dev → Reviewer → QA
   team that `claude/CLAUDE.md` now requires for every change to executable behavior.
 - Global changelog rule: projects with a `CHANGELOG.md` keep the Unreleased section current and use
@@ -24,6 +31,9 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- The `dev`, `ux-reviewer` and `qa` agents receive the confirmed design when the UX designer ran:
+  the Dev follows it, the UX reviewer checks the implementation against it and QA uses its screen
+  states as scenarios.
 - The `senior-reviewer` agent is renamed to `reviewer`.
 - The `dev`, `reviewer` and `qa` agents are explicitly senior roles: their definitions now state the
   expected engineering judgment, risk focus and clear reporting.
@@ -53,7 +63,7 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `dev`,
+- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `ux`, `dev`,
   `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/`, and
   removes old links that still point to this checkout: `senior-reviewer.md` in
   `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and

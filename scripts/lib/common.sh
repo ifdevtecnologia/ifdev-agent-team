@@ -10,6 +10,7 @@ MANAGED_ITEMS=(
   "claude/rules/testing.md|.claude/rules/testing.md"
   "claude/rules/git-workflow.md|.claude/rules/git-workflow.md"
   "claude/agents/analyst.md|.claude/agents/analyst.md"
+  "claude/agents/ux.md|.claude/agents/ux.md"
   "claude/agents/reviewer.md|.claude/agents/reviewer.md"
   "claude/agents/ux-reviewer.md|.claude/agents/ux-reviewer.md"
   "claude/agents/security-reviewer.md|.claude/agents/security-reviewer.md"
