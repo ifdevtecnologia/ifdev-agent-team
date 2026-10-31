@@ -8,6 +8,16 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `debugger` global agent: a read-only senior debugger that reproduces a bug, failing check or
+  regression with unknown cause, finds the root cause with evidence and reports the proposed fix and
+  the regression test, before the Dev. It never edits files or touches the user's working tree.
+- `api-reviewer` global agent: a read-only specialized review that runs alongside the Reviewer only
+  when the change adds or changes a contract consumed outside its deployable unit or published
+  (cross-service endpoints and events, webhooks, public interfaces) or an external integration:
+  compatibility, versioning, errors, idempotency, pagination and limits.
+- `metrics-analyst` global agent: defines success, input and guardrail metrics, tracking plans,
+  dashboards and experiment designs for a goal or feature, and analyzes only aggregated or synthetic
+  data, writing only analytics documents where the main agent says.
 - `po` global agent: a senior product owner that turns a product goal or idea into epics and user
   stories with story-level acceptance criteria, a prioritized backlog with reasons and a release or
   MVP cut, writing only product files where the main agent says. It runs before the team when the
@@ -46,8 +56,8 @@ before this file existed and has no Git tag.
 - Global changelog rule: projects with a `CHANGELOG.md` keep the Unreleased section current and use
   `0.y.z` before an official 1.0.0.
 - Validator check that read-only agents (`analyst`, `architect`, `reviewer`, `ux-reviewer`,
-  `security-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer`, `qa`) block Write
-  and Edit.
+  `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer`,
+  `debugger`, `qa`) block Write and Edit.
 - `analyst` global agent: a read-only senior requirements analyst that turns a new feature, a
   business-rule change or an ambiguous request into scope, numbered testable acceptance criteria,
   blocking questions, recorded assumptions, risks and a suggested slicing.
@@ -95,16 +105,16 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `analyst`,
-  `architect`, `ux`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`,
-  `privacy-reviewer`, `db-reviewer`, `performance-reviewer` and `qa` agents in `~/.claude/agents/`,
-  and removes old links that still point to this checkout: `senior-reviewer.md` in
-  `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
-  `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those
-  paths is kept and reported. Until then the main agent reports the missing agents and runs their
-  roles in a separate context. Stop selecting `codex --profile ifdev-autonomous`. A leftover
-  `codex/skills/supervise-claude/` directory with only ignored `__pycache__/` files may remain in
-  the checkout; it is unused and safe to delete.
+- Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
+  `analyst`, `architect`, `ux`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
+  `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,
+  `performance-reviewer` and `qa` agents in `~/.claude/agents/`, and removes old links that still
+  point to this checkout: `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link
+  in the Codex skills directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a
+  file or a link elsewhere at those paths is kept and reported. Until then the main agent reports
+  the missing agents and runs their roles in a separate context. Stop selecting `codex --profile
+  ifdev-autonomous`. A leftover `codex/skills/supervise-claude/` directory with only ignored
+  `__pycache__/` files may remain in the checkout; it is unused and safe to delete.
 
 ## 0.1.0 - 2026-10-17
 
