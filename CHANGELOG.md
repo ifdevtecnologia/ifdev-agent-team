@@ -8,6 +8,12 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `architect` global agent: a read-only senior software architect that runs after the Analyst only
+  when a change needs a technical decision (new modules or services, integrations, data model or
+  tenancy changes, cross-cutting concerns, technology choices, scale or cost). It compares options
+  and proposes a recommendation, boundaries and contracts, risks, an implementation slicing and a
+  draft decision record. The Dev follows the confirmed decision and the Reviewer checks the diff
+  against it.
 - `devops` global agent: a senior DevOps engineer that holds the Dev role for CI/CD, build and
   container configuration, infrastructure as code, environments, observability (logs, metrics,
   traces, alerts, SLOs) and release automation, or works with the Dev on separate slices when a
@@ -26,8 +32,8 @@ before this file existed and has no Git tag.
   team that `claude/CLAUDE.md` now requires for every change to executable behavior.
 - Global changelog rule: projects with a `CHANGELOG.md` keep the Unreleased section current and use
   `0.y.z` before an official 1.0.0.
-- Validator check that read-only agents (`analyst`, `reviewer`, `ux-reviewer`, `security-reviewer`,
-  `qa`) block Write and Edit.
+- Validator check that read-only agents (`analyst`, `architect`, `reviewer`, `ux-reviewer`,
+  `security-reviewer`, `qa`) block Write and Edit.
 - `analyst` global agent: a read-only senior requirements analyst that turns a new feature, a
   business-rule change or an ambiguous request into scope, numbered testable acceptance criteria,
   blocking questions, recorded assumptions, risks and a suggested slicing.
@@ -38,6 +44,9 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- The `dev` and `devops` agents receive the confirmed architecture decision when the Architect ran,
+  and the `reviewer` checks the diff against it; `work-session` runs the Architect after the Analyst when
+  the team calls for it.
 - The `dev`, `ux-reviewer` and `qa` agents receive the confirmed design when the UX designer ran:
   the Dev follows it, the UX reviewer checks the implementation against it and QA uses its screen
   states as scenarios.
@@ -70,10 +79,10 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `ux`, `dev`,
-  `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/`, and
-  removes old links that still point to this checkout: `senior-reviewer.md` in
-  `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
+- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `architect`,
+  `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in
+  `~/.claude/agents/`, and removes old links that still point to this checkout: `senior-reviewer.md`
+  in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
   `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those
   paths is kept and reported. Until then the main agent reports the missing agents and runs their
   roles in a separate context. Stop selecting `codex --profile ifdev-autonomous`. A leftover

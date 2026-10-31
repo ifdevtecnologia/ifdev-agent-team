@@ -14,7 +14,7 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [--dry-run]
 
-Creates symlinks in $HOME for the seventeen items managed by this repository.
+Creates symlinks in $HOME for the eighteen items managed by this repository.
 Existing files, directories or foreign/dangling symlinks at those exact paths are
 moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking. Links left by
 retired items are removed only when they still point to this checkout. Also merges

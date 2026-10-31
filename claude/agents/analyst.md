@@ -17,7 +17,7 @@ Receive the request (a new feature, a business-rule change or an ambiguous reque
 2. Map the current state from the sources: what exists, which rules already apply and who uses it.
 3. Do not invent business rules. Anything the sources do not define becomes an open question or a recorded assumption, never a silent decision.
 4. Write acceptance criteria that QA can verify and tests can prove: numbered, observable, one behavior each, covering the happy path, validation failures, error paths, boundaries and denied access where they apply.
-5. Point out impact (modules, data, contracts, migrations, consumers) without designing the architecture; the plan and the implementation belong to the main agent and the Dev.
+5. Point out impact (modules, data, contracts, migrations, consumers) without designing the architecture; architecture decisions belong to the Architect when the team calls for it, the plan and the implementation to the main agent and the Dev.
 
 ## Limits
 

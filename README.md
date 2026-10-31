@@ -1,6 +1,6 @@
 # ifdev-ai-tools
 
-Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the Analyst, UX designer, Dev, DevOps, Reviewer, QA, UX and security reviewer agents and a few general-purpose skills, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
+Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the Analyst, Architect, UX designer, Dev, DevOps, Reviewer, QA, UX and security reviewer agents and a few general-purpose skills, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
 
 ## Global versus project instructions
 
@@ -20,6 +20,7 @@ claude/
   rules/testing.md                   -> ~/.claude/rules/testing.md
   rules/git-workflow.md              -> ~/.claude/rules/git-workflow.md
   agents/analyst.md                  -> ~/.claude/agents/analyst.md (Analyst)
+  agents/architect.md                -> ~/.claude/agents/architect.md (Architect)
   agents/ux.md                       -> ~/.claude/agents/ux.md (UX designer)
   agents/devops.md                   -> ~/.claude/agents/devops.md (DevOps)
   agents/reviewer.md                 -> ~/.claude/agents/reviewer.md (Reviewer)
@@ -33,7 +34,7 @@ claude/
 codex/
   notify/agent-notify-codex.sh       -> ~/.codex/notify/agent-notify-codex.sh (opt-in native `notify` adapter)
 scripts/
-  install.sh, uninstall.sh           link / unlink the seventeen items above and merge/remove Claude hooks
+  install.sh, uninstall.sh           link / unlink the eighteen items above and merge/remove Claude hooks
   lib/common.sh                      managed item list and shared safety helpers
   lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
   agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
@@ -67,7 +68,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 ### What the installer does
 
 - Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the seventeen destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
+- Creates symlinks for exactly the eighteen destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
 - Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
@@ -180,11 +181,12 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 
 ## Team agents
 
-Eight global agents, all senior, form the team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-analyst--dev--reviewer--qa):
+Nine global agents, all senior, form the team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-analyst--dev--reviewer--qa):
 
 | Role | Agent | Does | Never does |
 |---|---|---|---|
 | Analyst | [`analyst`](claude/agents/analyst.md) | Read-only requirements for new features, rule changes or ambiguous requests: scope, numbered testable acceptance criteria, blocking questions, recorded assumptions, risks and slicing | Implement, design detailed architecture, invent business rules, remote operations |
+| Architect | [`architect`](claude/agents/architect.md) | Read-only technical decisions when a change needs one: drivers and constraints, options compared, recommendation, boundaries and contracts, data model, security boundaries, risks, implementation slicing and a draft decision record | Implement, write files, invent business rules or budgets, remote operations |
 | UX designer | [`ux`](claude/agents/ux.md) | Flows, screen inventory with every state, interaction and accessibility notes, copy and, when asked, a low/mid-fidelity prototype for new or redesigned screens, writing only design files where the main agent says | Edit production code, tests or configuration, invent business rules or brand, publish, remote operations |
 | Dev | [`dev`](claude/agents/dev.md) | Implements the planned change with tests and runs the affected checks | Commit, push, deploy, remote changes |
 | DevOps | [`devops`](claude/agents/devops.md) | Holds the Dev role for CI/CD, build and container configuration, infrastructure as code, environments, observability (logs, metrics, traces, alerts, SLOs) and release automation; verifies only locally (lint, build, dry run or plan against local or mocked state) and lists the remote steps that need authorization | Deploy, apply, release or act on any remote environment, read credentials, commit, push |
@@ -193,7 +195,7 @@ Eight global agents, all senior, form the team described in [`claude/CLAUDE.md`]
 | Security reviewer | [`security-reviewer`](claude/agents/security-reviewer.md) | Read-only review of auth, authorization and data isolation, secrets in clients, untrusted input, personal data and logs, dependencies, platform permissions, with concrete attack scenarios | Edit, run exploits, remote operations, read credentials |
 | QA | [`qa`](claude/agents/qa.md) | Derives scenarios, reruns the local verification end to end, reports gaps and a verdict | Edit, destructive or remote operations |
 
-The Analyst runs before the Dev only when the request needs requirements; the main agent takes its blocking questions to the user, and its acceptance criteria guide the Dev and QA. The UX designer runs after the Analyst only when the request creates or substantially changes screens or navigation; its confirmed design guides the Dev, the UX reviewer and QA. The DevOps agent takes the Dev role (or works with the Dev on separate slices) when the change is mainly infrastructure, delivery automation or observability. The UX and security reviewers run alongside the Reviewer only when the diff meets the criteria in `claude/CLAUDE.md` (interface changes; authentication, data access, secrets, permissions, backup or transfer configuration, or dependencies). The main agent orchestrates the team, fixes material findings and delivers through the Git workflow. Project-specific reviewers (for example access-policy reviewers) complement the global ones and do not replace them. Projects can add specialized reviewers in their own `.claude/agents/`, but must not name them `analyst`, `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` or `qa`: a project agent takes precedence over a global one with the same name and would hide it.
+The Analyst runs before the Dev only when the request needs requirements; the main agent takes its blocking questions to the user, and its acceptance criteria guide the Dev and QA. The Architect runs after the Analyst only when the change needs a technical decision; its confirmed decision guides the Dev and the Reviewer. The UX designer runs after the Analyst only when the request creates or substantially changes screens or navigation; its confirmed design guides the Dev, the UX reviewer and QA. The DevOps agent takes the Dev role (or works with the Dev on separate slices) when the change is mainly infrastructure, delivery automation or observability. The UX and security reviewers run alongside the Reviewer only when the diff meets the criteria in `claude/CLAUDE.md` (interface changes; authentication, data access, secrets, permissions, backup or transfer configuration, or dependencies). The main agent orchestrates the team, fixes material findings and delivers through the Git workflow. Project-specific reviewers (for example access-policy reviewers) complement the global ones and do not replace them. Projects can add specialized reviewers in their own `.claude/agents/`, but must not name them `analyst`, `architect`, `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` or `qa`: a project agent takes precedence over a global one with the same name and would hide it.
 
 Updating with `git pull` refreshes existing links, but a release that adds managed items (such as these agents) needs `./scripts/install.sh` again to create the new links; it is idempotent. Until then the global instructions tell the main agent to report the missing agent and run its role in a separate context.
 
@@ -254,4 +256,4 @@ GitHub CLI authentication is a one-time human step outside the agent: run `gh au
 
 ## Scope and ownership
 
-The repository owns only the seventeen linked items, including the opt-in Codex notify adapter, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+The repository owns only the eighteen linked items, including the opt-in Codex notify adapter, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.

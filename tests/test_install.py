@@ -22,6 +22,7 @@ MANAGED = {
     ".claude/rules/testing.md": "claude/rules/testing.md",
     ".claude/rules/git-workflow.md": "claude/rules/git-workflow.md",
     ".claude/agents/analyst.md": "claude/agents/analyst.md",
+    ".claude/agents/architect.md": "claude/agents/architect.md",
     ".claude/agents/ux.md": "claude/agents/ux.md",
     ".claude/agents/devops.md": "claude/agents/devops.md",
     ".claude/agents/reviewer.md": "claude/agents/reviewer.md",

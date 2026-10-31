@@ -36,6 +36,7 @@ REQUIRED_FILES = (
     "claude/rules/testing.md",
     "claude/rules/git-workflow.md",
     "claude/agents/analyst.md",
+    "claude/agents/architect.md",
     "claude/agents/ux.md",
     "claude/agents/reviewer.md",
     "claude/agents/ux-reviewer.md",
@@ -186,6 +187,7 @@ NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # they must block Write and Edit and never list them as allowed tools.
 READ_ONLY_AGENTS = (
     "claude/agents/analyst.md",
+    "claude/agents/architect.md",
     "claude/agents/reviewer.md",
     "claude/agents/ux-reviewer.md",
     "claude/agents/security-reviewer.md",
