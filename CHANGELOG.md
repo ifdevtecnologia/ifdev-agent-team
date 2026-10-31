@@ -8,6 +8,11 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `po` global agent: a senior product owner that turns a product goal or idea into epics and user
+  stories with story-level acceptance criteria, a prioritized backlog with reasons and a release or
+  MVP cut, writing only product files where the main agent says. It runs before the team when the
+  user asks for stories, a backlog, a roadmap or prioritization; the `analyst` accepts a confirmed
+  story as input.
 - `tech-writer` global agent: a senior technical writer for documentation that needs more than a
   changelog entry (user guides, README and setup, API references, runbooks, release notes). It
   verifies what it documents against code and tests and edits only documentation files.
@@ -88,8 +93,8 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `architect`,
-  `ux`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`,
+- Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `analyst`,
+  `architect`, `ux`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`,
   `privacy-reviewer`, `db-reviewer`, `performance-reviewer` and `qa` agents in `~/.claude/agents/`,
   and removes old links that still point to this checkout: `senior-reviewer.md` in
   `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and

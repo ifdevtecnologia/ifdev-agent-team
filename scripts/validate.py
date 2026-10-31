@@ -35,6 +35,7 @@ REQUIRED_FILES = (
     "claude/rules/engineering-principles.md",
     "claude/rules/testing.md",
     "claude/rules/git-workflow.md",
+    "claude/agents/po.md",
     "claude/agents/analyst.md",
     "claude/agents/architect.md",
     "claude/agents/ux.md",
