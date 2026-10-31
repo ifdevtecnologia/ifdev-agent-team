@@ -25,6 +25,7 @@ MANAGED = {
     ".claude/agents/architect.md": "claude/agents/architect.md",
     ".claude/agents/ux.md": "claude/agents/ux.md",
     ".claude/agents/devops.md": "claude/agents/devops.md",
+    ".claude/agents/tech-writer.md": "claude/agents/tech-writer.md",
     ".claude/agents/reviewer.md": "claude/agents/reviewer.md",
     ".claude/agents/ux-reviewer.md": "claude/agents/ux-reviewer.md",
     ".claude/agents/security-reviewer.md": "claude/agents/security-reviewer.md",

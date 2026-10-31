@@ -8,6 +8,9 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `tech-writer` global agent: a senior technical writer for documentation that needs more than a
+  changelog entry (user guides, README and setup, API references, runbooks, release notes). It
+  verifies what it documents against code and tests and edits only documentation files.
 - `privacy-reviewer`, `db-reviewer` and `performance-reviewer` global agents: read-only specialized
   reviews that run alongside the Reviewer only when the change touches personal data flows (purpose,
   consent, minimization, retention, data subject rights, sharing); the schema, migrations, database
@@ -86,14 +89,15 @@ before this file existed and has no Git tag.
 
 ### Upgrade
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `architect`,
-  `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer`, `privacy-reviewer`,
-  `db-reviewer`, `performance-reviewer` and `qa` agents in `~/.claude/agents/`, and removes old
-  links that still point to this checkout: `senior-reviewer.md` in `~/.claude/agents/`, the
-  `supervise-claude` link in the Codex skills directory and `~/.codex/ifdev-autonomous.config.toml`.
-  A real directory, a file or a link elsewhere at those paths is kept and reported. Until then the
-  main agent reports the missing agents and runs their roles in a separate context. Stop selecting
-  `codex --profile ifdev-autonomous`. A leftover `codex/skills/supervise-claude/` directory with
-  only ignored `__pycache__/` files may remain in the checkout; it is unused and safe to delete.
+  `ux`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`,
+  `privacy-reviewer`, `db-reviewer`, `performance-reviewer` and `qa` agents in `~/.claude/agents/`,
+  and removes old links that still point to this checkout: `senior-reviewer.md` in
+  `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
+  `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those
+  paths is kept and reported. Until then the main agent reports the missing agents and runs their
+  roles in a separate context. Stop selecting `codex --profile ifdev-autonomous`. A leftover
+  `codex/skills/supervise-claude/` directory with only ignored `__pycache__/` files may remain in
+  the checkout; it is unused and safe to delete.
 
 ## 0.1.0 - 2026-10-17
 
