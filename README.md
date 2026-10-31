@@ -189,7 +189,72 @@ The tests run the real scripts in subprocesses with a temporary `HOME` and tempo
 
 ## Team agents
 
-Seventeen global agents, all senior, form the team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-analyst--dev--reviewer--qa):
+Seventeen global agents, all senior, form the team described in [`claude/CLAUDE.md`](claude/CLAUDE.md#team-analyst--dev--reviewer--qa). Dashed boxes run only when their criterion applies:
+
+```mermaid
+flowchart TD
+    classDef optional stroke-dasharray: 5 5
+    classDef human fill:#f5f5f5,stroke:#888
+
+    request([Request])
+
+    subgraph product["Product"]
+        po["po<br/>stories, backlog, priority"]:::optional
+        metrics["metrics-analyst<br/>metrics, tracking, experiments"]:::optional
+    end
+
+    subgraph define["Define"]
+        analyst["analyst<br/>acceptance criteria"]:::optional
+        architect["architect<br/>technical decision, ADR draft"]:::optional
+        ux["ux<br/>flows, screens, prototype"]:::optional
+    end
+
+    subgraph build["Build"]
+        debugger["debugger<br/>root cause of unknown bugs"]:::optional
+        dev["dev<br/>code and tests"]
+        devops["devops<br/>CI/CD, infra, observability"]:::optional
+        writer["tech-writer<br/>documentation"]:::optional
+    end
+
+    subgraph review["Review"]
+        reviewer["reviewer<br/>every diff"]
+        specialized["ux-reviewer · security-reviewer · api-reviewer<br/>privacy-reviewer · db-reviewer · performance-reviewer"]:::optional
+    end
+
+    qa["qa<br/>end-to-end verification"]
+    delivery["Main agent<br/>commits, push, pull request"]
+    merge(["Human review and merge"]):::human
+
+    request --> po
+    request -.-> metrics
+    request --> analyst
+    request --> debugger
+    request --> dev
+    po --> analyst
+    metrics -.-> po
+    metrics -.-> analyst
+    analyst --> architect
+    analyst --> ux
+    architect --> ux
+    architect --> dev
+    ux --> dev
+    analyst --> dev
+    debugger --> architect
+    debugger --> dev
+    dev <-->|"or holds the Dev role"| devops
+    dev --> writer
+    devops --> writer
+    dev --> reviewer
+    devops --> reviewer
+    writer --> reviewer
+    reviewer --- specialized
+    reviewer --> qa
+    specialized --> qa
+    qa --> delivery
+    delivery --> merge
+```
+
+The main agent orchestrates every step, takes blocking questions to the user and fixes findings before moving on. A request that needs no optional role goes straight to the Dev; documentation-only or trivial changes stop at the Reviewer.
 
 | Role | Agent | Does | Never does |
 |---|---|---|---|
