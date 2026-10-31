@@ -41,6 +41,9 @@ REQUIRED_FILES = (
     "claude/agents/reviewer.md",
     "claude/agents/ux-reviewer.md",
     "claude/agents/security-reviewer.md",
+    "claude/agents/privacy-reviewer.md",
+    "claude/agents/db-reviewer.md",
+    "claude/agents/performance-reviewer.md",
     "claude/agents/dev.md",
     "claude/agents/devops.md",
     "claude/agents/qa.md",
@@ -191,6 +194,9 @@ READ_ONLY_AGENTS = (
     "claude/agents/reviewer.md",
     "claude/agents/ux-reviewer.md",
     "claude/agents/security-reviewer.md",
+    "claude/agents/privacy-reviewer.md",
+    "claude/agents/db-reviewer.md",
+    "claude/agents/performance-reviewer.md",
     "claude/agents/qa.md",
 )
 WRITE_TOOLS = ("Write", "Edit")

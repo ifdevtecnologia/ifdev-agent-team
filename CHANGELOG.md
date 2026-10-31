@@ -8,6 +8,11 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `privacy-reviewer`, `db-reviewer` and `performance-reviewer` global agents: read-only specialized
+  reviews that run alongside the Reviewer only when the change touches personal data flows (purpose,
+  consent, minimization, retention, data subject rights, sharing); the schema, migrations, database
+  functions or access policies; or hot paths, large data, caching, concurrency or a performance
+  target, respectively.
 - `architect` global agent: a read-only senior software architect that runs after the Analyst only
   when a change needs a technical decision (new modules or services, integrations, data model or
   tenancy changes, cross-cutting concerns, technology choices, scale or cost). It compares options
@@ -33,7 +38,8 @@ before this file existed and has no Git tag.
 - Global changelog rule: projects with a `CHANGELOG.md` keep the Unreleased section current and use
   `0.y.z` before an official 1.0.0.
 - Validator check that read-only agents (`analyst`, `architect`, `reviewer`, `ux-reviewer`,
-  `security-reviewer`, `qa`) block Write and Edit.
+  `security-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer`, `qa`) block Write
+  and Edit.
 - `analyst` global agent: a read-only senior requirements analyst that turns a new feature, a
   business-rule change or an ambiguous request into scope, numbered testable acceptance criteria,
   blocking questions, recorded assumptions, risks and a suggested slicing.
@@ -45,8 +51,8 @@ before this file existed and has no Git tag.
 
 ### Changed
 - The `dev` and `devops` agents receive the confirmed architecture decision when the Architect ran,
-  and the `reviewer` checks the diff against it; `work-session` runs the Architect after the Analyst when
-  the team calls for it.
+  and the `reviewer` checks the diff against it; `work-session` runs the Architect after the Analyst
+  when the team calls for it.
 - The `dev`, `ux-reviewer` and `qa` agents receive the confirmed design when the UX designer ran:
   the Dev follows it, the UX reviewer checks the implementation against it and QA uses its screen
   states as scenarios.
@@ -80,14 +86,14 @@ before this file existed and has no Git tag.
 
 ### Upgrade
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `architect`,
-  `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in
-  `~/.claude/agents/`, and removes old links that still point to this checkout: `senior-reviewer.md`
-  in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
-  `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those
-  paths is kept and reported. Until then the main agent reports the missing agents and runs their
-  roles in a separate context. Stop selecting `codex --profile ifdev-autonomous`. A leftover
-  `codex/skills/supervise-claude/` directory with only ignored `__pycache__/` files may remain in
-  the checkout; it is unused and safe to delete.
+  `ux`, `dev`, `devops`, `reviewer`, `ux-reviewer`, `security-reviewer`, `privacy-reviewer`,
+  `db-reviewer`, `performance-reviewer` and `qa` agents in `~/.claude/agents/`, and removes old
+  links that still point to this checkout: `senior-reviewer.md` in `~/.claude/agents/`, the
+  `supervise-claude` link in the Codex skills directory and `~/.codex/ifdev-autonomous.config.toml`.
+  A real directory, a file or a link elsewhere at those paths is kept and reported. Until then the
+  main agent reports the missing agents and runs their roles in a separate context. Stop selecting
+  `codex --profile ifdev-autonomous`. A leftover `codex/skills/supervise-claude/` directory with
+  only ignored `__pycache__/` files may remain in the checkout; it is unused and safe to delete.
 
 ## 0.1.0 - 2026-10-17
 
