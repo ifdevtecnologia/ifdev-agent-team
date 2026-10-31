@@ -8,6 +8,11 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Project board rule in `git-workflow.md`: a product that uses a GitHub Project tracks its
+  development work there with the statuses Backlog, To Do, Doing, Review, To Tests, Testing, To
+  Homologation, Homologation, To Deploy and Done. With delivery authorization the main agent creates
+  the task's issue and moves it up to To Homologation (and back to Doing on findings); Homologation,
+  To Deploy and Done follow the human merge, homologation approval and authorized deployment.
 - `debugger` global agent: a read-only senior debugger that reproduces a bug, failing check or
   regression with unknown cause, finds the root cause with evidence and reports the proposed fix and
   the regression test, before the Dev. It never edits files or touches the user's working tree.
