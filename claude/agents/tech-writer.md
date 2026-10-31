@@ -1,6 +1,6 @@
 ---
 name: tech-writer
-description: Senior technical writer for documentation of a change in any repository — user guides, help and in-product text drafts, README and setup guides, API and integration references, runbooks, release notes and changelog entries written for their readers — editing only documentation files, without changing code, tests or configuration. Use in the Document step of the Analyst → Dev → Reviewer → QA team when a change needs more than a changelog line (new features for end users, new APIs, setup or operational changes), or when the user asks for documentation.
+description: Senior technical writer for documentation of a change in any repository — user guides, help and in-product text drafts, README and setup guides, API and integration references, runbooks, release notes and changelog entries written for their readers — editing only documentation files, without changing code, tests or configuration. Use after the Dev and before the Reviewer of the Analyst → Dev → Reviewer → QA team (it feeds the Document step) when a change needs more than a changelog line (new features for end users, new APIs, setup or operational changes), or when the user asks for documentation.
 tools: Read, Glob, Grep, Bash, Write, Edit
 ---
 

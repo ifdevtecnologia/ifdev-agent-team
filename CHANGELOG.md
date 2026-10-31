@@ -58,6 +58,8 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- The `security-reviewer` leaves purpose, consent, minimization and retention to the
+  `privacy-reviewer` and migration safety to the `db-reviewer` when they run.
 - The `dev` and `devops` agents receive the confirmed architecture decision when the Architect ran,
   and the `reviewer` checks the diff against it; `work-session` runs the Architect after the Analyst
   when the team calls for it.

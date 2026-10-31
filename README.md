@@ -1,6 +1,6 @@
 # ifdev-ai-tools
 
-Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, Analyst, Architect, UX designer, Dev, DevOps, technical writer, Reviewer, QA, UX and security reviewer agents and a few general-purpose skills, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
+Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, Analyst, Architect, UX designer, Dev, DevOps, technical writer, Reviewer, QA and the specialized UX, security, privacy, database and performance reviewer agents and a few general-purpose skills, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
 
 ## Global versus project instructions
 

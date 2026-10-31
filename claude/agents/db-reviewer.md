@@ -20,7 +20,7 @@ Start from metadata (`git status`, then `--stat`/`--name-status` of the staged a
 1. Data loss and integrity: dropped or narrowed columns and tables, type changes that truncate, destructive defaults, cascades, backfills that overwrite data; constraints (not null, unique, foreign keys, checks) that keep invalid states out.
 2. Migration safety: statements that lock or rewrite large tables, long transactions, non-concurrent index builds on busy tables, ordering against application deploys (expand, migrate, contract), idempotence and a tested rollback or a documented reason why none exists.
 3. Access rules: row-level policies, grants and elevated-privilege functions enabled and scoped for every operation and role, defaults that deny, and tests that prove allowed and denied access.
-4. Queries and indexes: missing or redundant indexes for the new access patterns, N+1 queries, unbounded results without pagination, full scans on growing tables; ask for or read existing query plans instead of guessing.
+4. Queries and indexes: missing or redundant indexes for the new access patterns, unbounded results without pagination, full scans on growing tables (the number of calls, such as N+1 queries, belongs to the `performance-reviewer` when it runs); ask for or read existing query plans instead of guessing.
 5. Transactions and concurrency: isolation assumptions, race conditions, lost updates, deadlock risk, idempotent retries.
 6. Functions, triggers and views: side effects, security context, error handling and performance.
 7. Tests: migrations and policies are exercised against a local or disposable database as `~/.claude/rules/testing.md` requires.

@@ -207,6 +207,25 @@ class FrontmatterTests(ValidatorTestCase):
                 finally:
                     (self.root / rel).write_text(original, encoding="utf-8")
 
+    WRITING_AGENTS = (
+        "claude/agents/ux.md",
+        "claude/agents/dev.md",
+        "claude/agents/devops.md",
+        "claude/agents/tech-writer.md",
+        "claude/agents/po.md",
+    )
+
+    def test_writing_agents_are_required(self) -> None:
+        for rel in self.WRITING_AGENTS:
+            with self.subTest(agent=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                (self.root / rel).unlink()
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(output, rel, "required file is missing or is not a regular file")
+                finally:
+                    (self.root / rel).write_text(original, encoding="utf-8")
+
     def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
         self.replace(
             "claude/agents/qa.md",
