@@ -8,6 +8,13 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `devops` global agent: a senior DevOps engineer that holds the Dev role for CI/CD, build and
+  container configuration, infrastructure as code, environments, observability (logs, metrics,
+  traces, alerts, SLOs) and release automation, or works with the Dev on separate slices when a
+  change spans application and infrastructure. It verifies only locally (lint, build, dry run or
+  plan against local or mocked state), treats any command that contacts a real environment as a
+  remote step, never deploys or applies, and lists the remote steps that need the user's
+  authorization.
 - `ux` global agent: a senior UX designer that turns the objective and acceptance criteria of a
   new or redesigned user-facing flow into flows, a screen inventory with every state, interaction
   and accessibility notes, copy and, when asked, a low/mid-fidelity prototype. It writes only design
@@ -64,7 +71,7 @@ before this file existed and has no Git tag.
 
 ### Upgrade
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `analyst`, `ux`, `dev`,
-  `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/`, and
+  `devops`, `reviewer`, `ux-reviewer`, `security-reviewer` and `qa` agents in `~/.claude/agents/`, and
   removes old links that still point to this checkout: `senior-reviewer.md` in
   `~/.claude/agents/`, the `supervise-claude` link in the Codex skills directory and
   `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link elsewhere at those

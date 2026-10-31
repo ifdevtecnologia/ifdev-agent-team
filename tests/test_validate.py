@@ -362,7 +362,7 @@ class ManagedItemsTests(ValidatorTestCase):
     NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
 
     def test_required_agents_must_be_managed(self) -> None:
-        for agent in ("analyst", "ux", "security-reviewer", "dev"):
+        for agent in ("analyst", "ux", "security-reviewer", "dev", "devops"):
             with self.subTest(agent=agent):
                 item = f'  "claude/agents/{agent}.md|.claude/agents/{agent}.md"\n'
                 original = (self.root / self.COMMON).read_text(encoding="utf-8")

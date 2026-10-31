@@ -41,6 +41,7 @@ REQUIRED_FILES = (
     "claude/agents/ux-reviewer.md",
     "claude/agents/security-reviewer.md",
     "claude/agents/dev.md",
+    "claude/agents/devops.md",
     "claude/agents/qa.md",
     "claude/skills/work-session/SKILL.md",
     "claude/skills/work-session/references/commit-proposal.md",
