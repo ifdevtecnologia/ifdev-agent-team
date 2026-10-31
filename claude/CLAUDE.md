@@ -57,7 +57,7 @@ When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangel
 
 ## Git and delivery
 
-- Branches, commits, pushes and pull requests follow `~/.claude/rules/git-workflow.md`, which alone defines when they proceed and when they wait for approval. Do not add per-step approvals for Git delivery it already authorizes.
+- Branches, commits, pushes, pull requests and project board items follow `~/.claude/rules/git-workflow.md`, which alone defines when they proceed and when they wait for approval. Do not add per-step approvals for delivery it already authorizes.
 - Outside that flow, deploys, production access, remote migrations, package or release publishing and any other change to an external service require explicit authorization for that specific operation and destination; it does not extend to other destinations or operations.
 
 ## Reporting
