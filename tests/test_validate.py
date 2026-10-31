@@ -172,8 +172,14 @@ class FrontmatterTests(ValidatorTestCase):
 
     NEW_READ_ONLY_AGENTS = (
         "claude/agents/analyst.md",
+        "claude/agents/architect.md",
         "claude/agents/ux-reviewer.md",
         "claude/agents/security-reviewer.md",
+        "claude/agents/privacy-reviewer.md",
+        "claude/agents/db-reviewer.md",
+        "claude/agents/performance-reviewer.md",
+        "claude/agents/api-reviewer.md",
+        "claude/agents/debugger.md",
     )
 
     def test_analyst_and_specialized_reviewers_must_stay_read_only(self) -> None:
@@ -194,6 +200,26 @@ class FrontmatterTests(ValidatorTestCase):
 
     def test_analyst_and_specialized_reviewers_are_required(self) -> None:
         for rel in self.NEW_READ_ONLY_AGENTS:
+            with self.subTest(agent=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                (self.root / rel).unlink()
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(output, rel, "required file is missing or is not a regular file")
+                finally:
+                    (self.root / rel).write_text(original, encoding="utf-8")
+
+    WRITING_AGENTS = (
+        "claude/agents/ux.md",
+        "claude/agents/dev.md",
+        "claude/agents/devops.md",
+        "claude/agents/tech-writer.md",
+        "claude/agents/po.md",
+        "claude/agents/metrics-analyst.md",
+    )
+
+    def test_writing_agents_are_required(self) -> None:
+        for rel in self.WRITING_AGENTS:
             with self.subTest(agent=rel):
                 original = (self.root / rel).read_text(encoding="utf-8")
                 (self.root / rel).unlink()
@@ -362,7 +388,7 @@ class ManagedItemsTests(ValidatorTestCase):
     NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
 
     def test_required_agents_must_be_managed(self) -> None:
-        for agent in ("analyst", "ux", "security-reviewer", "dev"):
+        for agent in ("analyst", "architect", "ux", "security-reviewer", "privacy-reviewer", "db-reviewer", "performance-reviewer", "dev", "devops", "tech-writer", "po", "debugger", "api-reviewer", "metrics-analyst"):
             with self.subTest(agent=agent):
                 item = f'  "claude/agents/{agent}.md|.claude/agents/{agent}.md"\n'
                 original = (self.root / self.COMMON).read_text(encoding="utf-8")
