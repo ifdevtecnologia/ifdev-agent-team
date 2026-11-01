@@ -164,10 +164,10 @@ def definition(name: str) -> str:
 
 class FrontmatterTests(ValidatorTestCase):
     def test_read_only_agents_must_block_write_and_edit(self) -> None:
-        self.replace("claude/agents/qa.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
+        self.replace("claude/agents/debugger.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
         self.replace("claude/agents/reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
         output = self.assert_fails_with()
-        self.assert_reported(output, "claude/agents/qa.md", "read-only agent must list 'Edit' in disallowedTools")
+        self.assert_reported(output, "claude/agents/debugger.md", "read-only agent must list 'Edit' in disallowedTools")
         self.assert_reported(output, "claude/agents/reviewer.md", "read-only agent must not allow 'Edit'")
 
     NEW_READ_ONLY_AGENTS = (
@@ -216,6 +216,7 @@ class FrontmatterTests(ValidatorTestCase):
         "claude/agents/tech-writer.md",
         "claude/agents/po.md",
         "claude/agents/metrics-analyst.md",
+        "claude/agents/qa.md",
     )
 
     def test_writing_agents_are_required(self) -> None:
@@ -229,9 +230,35 @@ class FrontmatterTests(ValidatorTestCase):
                 finally:
                     (self.root / rel).write_text(original, encoding="utf-8")
 
+    NEW_SKILLS = (
+        "claude/skills/flutter-dev/SKILL.md",
+        "claude/skills/web-dev/SKILL.md",
+        "claude/skills/supabase-dev/SKILL.md",
+        "claude/skills/safe-refactor/SKILL.md",
+        "claude/skills/java-spring-dev/SKILL.md",
+        "claude/skills/e2e-testing/SKILL.md",
+    )
+
+    def test_new_skills_are_required(self) -> None:
+        for rel in self.NEW_SKILLS:
+            with self.subTest(skill=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                (self.root / rel).unlink()
+                try:
+                    output = self.assert_fails_with()
+                    self.assert_reported(output, rel, "required file is missing or is not a regular file")
+                finally:
+                    (self.root / rel).write_text(original, encoding="utf-8")
+
+    def test_qa_may_write_acceptance_tests(self) -> None:
+        text = (self.root / "claude/agents/qa.md").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^tools: Read, Glob, Grep, Bash, Write, Edit$")
+        self.assertNotRegex(text, r"(?m)^disallowedTools:")
+        self.assert_passes()
+
     def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
         self.replace(
-            "claude/agents/qa.md",
+            "claude/agents/debugger.md",
             "tools: Read, Glob, Grep, Bash\ndisallowedTools: Write, Edit",
             "tools: [Read, Glob, Grep, Bash]\ndisallowedTools: [Write, Edit]",
         )

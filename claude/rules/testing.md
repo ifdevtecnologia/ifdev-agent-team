@@ -74,6 +74,6 @@ Allocate checks by phase when implementation and independent review are split (f
 
 - **Implementer, each cycle:** the tests for the changed behavior and the impacted regression and local checks.
 - **Independent reviewer, intermediate reviews:** targeted checks that confirm the findings and affected regressions, not the full gate on every correction.
-- **Independent reviewer, once ready:** the complete relevant final gate, omitting no mandatory check.
+- **Independent QA, once ready:** acceptance tests derived from the acceptance criteria, at the integration, component or end-to-end level, for scenarios the implementer's tests do not cover, plus the complete relevant final gate, omitting no mandatory check.
 
 A passed result may be reused only within the same run while its relevant inputs are unchanged. The implementer's self-reported results are not independent validation.

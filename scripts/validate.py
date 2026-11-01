@@ -56,6 +56,12 @@ REQUIRED_FILES = (
     "claude/skills/work-session/references/commit-proposal.md",
     "claude/skills/verify-changes/SKILL.md",
     "claude/skills/verify-changes/references/commit-messages.md",
+    "claude/skills/flutter-dev/SKILL.md",
+    "claude/skills/web-dev/SKILL.md",
+    "claude/skills/supabase-dev/SKILL.md",
+    "claude/skills/safe-refactor/SKILL.md",
+    "claude/skills/java-spring-dev/SKILL.md",
+    "claude/skills/e2e-testing/SKILL.md",
     "codex/notify/agent-notify-codex.sh",
     "claude/hooks/agent-notify-hook.sh",
     "scripts/install.sh",
@@ -191,7 +197,8 @@ MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
 BASE_CODEX_CONFIG = ".codex/config.toml"
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-# Read-only roles of the Analyst -> Dev -> Reviewer -> QA team, including the specialized reviewers:
+# Read-only roles of the Analyst -> Dev -> Reviewer -> QA team, including the specialized reviewers
+# (QA writes acceptance tests, so it is not one of them):
 # they must block Write and Edit and never list them as allowed tools.
 READ_ONLY_AGENTS = (
     "claude/agents/analyst.md",
@@ -204,7 +211,6 @@ READ_ONLY_AGENTS = (
     "claude/agents/performance-reviewer.md",
     "claude/agents/api-reviewer.md",
     "claude/agents/debugger.md",
-    "claude/agents/qa.md",
 )
 WRITE_TOOLS = ("Write", "Edit")
 SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")

@@ -1,6 +1,6 @@
 # ifdev-ai-tools
 
-Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, metrics analyst, Analyst, Architect, UX designer, debugger, Dev, DevOps, technical writer, Reviewer, QA and the specialized UX, security, API, privacy, database and performance reviewer agents and a few general-purpose skills, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
+Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, metrics analyst, Analyst, Architect, UX designer, debugger, Dev, DevOps, technical writer, Reviewer, QA and the specialized UX, security, API, privacy, database and performance reviewer agents, a few general-purpose skills, stack skills for Flutter, web front ends, Supabase and Java/Spring Boot, and skills for safe refactoring and end-to-end testing, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
 
 ## Global versus project instructions
 
@@ -38,11 +38,17 @@ claude/
   agents/qa.md                       -> ~/.claude/agents/qa.md (QA)
   skills/work-session/               -> ~/.claude/skills/work-session (with references/)
   skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
+  skills/flutter-dev/                -> ~/.claude/skills/flutter-dev (Flutter stack guidance)
+  skills/web-dev/                    -> ~/.claude/skills/web-dev (web front-end stack guidance)
+  skills/supabase-dev/               -> ~/.claude/skills/supabase-dev (Supabase stack guidance)
+  skills/java-spring-dev/            -> ~/.claude/skills/java-spring-dev (Java and Spring Boot stack guidance)
+  skills/safe-refactor/              -> ~/.claude/skills/safe-refactor (refactoring without behavior change)
+  skills/e2e-testing/                -> ~/.claude/skills/e2e-testing (acceptance and end-to-end tests)
   hooks/agent-notify-hook.sh         -> ~/.claude/hooks/agent-notify-hook.sh (Stop/StopFailure/Notification adapter)
 codex/
   notify/agent-notify-codex.sh       -> ~/.codex/notify/agent-notify-codex.sh (opt-in native `notify` adapter)
 scripts/
-  install.sh, uninstall.sh           link / unlink the twenty-six items above and merge/remove Claude hooks
+  install.sh, uninstall.sh           link / unlink the thirty-two items above and merge/remove Claude hooks
   lib/common.sh                      managed item list and shared safety helpers
   lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
   agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
@@ -76,7 +82,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 ### What the installer does
 
 - Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the twenty-six destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
+- Creates symlinks for exactly the thirty-two destinations above and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents` or `~/.codex/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
 - Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees.
 - A destination that already links to this repository is left as is. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
 - Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
@@ -221,7 +227,7 @@ flowchart TD
         specialized["ux-reviewer · security-reviewer · api-reviewer<br/>privacy-reviewer · db-reviewer · performance-reviewer"]:::optional
     end
 
-    qa["qa<br/>end-to-end verification"]
+    qa["qa<br/>acceptance tests and verification"]
     delivery["Main agent<br/>commits, push, pull request"]
     merge(["Human review and merge"]):::human
 
@@ -274,9 +280,11 @@ The main agent orchestrates every step, takes blocking questions to the user and
 | Privacy reviewer | [`privacy-reviewer`](claude/agents/privacy-reviewer.md) | Read-only review of personal and sensitive data: purpose and legal basis, consent, minimization, retention and deletion, data subject rights, sharing and transfers, analytics | Edit, give legal opinions, read real personal data, remote operations |
 | Database reviewer | [`db-reviewer`](claude/agents/db-reviewer.md) | Read-only review of schema and migrations (data loss, locking, rollback), constraints, indexes and queries, transactions, functions and access policies | Edit, run migrations, connect to databases, remote operations |
 | Performance reviewer | [`performance-reviewer`](claude/agents/performance-reviewer.md) | Read-only review of hot paths, round trips, payload and bundle size, client rendering and memory, caching, concurrency and cost, against realistic volumes | Edit, run benchmarks or builds, remote operations |
-| QA | [`qa`](claude/agents/qa.md) | Derives scenarios, reruns the local verification end to end, reports gaps and a verdict | Edit, destructive or remote operations |
+| QA | [`qa`](claude/agents/qa.md) | Derives scenarios from the acceptance criteria, writes the missing acceptance tests (integration, component or end-to-end), reruns the local verification and reports gaps and a verdict | Production code, configuration or dependencies, destructive or remote operations |
 
 The product owner runs before the team when the user asks for stories, a backlog, a roadmap or prioritization; each confirmed story then enters the team, and the metrics analyst defines how it will be measured when needed. The debugger runs before the Dev when the cause of a bug is unknown. The Analyst runs before the Dev only when the request needs requirements; the main agent takes its blocking questions to the user, and its acceptance criteria guide the Dev and QA. The Architect runs after the Analyst only when the change needs a technical decision; its confirmed decision guides the Dev and the Reviewer. The UX designer runs after the Analyst only when the request creates or substantially changes screens or navigation; its confirmed design guides the Dev, the UX reviewer and QA. The DevOps agent takes the Dev role (or works with the Dev on separate slices) when the change is mainly infrastructure, delivery automation or observability. The technical writer handles documentation that needs more than a changelog entry, before the Reviewer. The UX, security, API, privacy, database and performance reviewers run alongside the Reviewer only when the diff meets the criteria in `claude/CLAUDE.md` (interface changes; authentication, data access, secrets, permissions, backup or transfer configuration, or dependencies; contracts and external integrations; personal data flows; schema, migrations or access policies; hot paths, large data or performance targets). The main agent orchestrates the team, fixes material findings and delivers through the Git workflow. Project-specific reviewers (for example access-policy reviewers) complement the global ones and do not replace them. Projects can add specialized reviewers in their own `.claude/agents/`, but must not name them `po`, `metrics-analyst`, `analyst`, `architect`, `ux`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer` or `qa`: a project agent takes precedence over a global one with the same name and would hide it.
+
+The stack skills [`flutter-dev`](claude/skills/flutter-dev/SKILL.md), [`web-dev`](claude/skills/web-dev/SKILL.md), [`supabase-dev`](claude/skills/supabase-dev/SKILL.md) and [`java-spring-dev`](claude/skills/java-spring-dev/SKILL.md) give the agents whose work touches a stack (Dev, Reviewer, QA and the database and security reviewers) stack-specific guidance (structure, state, accessibility, platform and security pitfalls, test levels and local verification). They name technologies, not products, and are read only when a change touches that stack; a project's own rules and skills win when they are more specific. Two procedure skills complement them: [`safe-refactor`](claude/skills/safe-refactor/SKILL.md) (characterization tests first, small verified steps, refactor separate from behavior changes) for the Dev, and [`e2e-testing`](claude/skills/e2e-testing/SKILL.md) (acceptance and end-to-end tests from acceptance criteria) for QA.
 
 Updating with `git pull` refreshes existing links, but a release that adds managed items (such as these agents) needs `./scripts/install.sh` again to create the new links; it is idempotent. Until then the global instructions tell the main agent to report the missing agent and run its role in a separate context.
 
@@ -337,4 +345,4 @@ GitHub CLI authentication is a one-time human step outside the agent: run `gh au
 
 ## Scope and ownership
 
-The repository owns only the twenty-six linked items, including the opt-in Codex notify adapter, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+The repository owns only the thirty-two linked items, including the opt-in Codex notify adapter, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.

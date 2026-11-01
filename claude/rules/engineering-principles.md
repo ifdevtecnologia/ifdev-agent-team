@@ -23,6 +23,14 @@ Choose the simplest solution that correctly solves the current problem. Do not i
 
 Avoid duplicated business logic. Extract shared behavior when duplication represents the same concept; do not deduplicate incidental similarity if it couples unrelated concepts.
 
+## Reuse and simplicity
+
+- **Search before writing:** look for existing functions, components, utilities, types and patterns in the project, then in the language, framework and current dependencies. Reuse or extend them before writing new code; do not add a dependency for what they already do.
+- **Extract when it pays off:** create an abstraction when a concept repeats (often at the third occurrence) or when it isolates a real boundary or variation, not in anticipation of one.
+- **Simplify before finishing:** once the tests pass, reread the change and remove what it does not need: unused parameters and options, single-use indirection, wrappers that only forward calls, defensive code for states that cannot happen and comments that restate the code.
+- **Fewer moving parts:** prefer plain functions and data over classes when there is no state or polymorphism, standard library and framework features over custom machinery, and one clear path over configurable generality nobody asked for.
+- Simple is not the same as short: do not trade readability, error handling or type safety for fewer lines.
+
 ## SOLID
 
 - **Single Responsibility:** a class, module or function has one clear reason to change.
@@ -76,6 +84,6 @@ Use cognitive complexity **15** as a warning threshold for a function/method, no
 
 ## Self-review
 
-Explicitly check correctness, coverage of new/changed meaningful behavior (see `~/.claude/rules/testing.md`), SOLID/KISS/DRY, coupling and cohesion, unnecessary complexity, overengineering, security, error handling, regression risk, architecture boundaries, duplication, naming, dead code, magic values and deprecated APIs.
+Explicitly check correctness, coverage of new/changed meaningful behavior (see `~/.claude/rules/testing.md`), missed reuse of existing code, SOLID/KISS/DRY, coupling and cohesion, unnecessary complexity, overengineering, security, error handling, regression risk, architecture boundaries, duplication, naming, dead code, magic values and deprecated APIs.
 
 Do not blindly refactor unrelated existing code because it violates these principles. Improve adjacent code only when necessary to implement the current change safely. Report material findings and justified exceptions rather than manufacturing issues or repeating an empty checklist.
