@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-01
 - Issue: #27 (epic #26). Follow-ups: #28 tasks, #29 runner, #30 report, #31 reference run.
-- Implements: the measurement plan (a proposal by the metrics analyst, kept in the owner's product notes; it is committed as `docs/benchmark/measurement-plan.md` with the pre-registration, see OD-6). This record turns that plan into an executable protocol and does not redesign it. Hypotheses, metrics, sample size, decision rules and threats to validity are defined in the plan; on any conflict, the plan wins and this record is corrected.
+- Implements: the measurement plan (a proposal by the metrics analyst, kept in the owner's product notes; it will be committed as `docs/benchmark/measurement-plan.md` with the pre-registration, see OD-6. Until then, "plan §N" refers to that document). This record turns that plan into an executable protocol and does not redesign it. Hypotheses, metrics, sample size, decision rules and threats to validity are defined in the plan; on any conflict, the plan wins and this record is corrected.
 - Claude Code version checked: 2.1.314 (`claude --version`, 2026-11-01). Verified flags: `-p`, `--output-format`, `--verbose`, `--model`, `--effort`, `--session-id`, `--max-budget-usd`, `--permission-mode`, `--permission-prompts`, `--allowedTools`, `--disallowedTools`, `--strict-mcp-config`, `--bare`. Anything else is marked as an assumption.
 
 ## Context
@@ -24,7 +24,7 @@
 | O1 success, O2 escaped defects (test part), G1 | Evaluator container: hidden tests, pre-existing suite and build, run after the agent exits |
 | O2 (review part), G5 | Blind review of anonymized final diffs, run outside the conditions |
 | K1 cost, K2 tokens, K4 time, K5 turns | Final `result` event of `--output-format stream-json`: `total_cost_usd`, `usage`, `modelUsage`, `duration_ms`, `num_turns` |
-| K6 cost per role, agent count | Calls to the subagent tool (`Agent`, formerly `Task`) and their `subagent_type`, read from the stream. Per-subagent tokens come from the run's transcripts under `$CLAUDE_CONFIG_DIR/projects/` (assumed location, check in the smoke round) |
+| K6 cost per role, agent count | Calls to the subagent tool (assumed name `Agent`, formerly `Task`; check in the smoke round) and their `subagent_type`, read from the stream. Per-subagent tokens come from the run's transcripts under `$CLAUDE_CONFIG_DIR/projects/` (assumed location, check in the smoke round) |
 | I1–I3 findings, rework | Counted by script from subagent final reports (severity keywords) and edits made after a report. The heuristic is validated against a manual count in the pilot |
 | I4–I7 | `final.patch` against the snapshot's base commit; expected-files list in `task.yaml` |
 | I8 end state | Last report line plus the runner's own status (`timed_out`, `budget_capped`, exit code) |
@@ -43,10 +43,10 @@
 
 | Option | Pros | Cons | Verdict |
 |---|---|---|---|
-| 1. Host process with a temporary `HOME` and `CLAUDE_CONFIG_DIR` (the pattern `tests/` uses) | Cheapest; same as the existing tests | The agent's Bash can still read the real home, credentials, SSH agent, hidden tests and other repos, and can reach git remotes. The real config is not loaded, but it is reachable | Rejected for agent runs. Kept for harness unit tests with a fake `claude` |
+| 1. Host process with a temporary `HOME` (the pattern `tests/` uses) and `CLAUDE_CONFIG_DIR` | Cheapest; same as the existing tests | The agent's Bash can still read the real home, credentials, SSH agent, hidden tests and other repos, and can reach git remotes. The real config is not loaded, but it is reachable | Rejected for agent runs. Kept for harness unit tests with a fake `claude` |
 | 2. One disposable container per run, with a temporary `HOME` and config dir inside | Only the run directory is mounted; no host home, SSH agent, Docker socket or hidden tests; Docker is already installed locally | Needs images per stack; Docker-in-Docker is excluded | **Chosen** |
 | 3. Disposable VM per run | Strongest boundary; easier egress control | Slow and heavy for 108+ runs | Revisit if container egress control is not enough |
-| `--restricted` or `--bare` modes | Built-in | `--restricted` removes Bash, so agents cannot run tests. `--bare` skips hooks and CLAUDE.md discovery, which breaks condition B | Rejected |
+| `--restricted` or `--bare` modes | Built-in | `--restricted` ignores user, project and local settings files, which drops B's hooks and settings. `--bare` skips hooks and CLAUDE.md discovery, which breaks condition B | Rejected |
 
 ### Invocation and capture
 
@@ -70,7 +70,7 @@ The harness code goes in this repository under `benchmark/` (generic, public). I
    - `work/`, the workspace;
    - `toolkit/`, a `git archive` export of the pinned toolkit SHA, used by B and C only;
    - `out/`, the run's outputs.
-2. **Workspace.** `work/` is a fresh copy of the frozen snapshot. The runner runs `git init`, makes one commit with a synthetic author, and adds no remote. The agent therefore cannot find the fix with `git log`, and has nothing to push to.
+2. **Workspace.** `work/` is a fresh copy of the frozen snapshot. The runner runs `git init`, makes one commit with a synthetic author, adds no remote, and writes a synthetic git identity to `$RUN_ROOT/home/.gitconfig` so the agent's local commits work. The local history does not contain the fix and there is nothing to push to; network access is handled in step 5.
 3. **Toolkit install (B and C).** The runner executes `$RUN_ROOT/toolkit/scripts/install.sh` on the host with `env -i PATH=… HOME=$RUN_ROOT/home`. The installer reads `HOME` from the environment (`require_home` in `scripts/lib/common.sh`), links the managed items into `$RUN_ROOT/home/.claude` and merges its hooks into the settings file there. Condition A skips this step and starts with an empty `.claude/`.
 4. **Agent container.**
    - `RUN_ROOT` is mounted read-write **at the same absolute path**, so the installer's symlinks and the installed hook command still resolve.
@@ -79,13 +79,13 @@ The harness code goes in this repository under `benchmark/` (generic, public). I
    - The environment is an explicit allowlist:
      - `HOME=$RUN_ROOT/home`;
      - `CLAUDE_CONFIG_DIR=$RUN_ROOT/home/.claude`, set explicitly so that it matches the installer's destination;
-     - the auth variable, passed **by name only** (OD-2), never as a value on the command line;
+     - the auth variable of a dedicated API key, passed **by name only** (OD-2), never as a value on the command line. The agent's own Bash can read it (`env`), so "agents never read it" cannot be enforced: this is an accepted risk, mitigated by a dedicated key with a workspace spend limit and by the egress allowlist;
      - `IFDEV_AGENT_NOTIFY=0`;
      - autoupdate and non-essential traffic disabled. Variable names are assumed and checked in the smoke round.
-5. **Network.** The default is: no tools that fetch from the web, no git credentials, and dependencies pre-fetched into the images. A stricter egress allowlist (Anthropic API only) is OD-3.
+5. **Network.** WebFetch and WebSearch are denied, there are no git credentials, and dependencies are pre-fetched into the images. Bash still has network access unless egress is restricted, so the agent could fetch public sources, such as the upstream history of a task taken from a public repository. Therefore evaluation rounds use an **egress allowlist (Anthropic API only) by default**, and task snapshots come only from private or synthetic sources. Smoke and harness checks may run without the allowlist (OD-3).
 6. **Evaluation.** After the agent exits:
    - The runner saves `final.patch` (working tree against the base commit, uncommitted changes included) and records whether the agent committed.
-   - It then starts a **fresh evaluator container** from the same stack image, copies the workspace and then the task's `hidden/` into it, and runs the commands from `task.yaml`.
+   - It then starts a **fresh evaluator container** from the same stack image, copies the workspace, restores the pre-existing tests and build files from the snapshot (runs that changed them are flagged, see G1), copies the task's `hidden/` into it, and runs the commands from `task.yaml`.
    - Hidden tests never enter the agent's container.
 7. **Teardown.** Extracted numbers go to `runs.csv`. Raw logs and transcripts stay local, are never versioned, and are deleted within 90 days (plan §4.7, pending the privacy review).
 
@@ -104,11 +104,11 @@ timeout 3600 claude -p --model "$MODEL" --effort "$EFFORT" \
 ```
 
 - `--model` takes a full model ID, never an alias. The toolkit's agents do not set a model (checked), so subagents use the session model; inheritance is assumed and checked.
-- `--permission-prompts none` denies anything that would prompt. The tool allowlist and permission mode are the owner's call (OD-3). This default allows Bash because the container, not the permission prompt, is the boundary.
+- `--permission-prompts none` denies anything that would prompt. `--allowedTools` only pre-approves tools; any other tool that needs permission (for example Skill) is silently denied, which could keep B from using its skills. The smoke round checks this, and the runner pins the available set with `--tools` if needed. The tool allowlist and permission mode are the owner's call (OD-3). This default allows Bash because the container, not the permission prompt, is the boundary.
 - `--strict-mcp-config` with no config loads no MCP servers.
 - `--session-id` set to the run UUID makes the transcripts easy to find.
 - If `timeout` or `--max-budget-usd` stops the run, there may be no `result` event. Cost then comes from the transcripts and the overrun flag is recorded. Either way the run counts as a failure (O1).
-- The smoke round must confirm: the `stream-json` + `--verbose` requirement; how the budget cap ends a run; and that `total_cost_usd` includes subagents, within ±5% of transcripts or OTel (plan pilot gate).
+- The smoke round must confirm: the `stream-json` + `--verbose` requirement; how the budget cap ends a run; that `total_cost_usd` includes subagents, within ±5% of transcripts or OTel (plan pilot gate); the subagent tool name; and that skills and subagents are usable under the chosen permission settings.
 
 ### Harness layout
 
@@ -137,11 +137,11 @@ $BENCH_TASKS_DIR/<task_id>/     # private repo, never mounted into the agent con
 
 ### Cost per round and owner authorization
 
-The plan's per-run figures are guesses until the smoke round (A ≈ US$1, C ≈ US$2, B ≈ US$5). Token volume is recorded, not estimated. Assumed order of magnitude: 0.5–2M tokens per A run and 3–10M per B run, mostly cache reads. "Cap" is the worst case with `--max-budget-usd` at the default US$15 per run (OD-2).
+The plan's per-run figures are guesses until the smoke round (A ≈ US$1, C ≈ US$2, B ≈ US$5). Token volume is recorded, not estimated. Assumed order of magnitude: 0.5–2M tokens per A run, 1–5M per C run and 3–10M per B run, mostly cache reads. Derived per round: smoke ≈ 4–12M tokens, pilot ≈ 36–136M, evaluation ≈ 162–612M. "Cap" is the worst case with `--max-budget-usd` at the default US$15 per run (OD-2).
 
 | Round | Runs | Expected | Cap |
 |---|---|---|---|
-| Smoke (#31 step 1): 1 task × A/B/C × 1 | 3 | ≈ US$8 | US$45 |
+| Smoke (#31 step 1): 1 task × A/B × 1 (C only after OD-1) | 2 | ≈ US$6 | US$30 |
 | Pilot: 4 × 3 × 2 | 24 | ≈ US$64 | US$360 |
 | Evaluation: 12 × 3 × 3 | 108 | ≈ US$290 (range 150–600) | US$1,620 |
 | Ablations (optional): 6 × 3 × 2 | 36 | ≈ US$145 | US$540 |
@@ -149,7 +149,7 @@ The plan's per-run figures are guesses until the smoke round (A ≈ US$1, C ≈ 
 
 **Needs the owner's explicit authorization before any run that calls the model:**
 
-1. The total budget, the per-run cap, and the billing mode (API key or subscription). If using an API key, provide a dedicated key in a workspace with a spend limit; agents never read or store it.
+1. The total budget and the per-run cap. The protocol assumes a dedicated API key in a workspace with a spend limit; subscription (OAuth) login is out of scope, because it would require copying the real credentials into the run directory (OD-2).
 2. Each round separately (smoke, pilot, evaluation, ablations, blind review), with its expected cost and cap.
 3. The execution environment: the container runtime, the built images and the network egress policy.
 4. The permission mode and tool allowlist inside the container.
@@ -166,8 +166,8 @@ Agents may build and test the harness with fakes, but they never start a model-c
 Each has a recommended default.
 
 - **OD-1 Light mode:** roles and trigger defined by the PO. Until then: toolkit installed plus one fixed prompt line (implementation with tests, the `reviewer`, specialized reviewers only when their criterion applies); smoke and harness checks run only A and B.
-- **OD-2 Budget and billing:** dedicated API key with a workspace spend limit, US$15 per-run cap, each round authorized separately.
-- **OD-3 Environment and permissions:** disposable container per run, only the run directory mounted, `acceptEdits`, prompts denied, tool allowlist with Bash, web tools denied, dependencies baked into the images; optional egress allowlist.
+- **OD-2 Budget and billing:** dedicated API key with a workspace spend limit, US$15 per-run cap, each round authorized separately. A subscription path would need its own credential-handling design.
+- **OD-3 Environment and permissions:** disposable container per run, only the run directory mounted, `acceptEdits`, prompts denied, tool allowlist with Bash, web tools denied, dependencies baked into the images, egress allowlist (Anthropic API only) required for evaluation rounds.
 - **OD-4 Pinned model:** one full model ID and an explicit effort level for every condition; subagents use the session model; Claude Code pinned at 2.1.314 in the images, autoupdate off.
 - **OD-5 Margins:** accept the plan's numbers (15 pp, 10 pp, ≤ 4× cost, ≤ 3× time, ≤ 50%) and freeze them in the pre-registration commit.
 - **OD-6 Plan and tasks location:** commit the measurement plan (translated to English) under `docs/benchmark/` with the pre-registration; private tasks repository location; whether to use historical snapshots from the owner's repositories.
