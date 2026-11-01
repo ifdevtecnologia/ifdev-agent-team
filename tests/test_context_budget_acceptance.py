@@ -2,9 +2,10 @@
 
 The README baseline is pinned to a commit, so its numbers are compared exactly against the script
 run on that commit's tree (exported to a temporary directory), not against the working tree: edits
-to `claude/CLAUDE.md` or the rules must not break the suite, but the recorded baseline must stay
-true. Against the working tree only the stable invariants are checked: the same set of files and an
-internally consistent table.
+to the content of `claude/CLAUDE.md` or the rules must not break the suite, but the recorded
+baseline must stay true. Against the working tree only the stable invariants are checked: the same
+set of files and an internally consistent table. Adding a rule, or giving one `paths`, changes the
+set of always-loaded files and requires updating the README baseline.
 """
 
 from __future__ import annotations
@@ -99,6 +100,8 @@ class ContextBaselineAcceptanceTest(unittest.TestCase):
         self.assertEqual([name for name, _, _ in self.rows], current)
 
     def test_ac2_baseline_numbers_match_the_script_at_the_recorded_commit(self) -> None:
+        if not hasattr(tarfile, "data_filter"):
+            self.skipTest("tarfile extraction filters need Python 3.12+ or a security backport")
         commit = COMMIT.search(self.section)["commit"]
         archive = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", commit, "claude"],
