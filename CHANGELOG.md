@@ -88,6 +88,9 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
+  existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
+  `./scripts/install.sh` only if you move or rename your local checkout.
 - Project board rule: new `Canceled` status after Done for discarded items. Canceling is the
   user's decision; the agent proposes it with the reason, closes the issue as not planned once the
   user agrees and only proposes closing the open pull request and branch.
