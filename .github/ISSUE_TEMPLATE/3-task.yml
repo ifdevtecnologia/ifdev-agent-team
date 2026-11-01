@@ -1,0 +1,30 @@
+name: Task
+description: "Trabalho técnico ou operacional sem história de usuário"
+labels: [task]
+type: Task
+projects: ["ifdevtecnologia/6"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: "Objetivo"
+      description: "O que precisa ser feito e por quê."
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: "Pronto quando"
+      description: "Como saber que terminou."
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: "Notas"
+      description: "Dependências, riscos e links."
+    validations:
+      required: false

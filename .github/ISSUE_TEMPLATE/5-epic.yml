@@ -1,0 +1,41 @@
+name: Epic
+description: "Conjunto de histórias com um resultado comum"
+title: "[Épico] "
+labels: [epic]
+type: Epic
+projects: ["ifdevtecnologia/6"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: "Resultado"
+      description: "O problema, para quem, e o que muda quando o épico terminar."
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "Escopo"
+      description: "O que entra e o que fica de fora."
+      placeholder: |
+        Entra:
+        - ...
+        
+        Fora:
+        - ...
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: "Como medir o sucesso"
+      description: "Métrica ou sinal observável."
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: "Notas"
+      description: "As histórias entram como sub-issues deste épico."
+    validations:
+      required: false
