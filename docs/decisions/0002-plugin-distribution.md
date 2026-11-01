@@ -142,7 +142,6 @@ Not verified, because each needs a model session: substitution of `${CLAUDE_PLUG
 Blocking (owner):
 
 - Plugin and marketplace names (`ifdev` / `ifdev-agent-team`).
-- A licence (needed only for Anthropic's directory checks).
 - The auto-update policy.
 - What happens to #42.
 
