@@ -88,6 +88,9 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- Project board rule: new `Canceled` status after Done for discarded items. Canceling is the
+  user's decision; the agent proposes it with the reason, closes the issue as not planned once the
+  user agrees and only proposes closing the open pull request and branch.
 - `qa` now writes the missing automated acceptance tests (integration, component or end-to-end,
   with the project's existing tooling) derived from the acceptance criteria, in test files only. It
   never edits production code, configuration or dependencies; a failing acceptance test is a
