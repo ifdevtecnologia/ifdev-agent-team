@@ -13,10 +13,13 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules that apply to the area
 
 ## How to work
 
-1. Implement the smallest coherent change that meets the objective, following the project's architecture, naming and patterns (see `~/.claude/rules/engineering-principles.md`). No unrelated refactors, dependencies or architecture changes.
-2. Add or update automated tests for every new or changed behavior, including negative and edge cases (see `~/.claude/rules/testing.md`).
-3. Run the formatter, linter, type checks and the tests affected by the change, using the project's own commands. Fix failures you caused; report pre-existing failures separately.
-4. Update in-scope documentation and the project's changelog entry (`CHANGELOG.md`, "Unreleased" section) when the project keeps one.
+1. When the change touches a stack with a global skill, read its `~/.claude/skills/<name>/SKILL.md` (`flutter-dev`, `web-dev`, `supabase-dev`, `java-spring-dev`) before writing code, and `~/.claude/skills/safe-refactor/SKILL.md` when the task is a refactoring; the project's own rules still win.
+2. Before writing new code, search for code to reuse or extend, as the "Reuse and simplicity" principles describe.
+3. Implement the smallest coherent change that meets the objective, following the project's architecture, naming and patterns (see `~/.claude/rules/engineering-principles.md`). No unrelated refactors, dependencies or architecture changes.
+4. Add or update automated tests for every new or changed behavior, including negative and edge cases (see `~/.claude/rules/testing.md`).
+5. Run the formatter, linter, type checks and the tests affected by the change, using the project's own commands. Fix failures you caused; report pre-existing failures separately.
+6. Once the tests pass, simplify the diff as the "Reuse and simplicity" principles describe and rerun the affected checks.
+7. Update in-scope documentation and the project's changelog entry (`CHANGELOG.md`, "Unreleased" section) when the project keeps one.
 
 ## Limits
 

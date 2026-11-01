@@ -8,6 +8,21 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Stack skills `flutter-dev`, `web-dev` and `supabase-dev`: guidance for Flutter apps, web front
+  ends (Angular, Astro and similar) and Supabase backends (structure, state, accessibility,
+  platform, security and privacy pitfalls, test levels and local-only verification). The agents
+  whose work touches that stack read them; project rules still win.
+- `java-spring-dev` stack skill for Java services with Spring Boot (layering, validation, error
+  mapping, transactions, JPA and migrations, configuration and secrets, security, test slices).
+- `safe-refactor` skill: refactoring without behavior change (confirm the reason, characterization
+  tests first, small verified steps, refactor separate from behavior changes). The Dev reads it
+  when the task is a refactoring.
+- `e2e-testing` skill: acceptance and end-to-end tests derived from acceptance criteria (choice of
+  level, stable selectors and waits, isolated synthetic data, flakiness, local-only runs). QA reads
+  it before writing acceptance tests.
+- "Reuse and simplicity" section in `engineering-principles.md`: search for existing code before
+  writing new code, extract abstractions only when they pay off, and simplify the change once the
+  tests pass.
 - Project board rule in `git-workflow.md`: a product that uses a GitHub Project tracks its
   development work there with the statuses Backlog, To Do, Doing, Review, To Tests, Testing, To
   Homologation, Homologation, To Deploy and Done. With delivery authorization the main agent creates
@@ -73,6 +88,13 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- `qa` now writes the missing automated acceptance tests (integration, component or end-to-end,
+  with the project's existing tooling) derived from the acceptance criteria, in test files only. It
+  never edits production code, configuration or dependencies; a failing acceptance test is a
+  finding for the Dev, and the Reviewer reviews the tests QA adds before delivery.
+- `dev` searches for code to reuse before writing, reads the matching stack skill and simplifies
+  the change once the tests pass; the `reviewer` reports missed reuse and abstractions without a
+  real problem, with the simpler alternative.
 - The `security-reviewer` leaves purpose, consent, minimization and retention to the
   `privacy-reviewer` and migration safety to the `db-reviewer` when they run.
 - The `dev` and `devops` agents receive the confirmed architecture decision when the Architect ran,
@@ -113,9 +135,11 @@ before this file existed and has no Git tag.
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
   `analyst`, `architect`, `ux`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
   `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,
-  `performance-reviewer` and `qa` agents in `~/.claude/agents/`, and removes old links that still
-  point to this checkout: `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link
-  in the Codex skills directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a
+  `performance-reviewer` and `qa` agents in `~/.claude/agents/` and the `flutter-dev`, `web-dev`,
+  `supabase-dev`, `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in
+  `~/.claude/skills/`, and removes old links that still point to this checkout:
+  `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills
+  directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a
   file or a link elsewhere at those paths is kept and reported. Until then the main agent reports
   the missing agents and runs their roles in a separate context. Stop selecting `codex --profile
   ifdev-autonomous`. A leftover `codex/skills/supervise-claude/` directory with only ignored

@@ -28,6 +28,12 @@ MANAGED_ITEMS=(
   "claude/agents/qa.md|.claude/agents/qa.md"
   "claude/skills/work-session|.claude/skills/work-session"
   "claude/skills/verify-changes|.claude/skills/verify-changes"
+  "claude/skills/flutter-dev|.claude/skills/flutter-dev"
+  "claude/skills/web-dev|.claude/skills/web-dev"
+  "claude/skills/supabase-dev|.claude/skills/supabase-dev"
+  "claude/skills/safe-refactor|.claude/skills/safe-refactor"
+  "claude/skills/java-spring-dev|.claude/skills/java-spring-dev"
+  "claude/skills/e2e-testing|.claude/skills/e2e-testing"
   # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters.
   "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh"
   "claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh"
