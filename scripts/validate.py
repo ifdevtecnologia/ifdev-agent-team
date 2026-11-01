@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded static lint for the ifdev-ai-tools repository.
+"""Bounded static lint for the ifdev-agent-team repository.
 
 Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter, local
 Markdown links, references to installed global files, machine-specific paths, product/domain

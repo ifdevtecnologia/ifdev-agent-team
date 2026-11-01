@@ -1,4 +1,4 @@
-# ifdev-ai-tools
+# ifdev-agent-team
 
 Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, metrics analyst, Analyst, Architect, UX designer, debugger, Dev, DevOps, technical writer, Reviewer, QA and the specialized UX, security, API, privacy, database and performance reviewer agents, a few general-purpose skills, stack skills for Flutter, web front ends, Supabase and Java/Spring Boot, and skills for safe refactoring and end-to-end testing, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
 
@@ -68,8 +68,8 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 ## Install on a new machine
 
 ```bash
-git clone https://github.com/ifdevtecnologia/ifdev-ai-tools.git
-cd ifdev-ai-tools
+git clone https://github.com/ifdevtecnologia/ifdev-agent-team.git
+cd ifdev-agent-team
 ./scripts/install.sh --dry-run   # review the plan; changes nothing
 ./scripts/install.sh
 ./scripts/validate.sh            # optional: validate the checkout (needs the dev dependency)
@@ -93,7 +93,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 
 ### Backups and manual restoration
 
-Backups go to `~/.ifdev-ai-tools/backups/YYYYMMDD-HHMMSS-<unique>/`, preserving the relative path, for example `.../.claude/CLAUDE.md` or `.../.claude/skills/work-session/`. Each backup directory has a `MANIFEST` listing the moved paths. The toolkit never restores backups automatically; restoration is manual and deliberate, one `MANIFEST` entry at a time:
+The state directory keeps the project's former name, `~/.ifdev-ai-tools`, so machines installed before the rename keep their lock and backups. Backups go to `~/.ifdev-ai-tools/backups/YYYYMMDD-HHMMSS-<unique>/`, preserving the relative path, for example `.../.claude/CLAUDE.md` or `.../.claude/skills/work-session/`. Each backup directory has a `MANIFEST` listing the moved paths. The toolkit never restores backups automatically; restoration is manual and deliberate, one `MANIFEST` entry at a time:
 
 ```bash
 ./scripts/uninstall.sh                          # remove this toolkit's links first
