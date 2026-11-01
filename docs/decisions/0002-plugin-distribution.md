@@ -32,7 +32,7 @@ Other facts that matter here:
 
 ## Hard-coded paths in the installed content
 
-A grep for home-relative config paths under `claude/` found 46 references in 25 files:
+A grep for home-relative config paths under `claude/` found 51 references in 21 files (excluding a comment in `claude/hooks/agent-notify-hook.sh`):
 
 | Reference | Count | Where |
 |---|---|---|
@@ -54,21 +54,21 @@ What changes when agents and skills come from a plugin:
 
 | Component | Both installed | Effect |
 |---|---|---|
-| Agent `dev` | user agent (priority 4) and `ifdev:dev` (plugin, priority 5) | Both register, because the names differ. Duplicate entries cost tokens and make delegation ambiguous; a bare `dev` resolves to the user agent |
+| Agent `dev` | user agent (priority 4) and `ifdev:dev` (plugin, priority 5) | Assumed: both register, because the names differ, which costs tokens and makes delegation ambiguous; a bare `dev` likely resolves to the user agent. The docs only say same-name agents resolve by priority; not verified in a session |
 | Skill `safe-refactor` | `/safe-refactor` and `/ifdev:safe-refactor` | Both load, because plugin skills are namespaced (skills docs) |
-| Notification hooks | settings file and plugin `hooks.json` | Both run. Duplicate handlers are merged only within settings files; a plugin's copy of the same handler stays separate (hooks docs). Result: double notifications |
+| Notification hooks | settings file and plugin `hooks.json` | Both run, because the two command strings differ (settings path vs `${CLAUDE_PLUGIN_ROOT}` path). Result: double notifications |
 | `CLAUDE.md`, rules | Symlink only | No conflict |
 
 The plugin and the symlinked agents, skills and hooks must therefore be **exclusive** on a machine.
 
-`RETIRED_ITEMS` does not fit this migration: its contract is "sources no longer exist", but in the hybrid the sources remain as the plugin's content. Migration needs an installer mode that installs only the core and removes, through the existing exact-link checks, only links to this checkout's agents, skills and hook scripts, plus the toolkit's own hook entries.
+`RETIRED_ITEMS` does not fit this migration: its contract is "sources no longer exist", but in the hybrid the sources remain as the plugin's content. Migration needs an installer mode that installs only the core and removes, through the existing exact-link checks, only links to this checkout's agents, skills and `agent-notify-hook.sh`, plus the toolkit's own settings hook entries. It keeps `.claude/hooks/agent-notify.sh` and the Codex adapter, because `codex/notify/agent-notify-codex.sh` calls `$HOME/.claude/hooks/agent-notify.sh` directly.
 
 ## Notification hooks as plugin hooks
 
 `claude/hooks/hooks.json` reproduces `HOOK_COMMANDS` and `HOOK_MATCHERS`: the command becomes `bash "${CLAUDE_PLUGIN_ROOT}/hooks/agent-notify-hook.sh" <kind>`, and the Notification matcher is unchanged.
 
 - There is no settings merge or backup and no `claude_hooks.py` path for plugin users; uninstalling or disabling the plugin removes the hooks.
-- `agent-notify-hook.sh` finds `agent-notify.sh` through `SCRIPT_DIR`, and the plugin cannot reach `scripts/`, which is outside the plugin root. So `scripts/agent-notify.sh` must move to `claude/hooks/agent-notify.sh`; the `MANAGED_ITEMS` destination stays the same, the installer refreshes the link, and the Codex adapter's path is checked.
+- `agent-notify-hook.sh` finds `agent-notify.sh` through `SCRIPT_DIR`, and the plugin cannot reach `scripts/`, which is outside the plugin root. So `scripts/agent-notify.sh` must move to `claude/hooks/agent-notify.sh`, keeping the `MANAGED_ITEMS` destination. Moving a managed source follows the AGENTS.md compatibility rules: after `git pull` and before the installer is rerun, existing links dangle and notifications stop, and the installer would treat the dangling link as foreign and back it up. #40 therefore adds an explicit stale-source rule (the old source path is recognized as this checkout's own and relinked, and uninstall removes it) or a retired entry for the old source, tests for both, and an **Upgrade** note in the CHANGELOG.
 - Plugin hooks receive `CLAUDE_PLUGIN_ROOT` in their environment and run in subagents as well, the same as today.
 
 ## Options considered
@@ -125,6 +125,7 @@ Not verified, because each needs a model session: substitution of `${CLAUDE_PLUG
 
 - **Double loading.** A machine with both modes gets duplicate agents and skills and double notifications. Mitigation: the installer detects the enabled plugin and refuses or switches to core-only, and the README documents exclusivity.
 - **Two install paths.** They double the test surface; a test must compare the plugin inventory with `MANAGED_ITEMS`.
+- **Core and plugin drift.** The core follows the clone's HEAD while the plugin is a pinned cached version, so `CLAUDE.md` can name agents or skills the installed plugin version lacks. Mitigation: release both together (plugin version equals the CHANGELOG release) and have #42 report both versions.
 - **Feature churn.** Claude Code changes plugin behaviour often. Pin the evaluated version in tests and the README, and revisit on breaking notes.
 - **Private repo.** Every machine needs git credentials to add the marketplace, and background auto-update needs them non-interactively.
 - **No updates by default.** Updates are manual unless `autoUpdate` is enabled, and the `version` in `plugin.json` must be bumped on every release or users stay on the old copy.
@@ -133,8 +134,8 @@ Not verified, because each needs a model session: substitution of `${CLAUDE_PLUG
 
 ## Implementation slicing
 
-1. **#40, dev (with validator and tests).** Add `claude/.claude-plugin/plugin.json` (`name: ifdev`, `version` equal to the CHANGELOG version) and `.claude-plugin/marketplace.json` (`source: ./claude`); add `claude/hooks/hooks.json` and move `agent-notify.sh` into `claude/hooks/`; teach the validator manifest ↔ `MANAGED_ITEMS` consistency, version equals CHANGELOG, and no root `CLAUDE.md` inside the plugin; add a test that runs `claude plugin validate`, `marketplace add` and `install` in a temporary HOME and compares agents and skills with `MANAGED_ITEMS` (skipped and reported when `claude` is missing); update the README (two install paths, exclusivity) and the CHANGELOG. devops decides whether CI installs the `claude` CLI for that test. Publishing anywhere outside the repository needs the owner's authorization.
-2. **#41, dev.** Reword the 9 skill-path references to by-name references and update the validator's mapping; add `install.sh --core` (or detection of the enabled plugin) that installs `CLAUDE.md` and rules, removes only exact links to this checkout's agents, skills and hook scripts, and removes the toolkit's hook entries through `claude_hooks.py`, keeping dry-run and idempotency; write the migration guide and the reverse path; tests in a temporary HOME cover full → core migration, foreign links kept and rerun idempotency; one manual session check for A2 and the substitution of `${CLAUDE_PLUGIN_ROOT}`.
+1. **#40, dev (with validator and tests).** Add `claude/.claude-plugin/plugin.json` (`name: ifdev`, `version` equal to the CHANGELOG version) and `.claude-plugin/marketplace.json` (`source: ./claude`); add `claude/hooks/hooks.json` and move `agent-notify.sh` into `claude/hooks/` with the stale-source handling and Upgrade note above; teach the validator manifest ↔ `MANAGED_ITEMS` consistency, version equals CHANGELOG, and no root `CLAUDE.md` inside the plugin; add a test that runs `claude plugin validate`, `marketplace add` and `install` in a temporary HOME and compares agents and skills with `MANAGED_ITEMS` (skipped and reported when `claude` is missing), using the real layout with `claude/` as the plugin root; update the README (two install paths, exclusivity) and the CHANGELOG. devops decides whether CI installs the `claude` CLI for that test. Publishing anywhere outside the repository needs the owner's authorization.
+2. **#41, dev.** Reword the 9 skill-path references to by-name references and update the validator's mapping; add `install.sh --core` (or detection of the enabled plugin) that installs `CLAUDE.md` and rules, removes only exact links to this checkout's agents, skills and `agent-notify-hook.sh`, keeps `agent-notify.sh` and the Codex adapter, and removes the toolkit's hook entries through `claude_hooks.py`, keeping dry-run and idempotency; write the migration guide and the reverse path; tests in a temporary HOME cover full → core migration, foreign links kept, Codex notify still working and rerun idempotency; one manual session check for A2 and the substitution of `${CLAUDE_PLUGIN_ROOT}`.
 3. **#42, dev.** Reduce scope to a read-only status of the symlinked core (`CLAUDE.md`, rules, hooks in symlink mode) plus the plugin version via `claude plugin list --json` when available, or close it if the plugin's own listing is enough.
 
 ## Open questions
