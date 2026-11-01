@@ -44,6 +44,18 @@ class ContextBudgetTest(unittest.TestCase):
         )
         self.assertEqual(on_demand, [("claude/rules/scoped.md", 38)])
 
+    def test_counts_nested_rules_and_skips_non_markdown_files(self) -> None:
+        self.write("claude/CLAUDE.md", "a" * 4)
+        (self.root / "claude/rules/area").mkdir()
+        self.write("claude/rules/area/nested.md", "# Nested\n")
+        self.write("claude/rules/area/scoped.md", "---\npaths: ['*.py']\n---\n")
+        self.write("claude/rules/notes.txt", "not a rule\n")
+
+        always, on_demand = context_budget.classify(self.root)
+
+        self.assertEqual(always, [("claude/CLAUDE.md", 4), ("claude/rules/area/nested.md", 9)])
+        self.assertEqual(on_demand, [("claude/rules/area/scoped.md", 24)])
+
     def test_size_is_measured_in_bytes_not_characters(self) -> None:
         self.write("claude/CLAUDE.md", "é")  # two bytes in UTF-8
 
@@ -58,6 +70,8 @@ class ContextBudgetTest(unittest.TestCase):
         # Unparsable frontmatter is counted as always loaded (conservative).
         self.assertFalse(context_budget.has_paths("---\npaths: [unclosed\n---\n"))
         self.assertFalse(context_budget.has_paths("---\npaths: '*.py'\n"))
+        self.assertFalse(context_budget.has_paths("---\npaths: []\n---\nbody\n"))
+        self.assertFalse(context_budget.has_paths("---\npaths:\n---\nbody\n"))
 
     def test_render_reports_total_and_method(self) -> None:
         output = context_budget.render([("a.md", 10), ("b.md", 7)], [])

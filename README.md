@@ -318,7 +318,7 @@ Moving skill procedures to `references/` shortened the skill entrypoints; no byt
 
 ### Always-loaded context baseline
 
-`python3 scripts/context_budget.py` (needs the pinned dev dependency) lists the files loaded in every session: `claude/CLAUDE.md` and each `claude/rules/*.md` without a `paths` frontmatter key. Rules with `paths` are listed as on demand and not counted. Tokens are **estimated** as `ceil(bytes / 4)`, a rough average for English Markdown, not a tokenizer count; the real number depends on the model's tokenizer.
+`python3 scripts/context_budget.py` (needs the pinned dev dependency) lists the files loaded in every session: `claude/CLAUDE.md` and each Markdown file under `claude/rules/` (searched recursively) without a non-empty `paths` frontmatter key. Rules with `paths` patterns are listed as on demand and not counted. Tokens are **estimated** as `ceil(bytes / 4)`, a rough average for English Markdown, not a tokenizer count; the real number depends on the model's tokenizer.
 
 Baseline at commit `dac3291` (estimate):
 
