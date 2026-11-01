@@ -8,6 +8,9 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `scripts/context_budget.py`: lists the files loaded in every session (`claude/CLAUDE.md` and the
+  rules without `paths`) with bytes and estimated tokens (`ceil(bytes / 4)`, not a tokenizer
+  count). The README records the current baseline as an estimate.
 - Stack skills `flutter-dev`, `web-dev` and `supabase-dev`: guidance for Flutter apps, web front
   ends (Angular, Astro and similar) and Supabase backends (structure, state, accessibility,
   platform, security and privacy pitfalls, test levels and local-only verification). The agents
