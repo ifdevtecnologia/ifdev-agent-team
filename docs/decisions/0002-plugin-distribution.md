@@ -27,7 +27,7 @@ Other facts that matter here:
 
 - **Version.** `plugin.json` `version` pins the version, and `claude plugin list --json` shows it.
 - **Updates.** Auto-update is off by default for third-party marketplaces.
-- **Private repos.** A private GitHub marketplace uses the machine's own git credentials. This repository is private.
+- **Public repo.** This repository is public, so adding it as a GitHub marketplace needs no git credentials; a private marketplace would use each machine's own credentials.
 - **Local-path marketplaces.** A plugin with a relative path in a marketplace added from a local path loads **in place**: edits take effect at the next session, the same as symlinks (plugins/loading "In-place and copied plugins"; confirmed in the PoC).
 
 ## Hard-coded paths in the installed content
@@ -127,7 +127,6 @@ Not verified, because each needs a model session: substitution of `${CLAUDE_PLUG
 - **Two install paths.** They double the test surface; a test must compare the plugin inventory with `MANAGED_ITEMS`.
 - **Core and plugin drift.** The core follows the clone's HEAD while the plugin is a pinned cached version, so `CLAUDE.md` can name agents or skills the installed plugin version lacks. Mitigation: release both together (plugin version equals the CHANGELOG release) and have #42 report both versions.
 - **Feature churn.** Claude Code changes plugin behaviour often. Pin the evaluated version in tests and the README, and revisit on breaking notes.
-- **Private repo.** Every machine needs git credentials to add the marketplace, and background auto-update needs them non-interactively.
 - **No updates by default.** Updates are manual unless `autoUpdate` is enabled, and the `version` in `plugin.json` must be bumped on every release or users stay on the old copy.
 - **Name change.** Agents and skills are renamed to `ifdev:*`; texts that mention paths must refer to skills by name.
 - **Revisit when** Claude Code adds a plugin component for memory (`CLAUDE.md`) or rules, or raises the `additionalContext` cap; option C would then become viable.
@@ -145,7 +144,6 @@ Blocking (owner):
 - Plugin and marketplace names (`ifdev` / `ifdev-agent-team`).
 - A licence (needed only for Anthropic's directory checks).
 - The auto-update policy.
-- Whether git credentials for the private repository on every machine are acceptable.
 - What happens to #42.
 
 Recorded assumptions:
