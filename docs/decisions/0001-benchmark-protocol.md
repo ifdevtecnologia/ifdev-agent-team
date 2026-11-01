@@ -59,7 +59,7 @@
 
 ### Where the harness lives
 
-The harness code goes in this repository under `benchmark/` (generic code only; the repository is private today but may be shared with clients). It is tested in CI with fakes, and it is not a managed item, so it is never installed. Task snapshots, hidden tests and reference solutions go in a **separate private repository**, located through `BENCH_TASKS_DIR`. Two reasons: AGENTS.md forbids product content here, and hidden tests in any repository the agents work with or that may be shared would invalidate the benchmark (the agent or a future model could find the answers). Putting everything in this repo was rejected for both reasons. Putting the harness in its own repo was rejected because it would need its own CI, and the harness is small.
+The harness code goes in this repository under `benchmark/` (generic code only; the repository is public). It is tested in CI with fakes, and it is not a managed item, so it is never installed. Task snapshots, hidden tests and reference solutions go in a **separate private repository**, located through `BENCH_TASKS_DIR`. Two reasons: AGENTS.md forbids product content here, and hidden tests in this public repository, or in any repository the agents work with, would invalidate the benchmark (the agent or a future model could find the answers). Putting everything in this repo was rejected for both reasons. Putting the harness in its own repo was rejected because it would need its own CI, and the harness is small.
 
 ## Decision
 
