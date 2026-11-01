@@ -70,12 +70,12 @@ When a project skill and a global skill share a name, Claude Code runs the **glo
 
 ## Overriding or switching off a global default
 
-Only the overrides below are allowed by the global rules. Each example is a line for your project's `AGENTS.md` (or `CLAUDE.md`).
+Below are common overrides the global rules explicitly allow; other more specific project instructions also take precedence, within the limits listed after the table. Each example is a line for your project's `AGENTS.md` (or `CLAUDE.md`).
 
 | Situation | What the global rule says | What to write in the project |
 | --- | --- | --- |
 | No GitHub Project board | [git-workflow.md](../claude/rules/git-workflow.md#project-board): without a GitHub Project, propose creating one once, *unless the project's instructions name another tracker or opt out*. | `Work tracking: this project does not use a GitHub Project board; do not propose one.` or `Work tracking: issues live in <tracker>; reference them as <issue key format>.` |
-| Board without preview or staging | Statuses that do not apply to the product are skipped. | `Board: there is no preview or staging; after the merge, items go to Done.` |
+| Board without preview or staging | [git-workflow.md](../claude/rules/git-workflow.md#project-board): statuses that do not apply to the product are skipped; without a preview or staging, an item goes from the merge to To Deploy, or to Done when nothing is deployed. | `Board: there is no preview or staging; after the merge, items go to To Deploy (Done when nothing is deployed).` |
 | No `CHANGELOG.md` | [claude/CLAUDE.md](../claude/CLAUDE.md#changelog): the changelog entry is required *when the project keeps a `CHANGELOG.md`*. | Nothing is needed. If you record changes elsewhere, say where: `Release notes: add an entry to <release notes file> instead of a CHANGELOG.md.` |
 | Stricter Git workflow | [git-workflow.md](../claude/rules/git-workflow.md): it applies *unless the project documents a stricter workflow*; scopes follow the ones the project documents. | `Git: branch names include the issue number (<type>/<issue>-<topic>); commit scopes are <scope list>; pull requests need two human approvals.` |
 | Own validation commands | [testing.md](../claude/rules/testing.md): follow the project's testing conventions and select commands from the project. | A `Validation` section with the exact non-interactive commands, as in the [`AGENTS.md` template](templates/project/AGENTS.md). |
@@ -106,4 +106,4 @@ The toolkit's validator checks its own repository and does not run on your proje
 
 1. Replace every `<placeholder>`; `grep -rn '<[a-z]' CLAUDE.md AGENTS.md .claude/` should find none left.
 2. Confirm that each frontmatter block parses as YAML and that each agent's `name` matches its file name.
-3. Start a session and run `/memory` to see which instruction files loaded; open a file covered by a path-scoped rule and confirm the rule loads only then.
+3. Start a session and run `/context` and check **Memory files** to see which instruction files loaded (`/memory` lists locations, including files that do not exist yet); open a file covered by a path-scoped rule and confirm the rule loads only then.
