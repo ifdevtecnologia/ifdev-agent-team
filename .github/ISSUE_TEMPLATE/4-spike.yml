@@ -1,0 +1,35 @@
+name: Spike
+description: "Investigação com tempo limitado para responder uma pergunta"
+labels: [spike]
+type: Spike
+projects: ["ifdevtecnologia/6"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: "Pergunta"
+      description: "O que precisa ser respondido para decidir ou estimar."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Contexto"
+      description: "Por que agora e o que já se sabe."
+    validations:
+      required: false
+  - type: input
+    id: timebox
+    attributes:
+      label: "Tempo limite"
+      description: "Ao fim do tempo, registra o que descobriu mesmo sem resposta completa."
+      placeholder: "ex.: 4 h"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: "Resultado esperado"
+      description: "Decisão, ADR, protótipo descartável ou histórias novas."
+    validations:
+      required: true

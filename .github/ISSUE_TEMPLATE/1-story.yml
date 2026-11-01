@@ -1,0 +1,39 @@
+name: Story
+description: "Funcionalidade para o usuário, com critérios de aceitação"
+labels: [story]
+type: Story
+projects: ["ifdevtecnologia/6"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: "História"
+      description: "Quem precisa, o que quer e por quê."
+      placeholder: |
+        Como <tipo de usuário>, quero <capacidade>, para <benefício>.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: "Critérios de aceitação"
+      description: "Testáveis: caminho principal, falhas importantes e quem deve ser barrado."
+      placeholder: |
+        1. Dado <contexto>, quando <ação>, então <resultado>.
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: "Notas"
+      description: "Dependências, fora do escopo, decisões e links para o design ou o épico."
+    validations:
+      required: false
+  - type: textarea
+    id: blocked
+    attributes:
+      label: "Bloqueio"
+      description: "O que falta para começar (decisão, resposta, outra issue). Deixe vazio se nada bloqueia."
+    validations:
+      required: false

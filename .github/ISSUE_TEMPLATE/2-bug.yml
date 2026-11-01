@@ -1,0 +1,58 @@
+name: Bug
+description: "Algo não funciona como deveria"
+labels: [bug]
+type: Bug
+projects: ["ifdevtecnologia/6"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: "O que aconteceu"
+      description: "Descreva o problema. Não cole senhas, tokens, chaves nem dados pessoais reais; use dados fictícios."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "O que deveria acontecer"
+      description: "O comportamento esperado."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Passos para reproduzir"
+      description: "Do início ao erro, um passo por linha."
+      placeholder: |
+        1. Abrir ...
+        2. Clicar em ...
+        3. Ver o erro ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: "Ambiente"
+      description: "Versão, navegador ou aparelho e sistema."
+      placeholder: "ex.: produção, Chrome 140, Android 16"
+    validations:
+      required: false
+  - type: dropdown
+    id: impact
+    attributes:
+      label: "Impacto"
+      description: "Quanto o problema atrapalha quem usa."
+      options:
+        - "Crítico: impede o uso ou expõe dados"
+        - "Alto: impede uma tarefa importante, sem alternativa"
+        - "Médio: atrapalha, mas há alternativa"
+        - "Baixo: detalhe visual ou de texto"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Evidências"
+      description: "Logs, mensagens de erro ou capturas de tela. Não cole senhas, tokens, chaves nem dados pessoais reais; use dados fictícios."
+    validations:
+      required: false
