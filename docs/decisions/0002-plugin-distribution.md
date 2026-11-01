@@ -86,7 +86,7 @@ The plugin and the symlinked agents, skills and hooks must therefore be **exclus
 
 Adopt **B. Hybrid**, kept opt-in:
 
-- The repository becomes a marketplace (`.claude-plugin/marketplace.json`, name `ifdev-ai-tools`) with a single plugin (`ifdev`) whose root is `claude/`.
+- The repository becomes a marketplace (`.claude-plugin/marketplace.json`, name `ifdev-agent-team`, matching the repository) with a single plugin (`ifdev`) whose root is `claude/`.
 - The plugin carries `agents/`, `skills/` and `hooks/` (`hooks.json` and the scripts). `claude/CLAUDE.md` stays outside the plugin; it may need moving to avoid the validator's root `CLAUDE.md` warning, decided in #40.
 - `install.sh` keeps today's full mode as the default and gains a core-only mode (`CLAUDE.md` and rules).
 - The plugin version is `0.y.z` and equals the CHANGELOG release.
