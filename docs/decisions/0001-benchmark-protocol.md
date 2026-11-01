@@ -59,7 +59,7 @@
 
 ### Where the harness lives
 
-The harness code goes in this repository under `benchmark/` (generic, public). It is tested in CI with fakes, and it is not a managed item, so it is never installed. Task snapshots, hidden tests and reference solutions go in a **separate private repository**, located through `BENCH_TASKS_DIR`. Two reasons: AGENTS.md forbids product content here, and tests in a public repository would invalidate the benchmark (the agent or a future model could find the answers). Putting everything in this repo was rejected for both reasons. Putting the harness in its own repo was rejected because it would need its own CI, and the harness is small.
+The harness code goes in this repository under `benchmark/` (generic code only; the repository is private today but may be shared with clients). It is tested in CI with fakes, and it is not a managed item, so it is never installed. Task snapshots, hidden tests and reference solutions go in a **separate private repository**, located through `BENCH_TASKS_DIR`. Two reasons: AGENTS.md forbids product content here, and hidden tests in any repository the agents work with or that may be shared would invalidate the benchmark (the agent or a future model could find the answers). Putting everything in this repo was rejected for both reasons. Putting the harness in its own repo was rejected because it would need its own CI, and the harness is small.
 
 ## Decision
 
@@ -82,10 +82,10 @@ The harness code goes in this repository under `benchmark/` (generic, public). I
      - the auth variable of a dedicated API key, passed **by name only** (OD-2), never as a value on the command line. The agent's own Bash can read it (`env`), so "agents never read it" cannot be enforced: this is an accepted risk, mitigated by a dedicated key with a workspace spend limit and by the egress allowlist;
      - `IFDEV_AGENT_NOTIFY=0`;
      - autoupdate and non-essential traffic disabled. Variable names are assumed and checked in the smoke round.
-5. **Network.** WebFetch and WebSearch are denied, there are no git credentials, and dependencies are pre-fetched into the images. Bash still has network access unless egress is restricted, so the agent could fetch public sources, such as the upstream history of a task taken from a public repository. Therefore evaluation rounds use an **egress allowlist (Anthropic API only) by default**, and task snapshots come only from private or synthetic sources. Smoke and harness checks may run without the allowlist (OD-3).
+5. **Network.** WebFetch and WebSearch are denied, there are no git credentials, and dependencies are pre-fetched into the images. Bash still has network access unless egress is restricted, so the agent could fetch public sources, such as the upstream history of a task taken from a public repository. Therefore pilot and evaluation rounds use an **egress allowlist (Anthropic API only) by default**, since the pilot calibrates task difficulty, and task snapshots come only from private or synthetic sources. Smoke and harness checks may run without the allowlist (OD-3).
 6. **Evaluation.** After the agent exits:
    - The runner saves `final.patch` (working tree against the base commit, uncommitted changes included) and records whether the agent committed.
-   - It then starts a **fresh evaluator container** from the same stack image, copies the workspace, restores the pre-existing tests and build files from the snapshot (runs that changed them are flagged, see G1), copies the task's `hidden/` into it, and runs the commands from `task.yaml`.
+   - It then starts a **fresh evaluator container** from the same stack image, copies the workspace, restores only the paths the task lists as `protected_paths` in `task.yaml` (tests and build files the solution must not change; runs that changed them are flagged for G1 and the blind review), copies the task's `hidden/` into it, and runs the commands from `task.yaml`.
    - Hidden tests never enter the agent's container.
 7. **Teardown.** Extracted numbers go to `runs.csv`. Raw logs and transcripts stay local, are never versioned, and are deleted within 90 days (plan §4.7, pending the privacy review).
 
@@ -124,7 +124,7 @@ benchmark/                      # this repo: generic code only, not installed
   results/                      # gitignored; <round>/<run_id>/{meta.json,stream.jsonl,final.patch,eval.json}
 tests/test_benchmark_*.py       # unittest with fake `claude`/`docker` on PATH; no model calls
 $BENCH_TASKS_DIR/<task_id>/     # private repo, never mounted into the agent container
-  task.yaml   # id, type, stack, image, test/build/hidden commands, expected_files, criteria IDs
+  task.yaml   # id, type, stack, image, test/build/hidden commands, expected_files, protected_paths, criteria IDs
   prompt.md   # issue-style statement, no solution
   snapshot/   # frozen starting tree with synthetic seeds only
   hidden/     # hidden tests, each mapped to a criterion ID (e.g. T07-C3)
@@ -167,7 +167,7 @@ Each has a recommended default.
 
 - **OD-1 Light mode:** roles and trigger defined by the PO. Until then: toolkit installed plus one fixed prompt line (implementation with tests, the `reviewer`, specialized reviewers only when their criterion applies); smoke and harness checks run only A and B.
 - **OD-2 Budget and billing:** dedicated API key with a workspace spend limit, US$15 per-run cap, each round authorized separately. A subscription path would need its own credential-handling design.
-- **OD-3 Environment and permissions:** disposable container per run, only the run directory mounted, `acceptEdits`, prompts denied, tool allowlist with Bash, web tools denied, dependencies baked into the images, egress allowlist (Anthropic API only) required for evaluation rounds.
+- **OD-3 Environment and permissions:** disposable container per run, only the run directory mounted, `acceptEdits`, prompts denied, tool allowlist with Bash, web tools denied, dependencies baked into the images, egress allowlist (Anthropic API only) required for pilot and evaluation rounds.
 - **OD-4 Pinned model:** one full model ID and an explicit effort level for every condition; subagents use the session model; Claude Code pinned at 2.1.314 in the images, autoupdate off.
 - **OD-5 Margins:** accept the plan's numbers (15 pp, 10 pp, ≤ 4× cost, ≤ 3× time, ≤ 50%) and freeze them in the pre-registration commit.
 - **OD-6 Plan and tasks location:** commit the measurement plan (translated to English) under `docs/benchmark/` with the pre-registration; private tasks repository location; whether to use historical snapshots from the owner's repositories.
