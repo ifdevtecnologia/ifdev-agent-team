@@ -346,3 +346,7 @@ GitHub CLI authentication is a one-time human step outside the agent: run `gh au
 ## Scope and ownership
 
 The repository owns only the thirty-two linked items, including the opt-in Codex notify adapter, plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

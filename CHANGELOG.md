@@ -8,6 +8,7 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Apache License 2.0 (`LICENSE`), mentioned in the README.
 - Stack skills `flutter-dev`, `web-dev` and `supabase-dev`: guidance for Flutter apps, web front
   ends (Angular, Astro and similar) and Supabase backends (structure, state, accessibility,
   platform, security and privacy pitfalls, test levels and local-only verification). The agents
