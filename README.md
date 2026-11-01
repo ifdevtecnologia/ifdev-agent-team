@@ -314,7 +314,7 @@ So `claude/CLAUDE.md` and the three global rules are **always loaded**; they sta
 
 A reference is binding once its phase starts. Reference directories ride on the existing skill directory links, so adding references does not change the managed paths.
 
-Static entrypoint sizes in lines (not a token or runtime measurement): `claude/CLAUDE.md` 42 → 39, `verify-changes` 54 → 43, `work-session` 64 → 48. Fewer lines do not always mean fewer bytes: `claude/CLAUDE.md` grew from 3505 to 3645 bytes, so no byte or token saving is claimed for it.
+Moving skill procedures to `references/` shortened the skill entrypoints; no byte or token saving is claimed for it. For the always-loaded files, use the measured baseline below.
 
 ### Always-loaded context baseline
 
