@@ -38,11 +38,13 @@ When the product uses a GitHub Project (owned by the repository's organization o
 | Homologation | Available (preview or staging) for the user or client to validate |
 | To Deploy | Merged and approved in homologation; waiting for an authorized deployment |
 | Done | Deployed, or merged when there is nothing to deploy |
+| Canceled | Discarded; will not be done |
 
 - Each item is an issue in the product's repository. A draft item is allowed only while the repository does not exist and becomes an issue before leaving To Do. Link it to its user story or acceptance criteria.
 - Reference the issue from the pull request with `Refs #<number>` when homologation or a deployment follows the merge; use a closing keyword (`Closes #<number>`) only when the merge itself finishes the work. Closing keywords and the project's default "closed" or "merged" automations move items to Done.
 - When the task or an adopted workflow authorizes delivery, the main agent also creates the task's issue when it is missing (starting in Doing) and moves its item from To Do up to To Homologation as the work progresses, including back to Doing when review or QA finds problems, without asking again for each move. Moving an item from Backlog to To Do is a prioritization decision for the user.
 - Statuses that do not apply to the product are skipped: without a preview or staging, an item goes from human merge to To Deploy, or to Done when nothing is deployed. Making an item available for homologation follows the project's preview automation or an explicitly authorized deployment.
+- Canceling is the user's decision: the agent proposes it with the reason (for example duplicate, obsolete or out of scope) and, once the user agrees, closes the issue as not planned and moves the item to Canceled. It proposes closing the item's open pull request and deleting its branch, without doing either on its own; a pull request never uses a closing keyword for a canceled item.
 - Moves into Homologation, To Deploy and Done follow the human merge, the human approval in homologation and the authorized deployment; agents never make them on their own judgment.
 - Without delivery authorization, propose the issue and the moves together with the proposed commits. When board access is missing (for example a token without the `project` scope), report it and continue with the Git delivery.
 - A product without a GitHub Project: propose creating one once, unless the project's instructions name another tracker or opt out. Creating or changing projects, fields, views or automations needs explicit authorization.
