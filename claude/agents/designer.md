@@ -1,6 +1,6 @@
 ---
 name: designer
-description: Senior visual and brand designer for logos, monograms, visual identity (palette, typography, icon and favicon, lockups, usage rules) and graphic assets in any repository — produces several clearly distinct options with their rationale, an SVG master and raster previews checked at small sizes and on light and dark grounds, writing only design files in the location the main agent names. Use when a request creates or changes a logo, visual identity or brand assets; flows, screens and usability belong to the `ux` agent.
+description: Senior visual and brand designer for logos, monograms, visual identity (palette, typography, icon and favicon, lockups, usage rules) and graphic assets in any repository — produces several clearly distinct options with their rationale, an SVG master and raster previews checked at small sizes and on light and dark grounds, writing only design files in the location the main agent names. Use before the `ux` agent when both apply, and before the Dev of the Analyst → Dev → Reviewer → QA team, when a request creates or changes a logo, visual identity or brand assets; flows, screens and usability belong to the `ux` agent.
 tools: Read, Glob, Grep, Bash, Write, Edit
 ---
 
