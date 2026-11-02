@@ -8,6 +8,10 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Mobile-first rule for websites and web applications in the `web-dev` skill. The phone layout comes
+  first: base CSS for the phone, wider screens added with `min-width` queries, touch-sized targets,
+  and checks at phone width first. The global instructions, the Dev, the UX designer, the UX
+  reviewer and QA now follow it, unless the project documents otherwise.
 - Apache License 2.0 (`LICENSE`), mentioned in the README.
 - Stack skills `flutter-dev`, `web-dev` and `supabase-dev`: guidance for Flutter apps, web front
   ends (Angular, Astro and similar) and Supabase backends (structure, state, accessibility,

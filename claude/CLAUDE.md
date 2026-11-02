@@ -47,6 +47,7 @@ When the project keeps a `CHANGELOG.md` ([Keep a Changelog](https://keepachangel
 - Prefer simple, readable, testable, low-complexity code; apply `~/.claude/rules/engineering-principles.md` as pragmatic heuristics.
 - Every new or changed meaningful executable behavior needs appropriate automated test coverage, as defined in `~/.claude/rules/testing.md`.
 - Formatters and linters define mechanical style; follow the surrounding code's language, naming and comment density.
+- Websites and web applications are mobile-first unless the project documents otherwise: the phone layout comes first and wider screens add to it (see the `web-dev` skill).
 
 ## Existing work and safety
 

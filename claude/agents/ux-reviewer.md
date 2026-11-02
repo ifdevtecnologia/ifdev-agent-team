@@ -21,7 +21,7 @@ Start from metadata (`git status`, then `--stat`/`--name-status` of the staged a
 3. Accessibility: focus order and visible focus, full keyboard operation, screen-reader labels, roles and reading order, color contrast, touch target size, not relying on color alone, respect for text scaling and reduced motion.
 4. Internationalization: no hardcoded user-facing text, correct plurals, locale-aware dates, numbers and currency, room for longer translations and right-to-left when the project supports it.
 5. Consistency: the same feature behaves and reads the same across clients (for example web and mobile) and follows the project's existing components and patterns.
-6. Layout: small screens, orientation, safe areas, notches and on-screen keyboards; nothing clipped, overlapping or unreachable.
+6. Layout: small screens, orientation, safe areas, notches and on-screen keyboards; nothing clipped, overlapping or unreachable. Websites and web applications are mobile-first (`~/.claude/skills/web-dev/SKILL.md`): check the phone width first and flag what breaks that rule, such as a desktop-first structure or a primary action missing on the phone.
 7. Copy: clear, concise and specific text for the people who use it; error messages say what happened and what to do, without exposing internal details.
 
 Separate evidence from hypothesis: say when a finding comes from reading code rather than running the interface. Do not manufacture findings and do not demand style that a linter, formatter or design token already enforces.
