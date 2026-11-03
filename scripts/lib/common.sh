@@ -3,7 +3,8 @@
 # Kept compatible with Bash 3.2 (macOS default): no mapfile, no empty-array expansion.
 
 # Managed items as "<source relative to the repository>|<destination relative to $HOME>|<targets>",
-# where <targets> is the comma-separated list of install targets that own the item.
+# where <targets> is the comma-separated list of install targets that own the item. An item with
+# several owners is shared: uninstalling one of them keeps it while another owner stays recorded.
 # Only these exact paths are ever linked or unlinked; their parent directories are never replaced.
 MANAGED_ITEMS=(
   "dist/claude/CLAUDE.md|.claude/CLAUDE.md|claude"
@@ -36,11 +37,42 @@ MANAGED_ITEMS=(
   "core/skills/safe-refactor|.claude/skills/safe-refactor|claude"
   "core/skills/java-spring-dev|.claude/skills/java-spring-dev|claude"
   "core/skills/e2e-testing|.claude/skills/e2e-testing|claude"
-  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters (the Codex
-  # adapter stays with the claude target, as it was before targets existed).
+  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters. The Codex
+  # adapter is shared: the claude target has installed it since before targets existed, and the
+  # codex target installs it next to its own copy of the notifier, which the adapter prefers.
   "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh|claude"
   "targets/claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh|claude"
-  "targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude"
+  "targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude,codex"
+  "scripts/agent-notify.sh|.codex/notify/agent-notify.sh|codex"
+  # Codex target: the global instructions (rules included), one custom agent file per role and
+  # the skills in the shared Agent Skills directory.
+  "dist/codex/AGENTS.md|.codex/AGENTS.md|codex"
+  "dist/codex/agents/po.toml|.codex/agents/po.toml|codex"
+  "dist/codex/agents/analyst.toml|.codex/agents/analyst.toml|codex"
+  "dist/codex/agents/architect.toml|.codex/agents/architect.toml|codex"
+  "dist/codex/agents/ux.toml|.codex/agents/ux.toml|codex"
+  "dist/codex/agents/designer.toml|.codex/agents/designer.toml|codex"
+  "dist/codex/agents/devops.toml|.codex/agents/devops.toml|codex"
+  "dist/codex/agents/tech-writer.toml|.codex/agents/tech-writer.toml|codex"
+  "dist/codex/agents/debugger.toml|.codex/agents/debugger.toml|codex"
+  "dist/codex/agents/metrics-analyst.toml|.codex/agents/metrics-analyst.toml|codex"
+  "dist/codex/agents/reviewer.toml|.codex/agents/reviewer.toml|codex"
+  "dist/codex/agents/ux-reviewer.toml|.codex/agents/ux-reviewer.toml|codex"
+  "dist/codex/agents/security-reviewer.toml|.codex/agents/security-reviewer.toml|codex"
+  "dist/codex/agents/privacy-reviewer.toml|.codex/agents/privacy-reviewer.toml|codex"
+  "dist/codex/agents/db-reviewer.toml|.codex/agents/db-reviewer.toml|codex"
+  "dist/codex/agents/performance-reviewer.toml|.codex/agents/performance-reviewer.toml|codex"
+  "dist/codex/agents/api-reviewer.toml|.codex/agents/api-reviewer.toml|codex"
+  "dist/codex/agents/dev.toml|.codex/agents/dev.toml|codex"
+  "dist/codex/agents/qa.toml|.codex/agents/qa.toml|codex"
+  "core/skills/work-session|.agents/skills/work-session|codex"
+  "core/skills/verify-changes|.agents/skills/verify-changes|codex"
+  "core/skills/flutter-dev|.agents/skills/flutter-dev|codex"
+  "core/skills/web-dev|.agents/skills/web-dev|codex"
+  "core/skills/supabase-dev|.agents/skills/supabase-dev|codex"
+  "core/skills/safe-refactor|.agents/skills/safe-refactor|codex"
+  "core/skills/java-spring-dev|.agents/skills/java-spring-dev|codex"
+  "core/skills/e2e-testing|.agents/skills/e2e-testing|codex"
 )
 
 # Sources that moved to a new path (decision record 0004), as "<old source>|<destination>". A
@@ -95,9 +127,9 @@ RETIRED_ITEMS=(
 RETIRED_PLAN=()
 RETIRED_REMOVED=0
 
-# Install targets that --target accepts, in their canonical order. codex is planned and cursor
-# is deferred (decision record 0004); both are refused until their items exist.
-AVAILABLE_TARGETS="claude"
+# Install targets that --target accepts, in their canonical order. cursor is deferred (decision
+# record 0004) and refused until its items exist.
+AVAILABLE_TARGETS="claude codex"
 REQUESTED_TARGETS=""
 RECORDED_TARGETS=""
 SELECTED_TARGETS=""
@@ -203,11 +235,13 @@ read_recorded_targets() {
   done <"$file"
 }
 
-# True when any managed destination is an exact link to this checkout, at its current or its
-# old (moved) source: a machine installed before targets were recorded.
+# True when any destination owned only by claude is an exact link to this checkout, at its current
+# or its old (moved) source: a machine installed before targets were recorded, which only had the
+# claude items. Shared and codex items are left out, so they never make a machine look like claude.
 has_legacy_install() {
   local item destination_rel
   for item in "${MANAGED_ITEMS[@]}"; do
+    [[ "$(item_targets "$item")" == "claude" ]] || continue
     destination_rel=$(item_destination "$item")
     if is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"; then
       return 0

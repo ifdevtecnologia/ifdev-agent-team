@@ -481,7 +481,7 @@ class SkillReferenceTests(ValidatorTestCase):
 
 class ManagedItemsTests(ValidatorTestCase):
     COMMON = "scripts/lib/common.sh"
-    NOTIFY_ITEM = '"targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude"'
+    NOTIFY_ITEM = '"targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude,codex"'
 
     def test_required_agents_must_be_managed(self) -> None:
         for agent in ("analyst", "architect", "ux", "designer", "security-reviewer", "privacy-reviewer", "db-reviewer", "performance-reviewer", "dev", "devops", "tech-writer", "po", "debugger", "api-reviewer", "metrics-analyst"):
@@ -987,7 +987,7 @@ class MovedAndTargetItemsTests(ValidatorTestCase):
     def test_managed_item_targets_must_be_available(self) -> None:
         self.replace(self.COMMON, "|.claude/rules/testing.md|claude", "|.claude/rules/testing.md|claude,cursor")
         self.assert_fails_with("managed item '.claude/rules/testing.md' has unsupported targets: cursor")
-        self.replace(self.COMMON, 'AVAILABLE_TARGETS="claude"', "OTHER_TARGETS=claude")
+        self.replace(self.COMMON, 'AVAILABLE_TARGETS="claude codex"', "OTHER_TARGETS=claude")
         self.assert_fails_with("AVAILABLE_TARGETS not found")
 
 

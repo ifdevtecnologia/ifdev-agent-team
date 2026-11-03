@@ -12,18 +12,19 @@ PLAN=()
 
 usage() {
   cat <<'EOF'
-Usage: scripts/uninstall.sh [--target claude|all]... [--dry-run]
+Usage: scripts/uninstall.sh [--target claude|codex|all]... [--dry-run]
 
 Removes the managed symlinks of the chosen targets that point to this repository
 (also at an item's old path in this checkout), including links left by retired items,
-and updates ~/.ifdev-ai-tools/targets. Without --target, removes the recorded targets,
-or every target when none is recorded. Real files, directories, foreign symlinks,
+and updates ~/.ifdev-ai-tools/targets. An item shared with a target that stays
+recorded (the Codex notify adapter) is kept. Without --target, removes the recorded
+targets, or every target when none is recorded. Real files, directories, foreign symlinks,
 sibling configuration and backups are left untouched. The claude target also removes
 this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
 other setting untouched (requires python3; see README). Backups are not restored
 automatically; see README for manual restoration.
 
-  --target    target to remove (repeatable); available: claude, or all
+  --target    target to remove (repeatable); available: claude, codex, or all
   --dry-run   print the planned actions without changing anything
   -h, --help  show this help
 EOF
@@ -85,14 +86,20 @@ is_own_link() {
   is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"
 }
 
-# Classifies every item into PLAN (skip, remove, foreign, absent); fails on unsafe parents,
-# including the state/backup directories.
+# Classifies every item into PLAN (skip, shared, remove, foreign, absent); fails on unsafe parents,
+# including the state/backup directories. A shared item still owned by a target that stays
+# recorded is kept.
 plan_uninstall() {
-  local item destination_rel destination problem failed=0
+  local item destination_rel destination problem failed=0 remaining
+  remaining=$(remaining_targets)
   PLAN=()
   for item in "${MANAGED_ITEMS[@]}"; do
     if ! item_in_targets "$item" "$SELECTED_TARGETS"; then
       PLAN+=("skip")
+      continue
+    fi
+    if [[ -n "$remaining" ]] && item_in_targets "$item" "$remaining"; then
+      PLAN+=("shared")
       continue
     fi
     destination_rel=$(item_destination "$item")
@@ -151,6 +158,7 @@ apply_uninstall() {
         fi
         log "${prefix}remove: ~/$destination_rel"
         ;;
+      shared) log "kept (shared with a target that stays installed): ~/$destination_rel" ;;
       foreign) log "kept (not a link to this repository): ~/$destination_rel" ;;
       absent) log "absent: ~/$destination_rel" ;;
     esac
