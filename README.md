@@ -6,6 +6,8 @@ Versioned, reproducible source of truth for **global** Claude Code instructions:
 
 This toolkit only provides defaults that apply to every repository. Each project keeps its own `CLAUDE.md` (and `AGENTS.md` when used) plus `.claude/rules/`, `.claude/skills/` and `.claude/agents/` for local behavior: stack, commands, domain rules and specialized reviewers. Project instructions take precedence when they are more specific or explicitly conflict with the global defaults.
 
+To set up a project, follow the per-project customization guide in `docs/customization.md` and its templates in `docs/templates/project/`.
+
 Two different `CLAUDE.md` files live here:
 
 - [`claude/CLAUDE.md`](claude/CLAUDE.md) is the **installed** global instruction file (linked to `~/.claude/CLAUDE.md`).
@@ -54,6 +56,7 @@ scripts/
   lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
   agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
   validate.sh, validate.py           static repository validation
+  context_budget.py                  estimate of the context loaded in every session (needs the dev dependency)
 tests/                               isolated automated tests (Python unittest)
 requirements-dev.txt                 pinned development dependency (PyYAML) for validation/tests
 .github/workflows/validate.yml       CI: syntax, validator and tests
@@ -319,7 +322,23 @@ So `claude/CLAUDE.md` and the three global rules are **always loaded**; they sta
 
 A reference is binding once its phase starts. Reference directories ride on the existing skill directory links, so adding references does not change the managed paths.
 
-Static entrypoint sizes in lines (not a token or runtime measurement): `claude/CLAUDE.md` 42 → 39, `verify-changes` 54 → 43, `work-session` 64 → 48. Fewer lines do not always mean fewer bytes: `claude/CLAUDE.md` grew from 3505 to 3645 bytes, so no byte or token saving is claimed for it.
+Moving skill procedures to `references/` shortened the skill entrypoints; no byte or token saving is claimed for it. For the always-loaded files, use the measured baseline below.
+
+### Always-loaded context baseline
+
+`python3 scripts/context_budget.py` (needs the pinned dev dependency) lists the files loaded in every session: `claude/CLAUDE.md` and each Markdown file under `claude/rules/` (searched recursively) without a non-empty `paths` frontmatter key. Rules with `paths` patterns are listed as on demand and not counted. Tokens are **estimated** as `ceil(bytes / 4)`, a rough average for English Markdown, not a tokenizer count; the real number depends on the model's tokenizer.
+
+Baseline at commit `dac3291` (estimate):
+
+| File | Bytes | ~Tokens |
+| --- | ---: | ---: |
+| `claude/CLAUDE.md` | 13336 | 3334 |
+| `claude/rules/engineering-principles.md` | 6727 | 1682 |
+| `claude/rules/git-workflow.md` | 7080 | 1770 |
+| `claude/rules/testing.md` | 7495 | 1874 |
+| **Total** | **34638** | **8660** |
+
+No rule is on demand yet. Compare against this baseline before claiming a context saving.
 
 ### Scoped project rules
 
