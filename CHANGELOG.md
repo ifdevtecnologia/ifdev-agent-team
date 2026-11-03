@@ -115,6 +115,8 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- `install.sh` also refuses, before changing anything, a managed source below a symlinked
+  directory of the checkout, so every installed link loads content from the checkout itself.
 - New source layout: the tool-neutral instructions, rules, agents and skills live in `core/`,
   tool-specific files (the Claude hook, the Codex `notify` adapter) in `targets/`, and the files
   Claude Code loads (`CLAUDE.md` and the agents) are generated into `dist/claude/` by

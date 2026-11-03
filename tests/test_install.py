@@ -405,6 +405,17 @@ class InstallTests(InstallerTestCase):
         self.assertEqual(snapshot(self.home), before)
         self.assertEqual(list(self.outside.iterdir()), [])
 
+    def test_source_below_a_symlinked_checkout_directory_is_rejected_without_changes(self) -> None:
+        # The link would point into the checkout but load content from outside it.
+        shutil.move(str(self.repo / "core/rules"), str(self.outside / "rules"))
+        os.symlink(self.outside / "rules", self.repo / "core/rules")
+
+        result = self.run_script("install.sh", *CLAUDE)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"refusing symlinked parent directory: {self.repo_real}/core/rules", result.stderr)
+        self.assertEqual(snapshot(self.home), {})
+
     def test_missing_source_aborts_before_any_change(self) -> None:
         (self.repo / "core/rules/testing.md").unlink()
 

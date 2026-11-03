@@ -243,10 +243,11 @@ require_home() {
   [[ -d "$HOME" ]] || die "HOME is not a directory: $HOME"
 }
 
-# Prints a problem when a directory between $HOME and <relative dir> is a symlink or not a
-# directory. Following such a parent could write into, or unlink from, a tree outside HOME.
+# Prints a problem when a directory between <base> (default $HOME) and <relative dir> is a
+# symlink or not a directory. Following such a parent could write into, or unlink from, a tree
+# outside <base>.
 parent_problem() {
-  local rel_dir=$1 path=$HOME part
+  local rel_dir=$1 path=${2:-$HOME} part
   local -a parts
   [[ "$rel_dir" == "." || -z "$rel_dir" ]] && return 0
   IFS=/ read -r -a parts <<<"$rel_dir"

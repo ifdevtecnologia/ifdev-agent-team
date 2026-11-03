@@ -97,7 +97,10 @@ plan_install() {
       PLAN+=("error")
       continue
     fi
-    problem=$(parent_problem "$(dirname -- "$destination_rel")")
+    problem=$(parent_problem "$(dirname -- "$source_rel")" "$REPO_ROOT")
+    if [[ -z "$problem" ]]; then
+      problem=$(parent_problem "$(dirname -- "$destination_rel")")
+    fi
     if [[ -n "$problem" ]]; then
       error "$problem"
       failed=1
