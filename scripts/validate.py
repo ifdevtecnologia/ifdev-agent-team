@@ -138,7 +138,7 @@ HOME_PATH = re.compile(r"(?<![\w.~])/(?:home|Users)/[A-Za-z0-9._-]+|\b[A-Za-z]:\
 # and the old toolkit source paths belong in targets/<tool>/ instead.
 CORE_DIR = "core/"
 CORE_TOOL_SPECIFIC = {
-    "tool home path": re.compile(r"~/\.(?:claude|codex|cursor)(?![\w-])"),
+    "tool home path": re.compile(r"(?:~|\$HOME|\$\{HOME\})/\.(?:claude|codex|cursor)(?![\w-])"),
     "$ARGUMENTS placeholder": re.compile(r"\$ARGUMENTS\b"),
     "tool name": re.compile(r"\b(?:Skill|Agent) tool\b"),
     "toolkit source path": re.compile(r"(?<![\w./~-])(?:claude|codex)/(?:CLAUDE\.md|rules|skills|agents|hooks|notify)\b"),

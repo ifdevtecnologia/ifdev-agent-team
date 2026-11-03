@@ -583,6 +583,9 @@ class ToolNeutralCoreTests(ValidatorTestCase):
             "core/instructions.md": ("Apply `~/.claude/rules/testing.md`.", "tool home path '~/.claude'"),
             "core/rules/testing.md": ("See ~/.codex/AGENTS.md.", "tool home path '~/.codex'"),
             "core/agents/dev.md": ("Rules in `~/.cursor` apply.", "tool home path '~/.cursor'"),
+            "core/agents/reviewer.md": ("Run `ls $HOME/.claude/agents`.", "tool home path '$HOME/.claude'"),
+            "core/skills/safe-refactor/SKILL.md": ('Use "${HOME}/.codex/notify".', "tool home path '${HOME}/.codex'"),
+            "core/rules/git-workflow.md": ("Check ${HOME}/.cursor.", "tool home path '${HOME}/.cursor'"),
             "core/skills/work-session/SKILL.md": ("Input: `$ARGUMENTS`.", "$ARGUMENTS placeholder '$ARGUMENTS'"),
             "core/skills/verify-changes/references/commit-messages.md": (
                 "Load it with the Skill tool.",
@@ -607,13 +610,17 @@ class ToolNeutralCoreTests(ValidatorTestCase):
             "core/instructions.md",
             "\nProject files such as `CLAUDE.md`, `.claude/rules/`, `.codex/` and `.cursor/rules/` are project"
             " instructions. Use the `testing` rule and the `web-dev` skill; pass the request that invoked this"
-            " skill. An agent tooling note and `~/.claudeish` are not tool homes.\n",
+            " skill. An agent tooling note, `~/.claudeish`, `$HOME/.claude-backup` and `${HOME}/.config` are not"
+            " tool homes.\n",
         )
         self.build()
         self.assert_passes()
 
     def test_tool_specific_text_outside_core_passes(self) -> None:
-        self.append("README.md", "\nInput: `$ARGUMENTS` via the Skill tool, from `~/.claude/rules/testing.md`.\n")
+        self.append(
+            "README.md",
+            "\nInput: `$ARGUMENTS` via the Skill tool, from `~/.claude/rules/testing.md` or `$HOME/.codex`.\n",
+        )
         self.assert_passes()
 
 
