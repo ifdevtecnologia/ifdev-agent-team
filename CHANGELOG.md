@@ -123,8 +123,15 @@ before this file existed and has no Git tag.
   `scripts/build_targets.py` and committed. Agents declare `read_only` instead of tool lists. Claude
   Code loads the same files with the same agent tool lists, and the same thirty-three destinations
   are installed. The validator checks that `dist/` is up to date.
-- For Claude Code, a short note at the top of `~/.claude/CLAUDE.md` and a footer in every agent say
-  that roles are the subagents of the same name and where the named rules and skills are.
+- The instructions, rules, agents and skills no longer name Claude Code paths or tools: they refer
+  to rules, skills and roles by name ("the `testing` rule", "the `web-dev` skill"), say "the
+  project's instructions" (defined once in the global instructions as `AGENTS.md` plus the tool's
+  own project files, such as `CLAUDE.md` and `.claude/`) and "the request that invoked this skill"
+  instead of `$ARGUMENTS`. The meaning of every rule and role is unchanged. For Claude Code, a short
+  note at the top of `~/.claude/CLAUDE.md` and a footer in every agent say that roles are the
+  subagents of the same name and where the rules and skills are. The global instructions also say
+  what to do in a tool that cannot start a role in a fresh context: a new session per role with a
+  written hand-off, or report "independent review not performed" and PARTIAL.
 - The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
   existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
   `./scripts/install.sh` only if you move or rename your local checkout.

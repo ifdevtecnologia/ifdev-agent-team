@@ -5,7 +5,7 @@ Applies to every repository unless the project documents a stricter workflow. Ex
 ## Delivery flow
 
 1. **Task → branch:** create a dedicated branch from the verified default/base branch, named `<type>/<short-topic>` (for example `feat/user-invitations`, `fix/session-timeout`, `docs/local-setup`). Do not implement on the default branch.
-2. **Implementation** with the tests required by `~/.claude/rules/testing.md`.
+2. **Implementation** with the tests required by the `testing` rule.
 3. **Tests and review:** run the relevant checks and review the diff before committing.
 4. **Logical commits:** one commit per logical change, using the message convention below.
 5. **Push** the task branch to the expected remote.

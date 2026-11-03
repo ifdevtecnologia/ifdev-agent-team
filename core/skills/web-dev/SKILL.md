@@ -5,7 +5,7 @@ description: Stack guidance for implementing, testing or reviewing a change in a
 
 # Web front-end development
 
-Apply this on top of the project's own instructions, which win when they are more specific: its `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, lint and formatter configuration and the patterns already in the codebase. General rules stay in `~/.claude/rules/engineering-principles.md` and `~/.claude/rules/testing.md`; this skill adds only what is specific to the web.
+Apply this on top of what the project defines, which wins when it is more specific: the project's instructions, lint and formatter configuration and the patterns already in the codebase. General rules stay in the `engineering-principles` and `testing` rules; this skill adds only what is specific to the web.
 
 ## Before writing code
 

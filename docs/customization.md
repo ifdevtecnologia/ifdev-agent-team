@@ -18,7 +18,7 @@ Do not put product names, business domains or project reviewers in the toolkit; 
 
 The global instructions ([`core/instructions.md`](../core/instructions.md), installed as `~/.claude/CLAUDE.md`) state:
 
-> Project instructions (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.claude/skills/`, `.claude/agents/`) take precedence when more specific or explicitly conflicting; state the tradeoff when you follow them.
+> The **project's instructions** are its `AGENTS.md` plus the coding tool's own project files (for example `CLAUDE.md` and `.claude/` with its rules, skills and agents, or `.codex/`); they take precedence when more specific or explicitly conflicting; state the tradeoff when you follow them.
 
 Claude Code itself does not merge or override instruction files: it loads the global and project files together, and when two instructions contradict each other it may follow either ([Claude Code memory docs](https://code.claude.com/docs/en/memory)). The precedence comes from the sentence above, so make every override **explicit**: name the global default you are replacing and the reason. Silent contradictions are unreliable.
 

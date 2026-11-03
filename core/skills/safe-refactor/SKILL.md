@@ -5,7 +5,7 @@ description: Procedure for a refactoring that must not change observable behavio
 
 # Safe refactor
 
-A refactoring changes structure, not behavior. The yardstick for what to improve is `~/.claude/rules/engineering-principles.md`; the test rules are in `~/.claude/rules/testing.md`. This skill adds the procedure that keeps the change safe.
+A refactoring changes structure, not behavior. The yardstick for what to improve is the `engineering-principles` rule; the test rules are in the `testing` rule. This skill adds the procedure that keeps the change safe.
 
 ## 1. Confirm the reason
 
@@ -29,7 +29,7 @@ A refactoring changes structure, not behavior. The yardstick for what to improve
 
 ## 4. Deliver
 
-- Keep the refactoring separable from behavior changes so the delivery can make them separate commits (`♻️ refactor`) and, when large, separate pull requests, following `~/.claude/rules/git-workflow.md`.
+- Keep the refactoring separable from behavior changes so the delivery can make them separate commits (`♻️ refactor`) and, when large, separate pull requests, following the `git-workflow` rule.
 - In the report and the pull request, say what changed structurally, why, how behavior was pinned (the tests), and that observable behavior did not change.
 - Run the complete relevant checks at the end, not only the tests of the touched files: refactors break callers.
 

@@ -84,6 +84,6 @@ Use cognitive complexity **15** as a warning threshold for a function/method, no
 
 ## Self-review
 
-Explicitly check correctness, coverage of new/changed meaningful behavior (see `~/.claude/rules/testing.md`), missed reuse of existing code, SOLID/KISS/DRY, coupling and cohesion, unnecessary complexity, overengineering, security, error handling, regression risk, architecture boundaries, duplication, naming, dead code, magic values and deprecated APIs.
+Explicitly check correctness, coverage of new/changed meaningful behavior (see the `testing` rule), missed reuse of existing code, SOLID/KISS/DRY, coupling and cohesion, unnecessary complexity, overengineering, security, error handling, regression risk, architecture boundaries, duplication, naming, dead code, magic values and deprecated APIs.
 
 Do not blindly refactor unrelated existing code because it violates these principles. Improve adjacent code only when necessary to implement the current change safely. Report material findings and justified exceptions rather than manufacturing issues or repeating an empty checklist.

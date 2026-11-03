@@ -15,7 +15,7 @@ Two different `CLAUDE.md` files live here:
 
 ## Layout
 
-Sources are tool-neutral and live in `core/`; files that only one tool needs live in `targets/<tool>/`; `dist/<tool>/` is generated from both by `scripts/build_targets.py` and committed (never edit it by hand; see [CONTRIBUTING.md](CONTRIBUTING.md)). Installed paths for the `claude` target:
+Sources are tool-neutral and live in `core/`; files that only one tool needs live in `targets/<tool>/`; `dist/<tool>/` is generated from both by `scripts/build_targets.py` and committed (never edit it by hand; see [CONTRIBUTING.md](CONTRIBUTING.md)). The text in `core/` refers to rules, skills and roles by name ("the `testing` rule", "the `web-dev` skill", "the `reviewer` role"); each target's adapter and agent footer say where that tool finds them (for Claude Code, `~/.claude/rules/<name>.md` and `~/.claude/skills/<name>/SKILL.md`). Installed paths for the `claude` target:
 
 ```
 core/
