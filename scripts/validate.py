@@ -2,7 +2,8 @@
 """Bounded static lint for the ifdev-agent-team repository.
 
 Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter (the neutral
-schema in core/ and the generated Claude agents), freshness of the generated dist/ files, the
+schema in core/ and the generated Claude agents), the generated Codex agent TOML files, the pairing
+of skills that opt out of implicit use, freshness of the generated dist/ files, the
 compatibility links, local Markdown links, references to installed global files, machine-specific
 paths, tool-specific paths and wording in core/, product/domain content, sensitive paths, credential patterns, unsafe prescriptions,
 obsolete delivery instructions, commit convention consistency, managed, moved and retired items
@@ -27,7 +28,13 @@ import yaml
 
 import build_targets
 
-# Every team role: a neutral source in core/agents/ and its generated Claude agent in dist/claude/agents/.
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11: the Codex agents are then checked by their header only.
+    tomllib = None
+
+# Every team role: a neutral source in core/agents/ and its generated agents in dist/claude/agents/
+# and dist/codex/agents/.
 ROLES = (
     "po",
     "analyst",
@@ -50,6 +57,7 @@ ROLES = (
 )
 CORE_AGENTS_DIR = "core/agents"
 CLAUDE_AGENTS_DIR = "dist/claude/agents"
+CODEX_AGENTS_DIR = "dist/codex/agents"
 
 REQUIRED_FILES = (
     "README.md",
@@ -66,6 +74,7 @@ REQUIRED_FILES = (
     "core/rules/git-workflow.md",
     *(f"{CORE_AGENTS_DIR}/{role}.md" for role in ROLES),
     "core/skills/work-session/SKILL.md",
+    "core/skills/work-session/agents/openai.yaml",
     "core/skills/work-session/references/commit-proposal.md",
     "core/skills/verify-changes/SKILL.md",
     "core/skills/verify-changes/references/commit-messages.md",
@@ -78,9 +87,13 @@ REQUIRED_FILES = (
     "targets/claude/adapter.md",
     "targets/claude/agent-footer.md",
     "targets/claude/hooks/agent-notify-hook.sh",
+    "targets/codex/adapter.md",
+    "targets/codex/agent-footer.md",
     "targets/codex/notify/agent-notify-codex.sh",
     "dist/claude/CLAUDE.md",
     *(f"{CLAUDE_AGENTS_DIR}/{role}.md" for role in ROLES),
+    "dist/codex/AGENTS.md",
+    *(f"{CODEX_AGENTS_DIR}/{role}.toml" for role in ROLES),
     "scripts/install.sh",
     "scripts/uninstall.sh",
     "scripts/validate.sh",
@@ -226,10 +239,11 @@ COMMIT_SUBJECT = re.compile(rf"{_EMOJI}[ \t]+({_TYPES})(?=[(!:])")
 COMMIT_TABLE_ROW = re.compile(rf"^\|\s*{_EMOJI}\s*\|\s*`({_TYPES})`\s*\|", re.MULTILINE)
 
 MARKDOWN_LINK = re.compile(r"\[[^\]\n]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-GLOBAL_REFERENCE = re.compile(r"~/\.(claude|codex)/([^\s`'\")\]>]+)")
+GLOBAL_REFERENCE = re.compile(r"~/\.(claude|codex|agents)/([^\s`'\")\]>]+)")
 MANAGED_REFERENCE_PREFIXES = {
     "claude": ("CLAUDE.md", "rules/", "agents/", "skills/"),
-    "codex": ("skills/",),
+    "codex": ("AGENTS.md", "agents/", "skills/"),
+    "agents": ("skills/",),
 }
 
 MANAGED_ITEMS_FILE = "scripts/lib/common.sh"
@@ -266,6 +280,11 @@ TOOL_SPECIFIC_AGENT_KEYS = ("tools", "disallowedTools", "readonly")
 SKILL_PATH = re.compile(r"^core/skills/([^/]+)/(.+)$")
 CORE_AGENT_PATH = re.compile(rf"^{CORE_AGENTS_DIR}/([^/]+)\.md$")
 CLAUDE_AGENT_PATH = re.compile(rf"^{CLAUDE_AGENTS_DIR}/([^/]+)\.md$")
+CODEX_AGENT_PATH = re.compile(rf"^{CODEX_AGENTS_DIR}/([^/]+)\.toml$")
+CODEX_AGENT_KEYS = {"name", "description", "developer_instructions"}
+# Codex skips a skill for implicit use when its agents/openai.yaml sets this to false; Claude Code
+# reads `disable-model-invocation: true` from SKILL.md. A skill must declare both or neither.
+CODEX_SKILL_POLICY = "agents/openai.yaml"
 
 
 SAFE_YAML_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
@@ -570,6 +589,70 @@ def check_read_only_agents(texts: dict[str, str], report: Report) -> None:
                 report.add(rel, f"read-only agent must list '{tool}' in disallowedTools")
 
 
+def check_codex_agents(texts: dict[str, str], report: Report) -> None:
+    """A generated Codex agent starts with the generated-file comment and, when `tomllib` is
+    available, holds exactly the string keys Codex reads, its role's name and, for a read-only
+    role, the read-only notice (Codex does not enforce read-only custom agents)."""
+    for rel in sorted(texts):
+        match = CODEX_AGENT_PATH.match(rel)
+        if not match:
+            continue
+        role = match.group(1)
+        source = f"{CORE_AGENTS_DIR}/{role}.md"
+        if not texts[rel].startswith(build_targets.CODEX_AGENT_HEADER.format(source=source)):
+            report.add(rel, "Codex agent must start with the generated-file comment")
+        if tomllib is None:
+            continue
+        try:
+            fields = tomllib.loads(texts[rel])
+        except tomllib.TOMLDecodeError:
+            report.add(rel, "Codex agent is not valid TOML")
+            continue
+        if set(fields) != CODEX_AGENT_KEYS:
+            report.add(rel, f"Codex agent keys must be exactly {', '.join(sorted(CODEX_AGENT_KEYS))}")
+        for key in sorted(CODEX_AGENT_KEYS & set(fields)):
+            if not isinstance(fields[key], str) or not fields[key].strip():
+                report.add(rel, f"Codex agent '{key}' must be a non-empty string")
+        if fields.get("name") != role:
+            report.add(rel, f"Codex agent name must be '{role}'")
+        neutral = quiet_frontmatter(source, texts) or {}
+        description = neutral.get("description")
+        if isinstance(description, str) and fields.get("description") != description.strip():
+            report.add(rel, f"Codex agent description must match {source}")
+        read_only = role in READ_ONLY_ROLES or neutral.get("read_only") is True
+        instructions = fields.get("developer_instructions")
+        if read_only and build_targets.CODEX_READ_ONLY_NOTICE not in (instructions if isinstance(instructions, str) else ""):
+            report.add(rel, "read-only Codex agent must carry the read-only notice in developer_instructions")
+
+
+def check_skill_invocation_policy(texts: dict[str, str], candidates: list[str], report: Report) -> None:
+    """Claude Code and Codex each have their own opt-out from implicit skill use; a skill that sets
+    one must set the other, so it never runs implicitly in one tool only."""
+    skills = sorted({match.group(1) for rel in candidates if (match := SKILL_PATH.match(rel))})
+    for name in skills:
+        fields = quiet_frontmatter(f"core/skills/{name}/SKILL.md", texts) or {}
+        manual = fields.get("disable-model-invocation") is True
+        rel = f"core/skills/{name}/{CODEX_SKILL_POLICY}"
+        if rel not in texts:
+            if manual:
+                report.add(rel, "skill sets 'disable-model-invocation: true' but has no Codex policy file")
+            continue
+        try:
+            data = yaml.load(texts[rel], Loader=UniqueKeySafeLoader)
+        except yaml.YAMLError as exc:
+            report.add(rel, f"invalid YAML ({yaml_problem(exc)})")
+            continue
+        policy = data.get("policy") if isinstance(data, dict) else None
+        implicit = policy.get("allow_implicit_invocation") if isinstance(policy, dict) else None
+        if not isinstance(implicit, bool):
+            report.add(rel, "'policy.allow_implicit_invocation' must be true or false")
+        elif implicit == manual:
+            report.add(
+                rel,
+                "'policy.allow_implicit_invocation: false' must pair with 'disable-model-invocation: true' in SKILL.md",
+            )
+
+
 def markdown_prose_blocks(text: str):
     """Yields (line, text) paragraphs; list items, headings, table rows and fences start new ones."""
     start, buffer = 0, []
@@ -797,16 +880,19 @@ def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str]
             report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
     check_retired_items(root, candidates, texts, destinations, report)
     check_moved_items(root, texts, {destination: source for source, destination, _ in items}, report)
-    check_managed_agents({source: destination for source, destination, _ in items}, report)
+    check_managed_agents(set(items), report)
 
 
-def check_managed_agents(managed: dict[str, str], report: Report) -> None:
-    """A required or read-only role whose generated Claude agent is outside MANAGED_ITEMS would never be installed."""
+def check_managed_agents(managed: set[tuple[str, str, str]], report: Report) -> None:
+    """A required or read-only role whose generated agent is outside MANAGED_ITEMS, for its target,
+    would never be installed."""
     for role in sorted({*ROLES, *READ_ONLY_ROLES}):
-        rel = f"{CLAUDE_AGENTS_DIR}/{role}.md"
-        expected = f".claude/agents/{role}.md"
-        if managed.get(rel) != expected:
-            report.add(MANAGED_ITEMS_FILE, f"agent '{rel}' must be managed as '{expected}'")
+        for rel, expected, target in (
+            (f"{CLAUDE_AGENTS_DIR}/{role}.md", f".claude/agents/{role}.md", "claude"),
+            (f"{CODEX_AGENTS_DIR}/{role}.toml", f".codex/agents/{role}.toml", "codex"),
+        ):
+            if (rel, expected, target) not in managed:
+                report.add(MANAGED_ITEMS_FILE, f"agent '{rel}' must be managed as '{expected}' for the {target} target")
 
 
 def check_generated(root: Path, report: Report) -> None:
@@ -864,6 +950,8 @@ def validate(root: Path) -> Report:
     check_executable_scripts(root, report)
     check_definitions(texts, candidates, report)
     check_read_only_agents(texts, report)
+    check_codex_agents(texts, report)
+    check_skill_invocation_policy(texts, candidates, report)
     check_commit_table(texts, report)
     check_generated(root, report)
     check_compat_links(root, candidates, report)
