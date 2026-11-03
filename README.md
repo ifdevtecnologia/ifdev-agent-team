@@ -164,6 +164,8 @@ Codex's own built-in `notify` hook is opt-in only; this toolkit never edits the 
 notify = ["bash", "-c", '"$HOME/.codex/notify/agent-notify-codex.sh" "$1"', "_"]
 ```
 
+The adapter forwards to the shared notifier at `~/.codex/notify/agent-notify.sh` when it is installed there, and otherwise to `~/.claude/hooks/agent-notify.sh`.
+
 Codex execs this array directly (no shell), so a literal `~` in a config-array argument is never expanded and would make Codex fail to even launch the adapter; a plain two-element `["bash", "~/.codex/notify/agent-notify-codex.sh"]` array does not work. The `bash -c` wrapper above is a real shell, so `$HOME` there does expand, and Codex's appended JSON payload reaches the adapter as `$1`, a single literal positional argument, never interpreted as a command. **Honest limitation:** Codex's `notify` hook only fires on turn/task completion, unlike Claude Code's separate Stop/StopFailure/Notification hooks. A Codex session using this adapter can therefore only ever report `complete`, never `attention` or `blocked`, even for a malformed or unrecognized turn-complete payload (it falls back to a generic "finished its turn" `complete` message, never to `blocked`).
 
 ### Troubleshooting

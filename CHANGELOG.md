@@ -133,6 +133,8 @@ before this file existed and has no Git tag.
   what to do in a tool that cannot start a role in a fresh context: a new session per role with a
   written hand-off, or report "independent review not performed" and PARTIAL. The validator
   rejects tool-specific paths and wording in `core/`.
+- The opt-in Codex notify adapter uses the shared notifier in `~/.codex/notify/` when it is
+  installed there and falls back to the one in `~/.claude/hooks/`.
 - The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
   existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
   `./scripts/install.sh` only if you move or rename your local checkout.
