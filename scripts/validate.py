@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Bounded static lint for the ifdev-agent-team repository.
 
-Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter, local
-Markdown links, references to installed global files, machine-specific paths, product/domain
-content, sensitive paths, credential patterns, unsafe prescriptions, obsolete delivery
-instructions, commit convention consistency, managed and retired items and Bash syntax.
+Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter (the neutral
+schema in core/ and the generated Claude agents), freshness of the generated dist/ files, the
+compatibility links, local Markdown links, references to installed global files, machine-specific
+paths, product/domain content, sensitive paths, credential patterns, unsafe prescriptions,
+obsolete delivery instructions, commit convention consistency, managed, moved and retired items
+and Bash syntax.
 
 This is a heuristic gate, not a comprehensive semantic or security review. Sensitive
 paths are classified by name before any file is opened and are never read. Every diagnostic
@@ -14,6 +16,7 @@ is redacted, so no output line echoes a recognized credential value.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import re
 import stat
@@ -23,62 +26,87 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
+# Every team role: a neutral source in core/agents/ and its generated Claude agent in dist/claude/agents/.
+ROLES = (
+    "po",
+    "analyst",
+    "architect",
+    "ux",
+    "designer",
+    "reviewer",
+    "ux-reviewer",
+    "security-reviewer",
+    "privacy-reviewer",
+    "db-reviewer",
+    "performance-reviewer",
+    "api-reviewer",
+    "debugger",
+    "dev",
+    "devops",
+    "tech-writer",
+    "metrics-analyst",
+    "qa",
+)
+CORE_AGENTS_DIR = "core/agents"
+CLAUDE_AGENTS_DIR = "dist/claude/agents"
+
 REQUIRED_FILES = (
     "README.md",
     "CONTRIBUTING.md",
     "AGENTS.md",
     "CLAUDE.md",
     ".editorconfig",
+    ".gitattributes",
     ".gitignore",
     "requirements-dev.txt",
-    "claude/CLAUDE.md",
-    "claude/rules/engineering-principles.md",
-    "claude/rules/testing.md",
-    "claude/rules/git-workflow.md",
-    "claude/agents/po.md",
-    "claude/agents/analyst.md",
-    "claude/agents/architect.md",
-    "claude/agents/ux.md",
-    "claude/agents/designer.md",
-    "claude/agents/reviewer.md",
-    "claude/agents/ux-reviewer.md",
-    "claude/agents/security-reviewer.md",
-    "claude/agents/privacy-reviewer.md",
-    "claude/agents/db-reviewer.md",
-    "claude/agents/performance-reviewer.md",
-    "claude/agents/api-reviewer.md",
-    "claude/agents/debugger.md",
-    "claude/agents/dev.md",
-    "claude/agents/devops.md",
-    "claude/agents/tech-writer.md",
-    "claude/agents/metrics-analyst.md",
-    "claude/agents/qa.md",
-    "claude/skills/work-session/SKILL.md",
-    "claude/skills/work-session/references/commit-proposal.md",
-    "claude/skills/verify-changes/SKILL.md",
-    "claude/skills/verify-changes/references/commit-messages.md",
-    "claude/skills/flutter-dev/SKILL.md",
-    "claude/skills/web-dev/SKILL.md",
-    "claude/skills/supabase-dev/SKILL.md",
-    "claude/skills/safe-refactor/SKILL.md",
-    "claude/skills/java-spring-dev/SKILL.md",
-    "claude/skills/e2e-testing/SKILL.md",
-    "codex/notify/agent-notify-codex.sh",
-    "claude/hooks/agent-notify-hook.sh",
+    "core/instructions.md",
+    "core/rules/engineering-principles.md",
+    "core/rules/testing.md",
+    "core/rules/git-workflow.md",
+    *(f"{CORE_AGENTS_DIR}/{role}.md" for role in ROLES),
+    "core/skills/work-session/SKILL.md",
+    "core/skills/work-session/references/commit-proposal.md",
+    "core/skills/verify-changes/SKILL.md",
+    "core/skills/verify-changes/references/commit-messages.md",
+    "core/skills/flutter-dev/SKILL.md",
+    "core/skills/web-dev/SKILL.md",
+    "core/skills/supabase-dev/SKILL.md",
+    "core/skills/safe-refactor/SKILL.md",
+    "core/skills/java-spring-dev/SKILL.md",
+    "core/skills/e2e-testing/SKILL.md",
+    "targets/claude/adapter.md",
+    "targets/claude/agent-footer.md",
+    "targets/claude/hooks/agent-notify-hook.sh",
+    "targets/codex/notify/agent-notify-codex.sh",
+    "dist/claude/CLAUDE.md",
+    *(f"{CLAUDE_AGENTS_DIR}/{role}.md" for role in ROLES),
     "scripts/install.sh",
     "scripts/uninstall.sh",
     "scripts/validate.sh",
     "scripts/validate.py",
+    "scripts/build_targets.py",
     "scripts/lib/common.sh",
     "scripts/lib/claude_hooks.py",
     "scripts/agent-notify.sh",
     "tests/test_install.py",
     "tests/test_validate.py",
+    "tests/test_build_targets.py",
     "tests/test_agent_notify.py",
     "tests/test_agent_notify_hook.py",
     "tests/test_claude_hooks.py",
     ".github/workflows/validate.yml",
 )
+
+# Tracked links that keep the pre-0004 source paths resolving for one release (decision record
+# 0004), as {link: exact relative target}. No other symlink is accepted inside the repository.
+COMPAT_LINKS = {
+    "claude/CLAUDE.md": "../dist/claude/CLAUDE.md",
+    "claude/rules": "../core/rules",
+    "claude/skills": "../core/skills",
+    "claude/agents": "../dist/claude/agents",
+    "claude/hooks": "../targets/claude/hooks",
+    "codex/notify": "../targets/codex/notify",
+}
 
 # Documented as runnable with `./scripts/<name>.sh`, so they must keep the executable bit.
 EXECUTABLE_SCRIPTS = ("scripts/install.sh", "scripts/uninstall.sh", "scripts/validate.sh", "scripts/agent-notify.sh")
@@ -136,7 +164,7 @@ NEGATION = re.compile(
     re.IGNORECASE,
 )
 
-# Obsolete global delivery rules that contradict claude/rules/git-workflow.md: approval for
+# Obsolete global delivery rules that contradict core/rules/git-workflow.md: approval for
 # every single commit, or a push prohibition that also applies when delivery is authorized.
 # Bounded sentence heuristics, not semantic analysis.
 PER_COMMIT_APPROVAL = re.compile(
@@ -160,7 +188,8 @@ PER_COMMIT_EXCEPTIONS = re.compile(
 PUSH_EXCEPTIONS = re.compile(
     _NARROWER_RESTRICTION + r"|\bforce\b|\bwithout\s+(?:[\w-]+\s+){0,3}(?:authori[sz]ation|approval)", re.IGNORECASE
 )
-DELIVERY_RULE_SCOPE = ("claude/", "codex/")
+# Installed content: neutral sources, hand-written target files and generated output.
+DELIVERY_RULE_SCOPE = ("core/", "targets/", "dist/")
 
 BLOCK_START = re.compile(r"^\s*(?:$|#|[-*+]\s|\d+\.\s|\||```|~~~)")
 SENTENCE_END = re.compile(r"(?<=[.!?;])\s+")
@@ -194,28 +223,37 @@ MANAGED_REFERENCE_PREFIXES = {
 MANAGED_ITEMS_FILE = "scripts/lib/common.sh"
 # Matches a multi-line "<NAME>=(\n...\n)" array or an empty one-line "<NAME>=()".
 ITEMS_BLOCK = r"^{name}=\((?:\)|(.*?)^\))"
-MANAGED_ITEM = re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$')
+# Items by field count: MANAGED_ITEMS adds the owning targets to "<source>|<destination>".
+ITEM_ENTRY = {
+    2: re.compile(r'^\s*"([^"|]+)\|([^"|]+)"\s*$'),
+    3: re.compile(r'^\s*"([^"|]+)\|([^"|]+)\|([^"|]+)"\s*$'),
+}
+AVAILABLE_TARGETS = re.compile(r'^AVAILABLE_TARGETS="([^"]*)"$', re.MULTILINE)
 BASE_CODEX_CONFIG = ".codex/config.toml"
 
 NAME_FORMAT = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # Read-only roles of the Analyst -> Dev -> Reviewer -> QA team, including the specialized reviewers
-# (QA writes acceptance tests, so it is not one of them):
-# they must block Write and Edit and never list them as allowed tools.
-READ_ONLY_AGENTS = (
-    "claude/agents/analyst.md",
-    "claude/agents/architect.md",
-    "claude/agents/reviewer.md",
-    "claude/agents/ux-reviewer.md",
-    "claude/agents/security-reviewer.md",
-    "claude/agents/privacy-reviewer.md",
-    "claude/agents/db-reviewer.md",
-    "claude/agents/performance-reviewer.md",
-    "claude/agents/api-reviewer.md",
-    "claude/agents/debugger.md",
+# (QA writes acceptance tests, so it is not one of them): their neutral source must set
+# `read_only: true`, and every generated Claude agent of a read-only role must block Write and
+# Edit and never list them as allowed tools.
+READ_ONLY_ROLES = (
+    "analyst",
+    "architect",
+    "reviewer",
+    "ux-reviewer",
+    "security-reviewer",
+    "privacy-reviewer",
+    "db-reviewer",
+    "performance-reviewer",
+    "api-reviewer",
+    "debugger",
 )
 WRITE_TOOLS = ("Write", "Edit")
-SKILL_PATH = re.compile(r"^(claude|codex)/skills/([^/]+)/(.+)$")
-AGENT_PATH = re.compile(r"^claude/agents/([^/]+)\.md$")
+# Tool permissions are target-specific: a neutral agent declares `read_only` and each target maps it.
+TOOL_SPECIFIC_AGENT_KEYS = ("tools", "disallowedTools", "readonly")
+SKILL_PATH = re.compile(r"^core/skills/([^/]+)/(.+)$")
+CORE_AGENT_PATH = re.compile(rf"^{CORE_AGENTS_DIR}/([^/]+)\.md$")
+CLAUDE_AGENT_PATH = re.compile(rf"^{CLAUDE_AGENTS_DIR}/([^/]+)\.md$")
 
 
 SAFE_YAML_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
@@ -421,17 +459,19 @@ def parse_frontmatter(rel: str, text: str, report: Report) -> dict | None:
     return fields
 
 
-def check_definition(rel: str, expected_name: str, texts: dict[str, str], seen: dict, kind: str, report: Report) -> None:
+def check_definition(
+    rel: str, expected_name: str, texts: dict[str, str], seen: dict, kind: str, report: Report
+) -> dict | None:
     fields = parse_frontmatter(rel, texts[rel], report)
     if fields is None:
-        return
+        return None
     description = fields.get("description")
     if not isinstance(description, str) or not description.strip():
         report.add(rel, "frontmatter 'description' must be a non-empty string")
     name = fields.get("name")
     if not isinstance(name, str) or not name.strip():
         report.add(rel, "frontmatter 'name' must be a non-empty string")
-        return
+        return fields
     if not NAME_FORMAT.match(name):
         report.add(rel, "frontmatter requires a lowercase kebab-case name")
     elif name != expected_name:
@@ -439,31 +479,44 @@ def check_definition(rel: str, expected_name: str, texts: dict[str, str], seen: 
     if name in seen.setdefault(kind, {}):
         report.add(rel, f"duplicate {kind} name '{name}' (also in {seen[kind][name]})")
     seen[kind][name] = rel
+    return fields
+
+
+def check_neutral_agent(rel: str, fields: dict, report: Report) -> None:
+    """A core agent declares `read_only` and leaves tool permissions to each target."""
+    if not isinstance(fields.get("read_only"), bool):
+        report.add(rel, "frontmatter 'read_only' must be true or false")
+    for key in TOOL_SPECIFIC_AGENT_KEYS:
+        if key in fields:
+            report.add(rel, f"tool-specific key '{key}' does not belong in a neutral agent (use read_only)")
 
 
 def check_definitions(texts: dict[str, str], candidates: list[str], report: Report) -> None:
     """Evaluates definitions from the full path inventory, so unreadable or unsafe ones still fail."""
     seen: dict = {}
-    skill_dirs: dict[tuple[str, str], bool] = {}
+    skill_dirs: dict[str, bool] = {}
     for rel in candidates:
         match = SKILL_PATH.match(rel)
         if match:
-            key = (match.group(1), match.group(2))
-            skill_dirs[key] = skill_dirs.get(key, False) or match.group(3) == "SKILL.md"
-    for (tool, name), has_skill in sorted(skill_dirs.items()):
-        rel = f"{tool}/skills/{name}/SKILL.md"
+            name = match.group(1)
+            skill_dirs[name] = skill_dirs.get(name, False) or match.group(2) == "SKILL.md"
+    for name, has_skill in sorted(skill_dirs.items()):
+        rel = f"core/skills/{name}/SKILL.md"
         if not has_skill or rel not in texts:
-            report.add(f"{tool}/skills/{name}", "skill directory has no readable SKILL.md")
+            report.add(f"core/skills/{name}", "skill directory has no readable SKILL.md")
             continue
-        check_definition(rel, name, texts, seen, f"{tool} skill", report)
-    for rel in candidates:
-        match = AGENT_PATH.match(rel)
-        if not match:
-            continue
-        if rel not in texts:
-            report.add(rel, "agent definition is missing, unreadable or unsafe")
-            continue
-        check_definition(rel, match.group(1), texts, seen, "claude agent", report)
+        check_definition(rel, name, texts, seen, "skill", report)
+    for pattern, kind in ((CORE_AGENT_PATH, "core agent"), (CLAUDE_AGENT_PATH, "claude agent")):
+        for rel in candidates:
+            match = pattern.match(rel)
+            if not match:
+                continue
+            if rel not in texts:
+                report.add(rel, "agent definition is missing, unreadable or unsafe")
+                continue
+            fields = check_definition(rel, match.group(1), texts, seen, kind, report)
+            if fields is not None and kind == "core agent":
+                check_neutral_agent(rel, fields, report)
 
 
 def tool_names(value: object) -> set[str]:
@@ -475,11 +528,25 @@ def tool_names(value: object) -> set[str]:
     return set()
 
 
+def quiet_frontmatter(rel: str, texts: dict[str, str]) -> dict | None:
+    """Frontmatter whose problems check_definitions already reports."""
+    return parse_frontmatter(rel, texts[rel], Report()) if rel in texts else None
+
+
 def check_read_only_agents(texts: dict[str, str], report: Report) -> None:
-    for rel in READ_ONLY_AGENTS:
-        if rel not in texts:
+    for role in READ_ONLY_ROLES:
+        rel = f"{CORE_AGENTS_DIR}/{role}.md"
+        fields = quiet_frontmatter(rel, texts)
+        if fields is not None and fields.get("read_only") is not True:
+            report.add(rel, "read-only role must set 'read_only: true'")
+    for rel in sorted(texts):
+        match = CLAUDE_AGENT_PATH.match(rel)
+        if not match:
             continue
-        fields = parse_frontmatter(rel, texts[rel], Report())
+        source = quiet_frontmatter(f"{CORE_AGENTS_DIR}/{match.group(1)}.md", texts) or {}
+        if match.group(1) not in READ_ONLY_ROLES and source.get("read_only") is not True:
+            continue
+        fields = quiet_frontmatter(rel, texts)
         if fields is None:
             continue
         allowed = tool_names(fields.get("tools"))
@@ -526,9 +593,9 @@ def check_unsafe_prescriptions(rel: str, text: str, report: Report) -> None:
 def check_obsolete_delivery_rules(rel: str, text: str, report: Report) -> None:
     for line, sentence in prose_sentences(text):
         if PER_COMMIT_APPROVAL.search(sentence) and not PER_COMMIT_EXCEPTIONS.search(sentence):
-            report.add(rel, "obsolete delivery instruction (per-commit approval); see claude/rules/git-workflow.md", line)
+            report.add(rel, "obsolete delivery instruction (per-commit approval); see core/rules/git-workflow.md", line)
         if PUSH_PROHIBITION.search(sentence) and not PUSH_EXCEPTIONS.search(sentence):
-            report.add(rel, "obsolete delivery instruction (unconditional push prohibition); see claude/rules/git-workflow.md", line)
+            report.add(rel, "obsolete delivery instruction (unconditional push prohibition); see core/rules/git-workflow.md", line)
 
 
 def check_commit_convention(rel: str, text: str, report: Report) -> None:
@@ -539,7 +606,7 @@ def check_commit_convention(rel: str, text: str, report: Report) -> None:
 
 
 def check_commit_table(texts: dict[str, str], report: Report) -> None:
-    rel = "claude/rules/git-workflow.md"
+    rel = "core/rules/git-workflow.md"
     if rel not in texts:
         return
     rows = {t: e for e, t in COMMIT_TABLE_ROW.findall(texts[rel])}
@@ -547,7 +614,18 @@ def check_commit_table(texts: dict[str, str], report: Report) -> None:
         report.add(rel, "commit type table must list exactly the nine emoji/type pairs")
 
 
-def check_links(root: Path, rel: str, text: str, report: Report) -> None:
+def has_managed_source(root: Path, destination: str, managed: list[tuple[str, ...]]) -> bool:
+    """True when the installed path <destination> (relative to HOME) is, or lies inside, a managed
+    item whose source exists, or is a directory that holds managed items."""
+    for source, item_destination, *_ in managed:
+        if destination == item_destination:
+            return (root / source).exists()
+        if destination.startswith(item_destination + "/"):
+            return (root / source / destination[len(item_destination) + 1 :]).exists()
+    return any(item_destination.startswith(destination + "/") for _, item_destination, *_ in managed)
+
+
+def check_links(root: Path, rel: str, text: str, managed: list[tuple[str, ...]], report: Report) -> None:
     real_root = os.path.realpath(root)
     in_fence = False
     for number, line in enumerate(text.split("\n"), start=1):
@@ -569,11 +647,11 @@ def check_links(root: Path, rel: str, text: str, report: Report) -> None:
                 continue
             if not reference.startswith(MANAGED_REFERENCE_PREFIXES[tool]):
                 continue
-            if not (root / tool / reference.rstrip("/")).exists():
-                report.add(rel, f"reference ~/.{tool}/{reference} has no source {tool}/{reference}", number)
+            if not has_managed_source(root, f".{tool}/{reference.rstrip('/')}", managed):
+                report.add(rel, f"reference ~/.{tool}/{reference} has no managed source", number)
 
 
-def check_text(root: Path, rel: str, text: str, report: Report) -> None:
+def check_text(root: Path, rel: str, text: str, managed: list[tuple[str, ...]], report: Report) -> None:
     for label, pattern in CREDENTIAL_PATTERNS.items():
         for match in pattern.finditer(text):
             report.add(rel, f"possible credential ({label}); value not shown", line_of(text, match.start()))
@@ -586,11 +664,12 @@ def check_text(root: Path, rel: str, text: str, report: Report) -> None:
         if rel.startswith(DELIVERY_RULE_SCOPE):
             check_obsolete_delivery_rules(rel, text, report)
         check_commit_convention(rel, text, report)
-        check_links(root, rel, text, report)
+        check_links(root, rel, text, managed, report)
 
 
-def parse_item_array(texts: dict[str, str], name: str, report: Report) -> list[tuple[str, str]]:
-    """Parses a "<source>|<destination>" Bash array such as MANAGED_ITEMS or RETIRED_ITEMS."""
+def parse_item_array(texts: dict[str, str], name: str, report: Report, fields: int = 2) -> list[tuple[str, ...]]:
+    """Parses a "<source>|<destination>" Bash array such as RETIRED_ITEMS or MOVED_ITEMS, or,
+    with fields=3, MANAGED_ITEMS with its owning targets."""
     text = texts.get(MANAGED_ITEMS_FILE)
     pattern = re.compile(ITEMS_BLOCK.format(name=name), re.MULTILINE | re.DOTALL)
     match = pattern.search(text) if text is not None else None
@@ -603,7 +682,7 @@ def parse_item_array(texts: dict[str, str], name: str, report: Report) -> list[t
     for offset, line in enumerate(match.group(1).split("\n")):
         if not line.strip() or line.strip().startswith("#"):
             continue
-        entry = MANAGED_ITEM.match(line)
+        entry = ITEM_ENTRY[fields].match(line)
         if entry is None:
             report.add(MANAGED_ITEMS_FILE, f"malformed {name} entry", line_of(text, match.start(1)) + offset)
             continue
@@ -618,24 +697,65 @@ def has_inventoried_content(source: str, candidates: list[str]) -> bool:
 
 
 def check_retired_items(
-    candidates: list[str], texts: dict[str, str], managed_destinations: set[str], report: Report
+    root: Path, candidates: list[str], texts: dict[str, str], managed_destinations: set[str], report: Report
 ) -> None:
     """A retired source must be gone (otherwise it is still managed) and its destination must
     not collide with a managed one (install would link it and uninstall would fight over it).
 
     "Gone" means absent from the inventory: Git-ignored leftovers such as `__pycache__/` stay
-    on disk after the tracked files are removed and are not toolkit content."""
+    on disk after the tracked files are removed and are not toolkit content. Below a
+    compatibility link the inventory lists the link's target instead, so the path itself counts."""
     for source, destination in parse_item_array(texts, "RETIRED_ITEMS", report):
-        if has_inventoried_content(source, candidates):
+        through_link = reached_through_compat_link(source) and os.path.lexists(root / source)
+        if through_link or has_inventoried_content(source, candidates):
             report.add(MANAGED_ITEMS_FILE, f"retired source '{source}' still exists in the checkout")
         if destination in managed_destinations:
             report.add(MANAGED_ITEMS_FILE, f"retired destination '{destination}' collides with a managed destination")
 
 
-def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str], report: Report) -> None:
-    items = parse_item_array(texts, "MANAGED_ITEMS", report)
+def available_targets(texts: dict[str, str], report: Report) -> set[str]:
+    match = AVAILABLE_TARGETS.search(texts.get(MANAGED_ITEMS_FILE) or "")
+    if match is None:
+        report.add(MANAGED_ITEMS_FILE, "AVAILABLE_TARGETS not found")
+        return set()
+    return set(match.group(1).split())
+
+
+def reached_through_compat_link(rel: str) -> bool:
+    return any(rel == link or rel.startswith(link + "/") for link in COMPAT_LINKS)
+
+
+def check_moved_items(root: Path, texts: dict[str, str], managed: dict[str, str], report: Report) -> None:
+    """A moved item's destination must still be managed, from a different source, and its old
+    source may survive only through a compatibility link (otherwise it is still a real source)."""
+    for source, destination in parse_item_array(texts, "MOVED_ITEMS", report):
+        if destination not in managed:
+            report.add(MANAGED_ITEMS_FILE, f"moved destination '{destination}' is not a managed destination")
+        elif managed[destination] == source:
+            report.add(MANAGED_ITEMS_FILE, f"moved source '{source}' is still the managed source of '{destination}'")
+        if os.path.lexists(root / source) and not reached_through_compat_link(source):
+            report.add(MANAGED_ITEMS_FILE, f"moved source '{source}' still exists outside the compatibility links")
+
+
+def check_compat_links(root: Path, candidates: list[str], report: Report) -> None:
+    for rel, target in sorted(COMPAT_LINKS.items()):
+        path = root / rel
+        if not path.is_symlink() or os.readlink(path) != target:
+            report.add(rel, f"compatibility link must be a symlink to '{target}'")
+        elif not path.exists():
+            report.add(rel, "compatibility link is dangling")
+    for rel in candidates:
+        if rel not in COMPAT_LINKS and not has_unsafe_parent(root, rel) and (root / rel).is_symlink():
+            report.add(rel, "symlink is not a listed compatibility link")
+
+
+def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str], items: list, report: Report) -> None:
+    targets = available_targets(texts, report)
     destinations: set[str] = set()
-    for source, destination in items:
+    for source, destination, owners in items:
+        unknown = sorted(set(owners.split(",")) - targets)
+        if unknown:
+            report.add(MANAGED_ITEMS_FILE, f"managed item '{destination}' has unsupported targets: {', '.join(unknown)}")
         path = root / source
         if path.is_symlink() or not (path.is_file() or path.is_dir()) or has_unsafe_parent(root, source):
             report.add(MANAGED_ITEMS_FILE, f"managed source '{source}' is missing or unsafe")
@@ -646,17 +766,39 @@ def check_managed_items(root: Path, texts: dict[str, str], candidates: list[str]
         destinations.add(destination)
         if destination == BASE_CODEX_CONFIG:
             report.add(MANAGED_ITEMS_FILE, "managed items must never replace the base Codex config")
-    check_retired_items(candidates, texts, destinations, report)
-    check_managed_agents(dict(items), report)
+    check_retired_items(root, candidates, texts, destinations, report)
+    check_moved_items(root, texts, {destination: source for source, destination, _ in items}, report)
+    check_managed_agents({source: destination for source, destination, _ in items}, report)
 
 
 def check_managed_agents(managed: dict[str, str], report: Report) -> None:
-    """A required or read-only agent outside MANAGED_ITEMS would never be installed."""
-    agents = {rel for rel in (*REQUIRED_FILES, *READ_ONLY_AGENTS) if AGENT_PATH.match(rel)}
-    for rel in sorted(agents):
-        expected = "." + rel
+    """A required or read-only role whose generated Claude agent is outside MANAGED_ITEMS would never be installed."""
+    for role in sorted({*ROLES, *READ_ONLY_ROLES}):
+        rel = f"{CLAUDE_AGENTS_DIR}/{role}.md"
+        expected = f".claude/agents/{role}.md"
         if managed.get(rel) != expected:
             report.add(MANAGED_ITEMS_FILE, f"agent '{rel}' must be managed as '{expected}'")
+
+
+def check_generated(root: Path, report: Report) -> None:
+    """dist/ must match what scripts/build_targets.py (next to this validator) generates now."""
+    path = Path(__file__).with_name("build_targets.py")
+    if not path.is_file():
+        report.add("scripts/build_targets.py", "generator is missing; dist/ freshness not checked")
+        return
+    spec = importlib.util.spec_from_file_location("build_targets", path)
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    try:
+        found = generator.problems(root)
+    except generator.BuildError as exc:
+        report.add("dist", f"cannot generate the target files: {exc}")
+        return
+    except (OSError, ValueError) as exc:
+        report.add("dist", f"cannot generate the target files ({type(exc).__name__})")
+        return
+    for rel, message in found:
+        report.add(rel, f"{message}; run python3 scripts/build_targets.py")
 
 
 def check_bash_syntax(root: Path, texts: dict[str, str], report: Report) -> None:
@@ -701,9 +843,12 @@ def validate(root: Path) -> Report:
     check_definitions(texts, candidates, report)
     check_read_only_agents(texts, report)
     check_commit_table(texts, report)
-    check_managed_items(root, texts, candidates, report)
+    check_generated(root, report)
+    check_compat_links(root, candidates, report)
+    managed = parse_item_array(texts, "MANAGED_ITEMS", report, fields=3)
+    check_managed_items(root, texts, candidates, managed, report)
     for rel, text in sorted(texts.items()):
-        check_text(root, rel, text, report)
+        check_text(root, rel, text, managed, report)
     check_bash_syntax(root, texts, report)
     return report
 

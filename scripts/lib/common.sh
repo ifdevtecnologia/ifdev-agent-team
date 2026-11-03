@@ -2,9 +2,52 @@
 # Shared helpers for install.sh and uninstall.sh. Sourced, never executed directly.
 # Kept compatible with Bash 3.2 (macOS default): no mapfile, no empty-array expansion.
 
-# Managed items as "<source relative to the repository>|<destination relative to $HOME>".
+# Managed items as "<source relative to the repository>|<destination relative to $HOME>|<targets>",
+# where <targets> is the comma-separated list of install targets that own the item.
 # Only these exact paths are ever linked or unlinked; their parent directories are never replaced.
 MANAGED_ITEMS=(
+  "dist/claude/CLAUDE.md|.claude/CLAUDE.md|claude"
+  "core/rules/engineering-principles.md|.claude/rules/engineering-principles.md|claude"
+  "core/rules/testing.md|.claude/rules/testing.md|claude"
+  "core/rules/git-workflow.md|.claude/rules/git-workflow.md|claude"
+  "dist/claude/agents/po.md|.claude/agents/po.md|claude"
+  "dist/claude/agents/analyst.md|.claude/agents/analyst.md|claude"
+  "dist/claude/agents/architect.md|.claude/agents/architect.md|claude"
+  "dist/claude/agents/ux.md|.claude/agents/ux.md|claude"
+  "dist/claude/agents/designer.md|.claude/agents/designer.md|claude"
+  "dist/claude/agents/devops.md|.claude/agents/devops.md|claude"
+  "dist/claude/agents/tech-writer.md|.claude/agents/tech-writer.md|claude"
+  "dist/claude/agents/debugger.md|.claude/agents/debugger.md|claude"
+  "dist/claude/agents/metrics-analyst.md|.claude/agents/metrics-analyst.md|claude"
+  "dist/claude/agents/reviewer.md|.claude/agents/reviewer.md|claude"
+  "dist/claude/agents/ux-reviewer.md|.claude/agents/ux-reviewer.md|claude"
+  "dist/claude/agents/security-reviewer.md|.claude/agents/security-reviewer.md|claude"
+  "dist/claude/agents/privacy-reviewer.md|.claude/agents/privacy-reviewer.md|claude"
+  "dist/claude/agents/db-reviewer.md|.claude/agents/db-reviewer.md|claude"
+  "dist/claude/agents/performance-reviewer.md|.claude/agents/performance-reviewer.md|claude"
+  "dist/claude/agents/api-reviewer.md|.claude/agents/api-reviewer.md|claude"
+  "dist/claude/agents/dev.md|.claude/agents/dev.md|claude"
+  "dist/claude/agents/qa.md|.claude/agents/qa.md|claude"
+  "core/skills/work-session|.claude/skills/work-session|claude"
+  "core/skills/verify-changes|.claude/skills/verify-changes|claude"
+  "core/skills/flutter-dev|.claude/skills/flutter-dev|claude"
+  "core/skills/web-dev|.claude/skills/web-dev|claude"
+  "core/skills/supabase-dev|.claude/skills/supabase-dev|claude"
+  "core/skills/safe-refactor|.claude/skills/safe-refactor|claude"
+  "core/skills/java-spring-dev|.claude/skills/java-spring-dev|claude"
+  "core/skills/e2e-testing|.claude/skills/e2e-testing|claude"
+  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters (the Codex
+  # adapter stays with the claude target, as it was before targets existed).
+  "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh|claude"
+  "targets/claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh|claude"
+  "targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude"
+)
+
+# Sources that moved to a new path (decision record 0004), as "<old source>|<destination>". A
+# destination that is still an exact link to this checkout's old source belongs to the toolkit:
+# install.sh relinks it to the new source without a backup and uninstall.sh removes it. The old
+# paths stay resolvable for one release through the tracked compatibility links in claude/ and codex/.
+MOVED_ITEMS=(
   "claude/CLAUDE.md|.claude/CLAUDE.md"
   "claude/rules/engineering-principles.md|.claude/rules/engineering-principles.md"
   "claude/rules/testing.md|.claude/rules/testing.md"
@@ -35,13 +78,11 @@ MANAGED_ITEMS=(
   "claude/skills/safe-refactor|.claude/skills/safe-refactor"
   "claude/skills/java-spring-dev|.claude/skills/java-spring-dev"
   "claude/skills/e2e-testing|.claude/skills/e2e-testing"
-  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters.
-  "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh"
   "claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh"
   "codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"
 )
 
-# Formerly managed items, same format. Their sources no longer exist; install.sh and
+# Formerly managed items, as "<old source>|<destination>". Their sources no longer exist; install.sh and
 # uninstall.sh remove a destination only when it is still an exact link to this checkout's
 # old source, and leave anything else at that path untouched.
 RETIRED_ITEMS=(
@@ -53,6 +94,10 @@ RETIRED_ITEMS=(
 )
 RETIRED_PLAN=()
 RETIRED_REMOVED=0
+
+# Install targets that may own managed items. codex is planned and cursor is deferred
+# (decision record 0004).
+AVAILABLE_TARGETS="claude"
 
 STATE_DIR_REL=".ifdev-ai-tools"
 BACKUPS_DIR_REL="$STATE_DIR_REL/backups"
@@ -66,7 +111,29 @@ die() {
 }
 
 item_source() { printf '%s' "${1%%|*}"; }
-item_destination() { printf '%s' "${1#*|}"; }
+item_destination() {
+  local rest=${1#*|}
+  printf '%s' "${rest%%|*}"
+}
+
+# Prints the old source of a moved <destination>, or nothing when it did not move.
+moved_source() {
+  local item
+  [[ ${#MOVED_ITEMS[@]} -gt 0 ]] || return 0
+  for item in "${MOVED_ITEMS[@]}"; do
+    if [[ "$(item_destination "$item")" == "$1" ]]; then
+      item_source "$item"
+      return 0
+    fi
+  done
+}
+
+# True when <destination> is an exact link to the moved item's old source in this checkout.
+is_moved_link() {
+  local old
+  old=$(moved_source "$1")
+  [[ -n "$old" ]] && is_managed_link "$HOME/$1" "$REPO_ROOT/$old"
+}
 
 require_commands() {
   local cmd

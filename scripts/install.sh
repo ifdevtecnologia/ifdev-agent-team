@@ -16,7 +16,8 @@ Usage: scripts/install.sh [--dry-run]
 
 Creates symlinks in $HOME for the thirty-three items managed by this repository.
 Existing files, directories or foreign/dangling symlinks at those exact paths are
-moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking. Links left by
+moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking; a link to
+an item's old path in this checkout is relinked without a backup. Links left by
 retired items are removed only when they still point to this checkout. Also merges
 this toolkit's notification hooks into ~/.claude/settings.json, preserving every
 other setting (requires python3; see README).
@@ -44,7 +45,7 @@ parse_args() {
   done
 }
 
-# Classifies every item into PLAN (ok, create, backup) without touching the filesystem.
+# Classifies every item into PLAN (ok, relink, create, backup) without touching the filesystem.
 # Returns non-zero after reporting every problem, so nothing is changed on partial safety.
 plan_install() {
   local item source_rel destination_rel target destination problem failed=0
@@ -71,6 +72,8 @@ plan_install() {
 
     if is_managed_link "$destination" "$target"; then
       PLAN+=("ok")
+    elif is_moved_link "$destination_rel"; then
+      PLAN+=("relink")
     elif [[ -e "$destination" || -L "$destination" ]]; then
       PLAN+=("backup")
     else
@@ -96,6 +99,7 @@ print_plan() {
     case "${PLAN[$i]}" in
       ok) log "unchanged: ~/$destination_rel already links to this repository" ;;
       create) log "would link: ~/$destination_rel -> $REPO_ROOT/$(item_source "$item")" ;;
+      relink) log "would relink: ~/$destination_rel -> $REPO_ROOT/$(item_source "$item") (moved source)" ;;
       backup) log "would back up ~/$destination_rel to ~/$BACKUPS_DIR_REL/<timestamp>-<unique>/ and link it" ;;
     esac
     i=$((i + 1))
@@ -123,6 +127,13 @@ apply_install() {
       ok)
         unchanged=$((unchanged + 1))
         log "unchanged: ~/$destination_rel"
+        ;;
+      relink)
+        is_moved_link "$destination_rel" || die "~/$destination_rel changed during installation; stopping"
+        rm -- "$destination"
+        ln -s -- "$target" "$destination"
+        linked=$((linked + 1))
+        log "relinked: ~/$destination_rel -> $target (moved source)"
         ;;
       create | backup)
         mkdir -p -- "$(dirname -- "$destination")"

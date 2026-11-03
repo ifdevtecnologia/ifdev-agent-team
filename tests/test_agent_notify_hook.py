@@ -1,5 +1,5 @@
-"""Tests for the Claude/Codex hook adapters: claude/hooks/agent-notify-hook.sh and
-codex/notify/agent-notify-codex.sh. Both are exercised against a fake agent-notify.sh
+"""Tests for the Claude/Codex hook adapters: targets/claude/hooks/agent-notify-hook.sh and
+targets/codex/notify/agent-notify-codex.sh. Both are exercised against a fake agent-notify.sh
 placed in PATH so no real desktop/audio backend is ever reached; the fake logs its
 argv, which is exactly the surface these adapters must translate correctly.
 """
@@ -13,8 +13,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CLAUDE_HOOK = REPO_ROOT / "claude" / "hooks" / "agent-notify-hook.sh"
-CODEX_ADAPTER = REPO_ROOT / "codex" / "notify" / "agent-notify-codex.sh"
+CLAUDE_HOOK = REPO_ROOT / "targets" / "claude" / "hooks" / "agent-notify-hook.sh"
+CODEX_ADAPTER = REPO_ROOT / "targets" / "codex" / "notify" / "agent-notify-codex.sh"
 BASH = shutil.which("bash") or "/bin/bash"
 
 FAKE_NOTIFY = """#!/bin/sh
@@ -33,7 +33,7 @@ class HookAdapterTestCase(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
         self.log = self.tmp / "log.txt"
         self.log.write_text("", encoding="utf-8")
-        # claude/hooks/agent-notify-hook.sh resolves the notifier next to itself, so the
+        # targets/claude/hooks/agent-notify-hook.sh resolves the notifier next to itself, so the
         # fake must live in the same directory under this test's isolated HOME.
         self.claude_hooks_dir = self.tmp / "home" / ".claude" / "hooks"
         self.claude_hooks_dir.mkdir(parents=True)

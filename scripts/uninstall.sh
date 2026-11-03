@@ -14,8 +14,8 @@ usage() {
   cat <<'EOF'
 Usage: scripts/uninstall.sh [--dry-run]
 
-Removes the managed symlinks that point to this repository, including links left by
-retired items. Real files, directories, foreign symlinks, sibling configuration and
+Removes the managed symlinks that point to this repository (also at an item's old
+path in this checkout), including links left by retired items. Real files, directories, foreign symlinks, sibling configuration and
 backups are left untouched. Also removes
 this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
 other setting untouched (requires python3; see README). Backups are not restored
@@ -44,6 +44,13 @@ parse_args() {
   done
 }
 
+# True when <destination> is an exact link to this checkout, at the item's current or old source.
+is_own_link() {
+  local item=$1 destination_rel
+  destination_rel=$(item_destination "$item")
+  is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"
+}
+
 # Classifies every item into PLAN (remove, foreign, absent); fails on unsafe parents,
 # including the state/backup directories.
 plan_uninstall() {
@@ -57,7 +64,7 @@ plan_uninstall() {
       error "$problem"
       failed=1
       PLAN+=("error")
-    elif is_managed_link "$destination" "$REPO_ROOT/$(item_source "$item")"; then
+    elif is_own_link "$item"; then
       PLAN+=("remove")
     elif [[ -e "$destination" || -L "$destination" ]]; then
       PLAN+=("foreign")
@@ -100,8 +107,7 @@ apply_uninstall() {
     case "${PLAN[$i]}" in
       remove)
         if [[ "$DRY_RUN" -eq 0 ]]; then
-          is_managed_link "$destination" "$REPO_ROOT/$(item_source "$item")" ||
-            die "~/$destination_rel changed during uninstallation; stopping"
+          is_own_link "$item" || die "~/$destination_rel changed during uninstallation; stopping"
           rm -- "$destination"
           removed=$((removed + 1))
         fi

@@ -19,7 +19,8 @@ class ContextBudgetTest(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(tempfile.mkdtemp(prefix="ifdev-ai-tools-budget-"))
         self.addCleanup(shutil.rmtree, self.root)
-        (self.root / "claude/rules").mkdir(parents=True)
+        (self.root / "core/rules").mkdir(parents=True)
+        (self.root / "dist/claude").mkdir(parents=True)
 
     def write(self, rel: str, text: str) -> None:
         (self.root / rel).write_text(text, encoding="utf-8")
@@ -31,37 +32,37 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertEqual(context_budget.estimate_tokens(5), 2)
 
     def test_counts_entry_point_and_rules_without_paths(self) -> None:
-        self.write("claude/CLAUDE.md", "a" * 10)
-        self.write("claude/rules/plain.md", "# Plain\n")
-        self.write("claude/rules/other-key.md", "---\ndescription: x\n---\nbody\n")
-        self.write("claude/rules/scoped.md", '---\npaths:\n  - "src/**/*.ts"\n---\nbody\n')
+        self.write("dist/claude/CLAUDE.md", "a" * 10)
+        self.write("core/rules/plain.md", "# Plain\n")
+        self.write("core/rules/other-key.md", "---\ndescription: x\n---\nbody\n")
+        self.write("core/rules/scoped.md", '---\npaths:\n  - "src/**/*.ts"\n---\nbody\n')
 
         always, on_demand = context_budget.classify(self.root)
 
         self.assertEqual(
             always,
-            [("claude/CLAUDE.md", 10), ("claude/rules/other-key.md", 28), ("claude/rules/plain.md", 8)],
+            [("dist/claude/CLAUDE.md", 10), ("core/rules/other-key.md", 28), ("core/rules/plain.md", 8)],
         )
-        self.assertEqual(on_demand, [("claude/rules/scoped.md", 38)])
+        self.assertEqual(on_demand, [("core/rules/scoped.md", 38)])
 
     def test_counts_nested_rules_and_skips_non_markdown_files(self) -> None:
-        self.write("claude/CLAUDE.md", "a" * 4)
-        (self.root / "claude/rules/area").mkdir()
-        self.write("claude/rules/area/nested.md", "# Nested\n")
-        self.write("claude/rules/area/scoped.md", "---\npaths: ['*.py']\n---\n")
-        self.write("claude/rules/notes.txt", "not a rule\n")
+        self.write("dist/claude/CLAUDE.md", "a" * 4)
+        (self.root / "core/rules/area").mkdir()
+        self.write("core/rules/area/nested.md", "# Nested\n")
+        self.write("core/rules/area/scoped.md", "---\npaths: ['*.py']\n---\n")
+        self.write("core/rules/notes.txt", "not a rule\n")
 
         always, on_demand = context_budget.classify(self.root)
 
-        self.assertEqual(always, [("claude/CLAUDE.md", 4), ("claude/rules/area/nested.md", 9)])
-        self.assertEqual(on_demand, [("claude/rules/area/scoped.md", 24)])
+        self.assertEqual(always, [("dist/claude/CLAUDE.md", 4), ("core/rules/area/nested.md", 9)])
+        self.assertEqual(on_demand, [("core/rules/area/scoped.md", 24)])
 
     def test_size_is_measured_in_bytes_not_characters(self) -> None:
-        self.write("claude/CLAUDE.md", "é")  # two bytes in UTF-8
+        self.write("dist/claude/CLAUDE.md", "é")  # two bytes in UTF-8
 
         always, _ = context_budget.classify(self.root)
 
-        self.assertEqual(always, [("claude/CLAUDE.md", 2)])
+        self.assertEqual(always, [("dist/claude/CLAUDE.md", 2)])
 
     def test_paths_detection(self) -> None:
         self.assertTrue(context_budget.has_paths("---\npaths:\n  - '*.py'\n---\nbody\n"))
@@ -82,8 +83,8 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertIn("(none)", output)
 
     def test_cli_prints_report_for_root(self) -> None:
-        self.write("claude/CLAUDE.md", "x" * 8)
-        self.write("claude/rules/scoped.md", "---\npaths: ['*.md']\n---\n")
+        self.write("dist/claude/CLAUDE.md", "x" * 8)
+        self.write("core/rules/scoped.md", "---\npaths: ['*.md']\n---\n")
 
         result = subprocess.run(
             [sys.executable, str(REPO_ROOT / "scripts/context_budget.py"), "--root", str(self.root)],
@@ -92,8 +93,8 @@ class ContextBudgetTest(unittest.TestCase):
             check=True,
         )
 
-        self.assertRegex(result.stdout, r"\n\s+8\s+2\s+claude/CLAUDE.md\n\s+8\s+2\s+total\n")
-        self.assertRegex(result.stdout, r"\n\s+\d+\s+\d+\s+claude/rules/scoped.md$")
+        self.assertRegex(result.stdout, r"\n\s+8\s+2\s+dist/claude/CLAUDE.md\n\s+8\s+2\s+total\n")
+        self.assertRegex(result.stdout, r"\n\s+\d+\s+\d+\s+core/rules/scoped.md$")
 
 
 if __name__ == "__main__":
