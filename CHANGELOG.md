@@ -131,7 +131,8 @@ before this file existed and has no Git tag.
   note at the top of `~/.claude/CLAUDE.md` and a footer in every agent say that roles are the
   subagents of the same name and where the rules and skills are. The global instructions also say
   what to do in a tool that cannot start a role in a fresh context: a new session per role with a
-  written hand-off, or report "independent review not performed" and PARTIAL.
+  written hand-off, or report "independent review not performed" and PARTIAL. The validator
+  rejects tool-specific paths and wording in `core/`.
 - The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
   existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
   `./scripts/install.sh` only if you move or rename your local checkout.

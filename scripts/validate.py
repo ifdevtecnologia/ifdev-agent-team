@@ -4,7 +4,7 @@
 Checks the required tree, entry-point executable bits, skill/agent YAML frontmatter (the neutral
 schema in core/ and the generated Claude agents), freshness of the generated dist/ files, the
 compatibility links, local Markdown links, references to installed global files, machine-specific
-paths, product/domain content, sensitive paths, credential patterns, unsafe prescriptions,
+paths, tool-specific paths and wording in core/, product/domain content, sensitive paths, credential patterns, unsafe prescriptions,
 obsolete delivery instructions, commit convention consistency, managed, moved and retired items
 and Bash syntax.
 
@@ -132,6 +132,17 @@ CREDENTIAL_PATTERNS = {
 }
 
 HOME_PATH = re.compile(r"(?<![\w.~])/(?:home|Users)/[A-Za-z0-9._-]+|\b[A-Za-z]:\\+Users\\+[A-Za-z0-9._-]+")
+
+# core/ is tool-neutral (decision record 0004): it names rules, skills and roles, and each target's
+# adapter and agent footer say where they live. Tool homes, Claude-only placeholders and tool names,
+# and the old toolkit source paths belong in targets/<tool>/ instead.
+CORE_DIR = "core/"
+CORE_TOOL_SPECIFIC = {
+    "tool home path": re.compile(r"~/\.(?:claude|codex|cursor)(?![\w-])"),
+    "$ARGUMENTS placeholder": re.compile(r"\$ARGUMENTS\b"),
+    "tool name": re.compile(r"\b(?:Skill|Agent) tool\b"),
+    "toolkit source path": re.compile(r"(?<![\w./~-])(?:claude|codex)/(?:CLAUDE\.md|rules|skills|agents|hooks|notify)\b"),
+}
 
 # Accidental product or business-domain content. The terms are assembled from fragments so
 # that this file never contains them literally and needs no exemption from its own check.
@@ -652,6 +663,16 @@ def check_links(root: Path, rel: str, text: str, managed: list[tuple[str, ...]],
                 report.add(rel, f"reference ~/.{tool}/{reference} has no managed source", number)
 
 
+def check_tool_neutral(rel: str, text: str, report: Report) -> None:
+    for label, pattern in CORE_TOOL_SPECIFIC.items():
+        for match in pattern.finditer(text):
+            report.add(
+                rel,
+                f"tool-specific {label} '{match.group(0)}' in core/ (refer by name; tool details go in targets/)",
+                line_of(text, match.start()),
+            )
+
+
 def check_text(root: Path, rel: str, text: str, managed: list[tuple[str, ...]], report: Report) -> None:
     for label, pattern in CREDENTIAL_PATTERNS.items():
         for match in pattern.finditer(text):
@@ -660,6 +681,8 @@ def check_text(root: Path, rel: str, text: str, managed: list[tuple[str, ...]], 
         report.add(rel, "hardcoded machine-specific home path", line_of(text, match.start()))
     for match in PRODUCT_TERMS.finditer(text):
         report.add(rel, f"product/domain-specific term '{match.group(0)}'", line_of(text, match.start()))
+    if rel.startswith(CORE_DIR):
+        check_tool_neutral(rel, text, report)
     if rel.endswith(".md"):
         check_unsafe_prescriptions(rel, text, report)
         if rel.startswith(DELIVERY_RULE_SCOPE):
