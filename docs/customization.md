@@ -35,7 +35,7 @@ The global instructions ([`core/instructions.md`](../core/instructions.md)) stat
 
 > The **project's instructions** are its `AGENTS.md` plus the coding tool's own project files (for example `CLAUDE.md` and `.claude/` with its rules, skills and agents, or `.codex/`); they take precedence when more specific or explicitly conflicting; state the tradeoff when you follow them.
 
-The tools do not merge or override instruction files: they load the global and project files together, and when two instructions contradict each other the model may follow either. The precedence comes from the sentence above, so make every override **explicit**: name the global default you are replacing and the reason. Silent contradictions are unreliable.
+Apart from file-level precedence (in Codex, a closer `AGENTS.md` wins over a farther one and `AGENTS.override.md` replaces the global file), the tools do not reconcile conflicting instructions: they load the global and project files together, and when two instructions contradict each other the model may follow either. The precedence comes from the sentence above, so make every override **explicit**: name the global default you are replacing and the reason. Silent contradictions are unreliable.
 
 ## Validation commands
 
