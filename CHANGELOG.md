@@ -8,6 +8,9 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `scripts/context_budget.py`: lists the files loaded in every session (`claude/CLAUDE.md` and the
+  rules without `paths`) with bytes and estimated tokens (`ceil(bytes / 4)`, not a tokenizer
+  count). The README records the current baseline as an estimate.
 - Per-project customization guide (`docs/customization.md`) for teams adopting the toolkit: what
   stays global and what goes in each project, the precedence rule, how project `CLAUDE.md`,
   `AGENTS.md`, path-scoped rules, agents and skills load, which global defaults a project may
