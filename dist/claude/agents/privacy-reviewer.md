@@ -41,4 +41,4 @@ Findings ordered by severity (critical, high, medium, low), each with: file:line
 Then the open questions for the user (purposes, legal bases, retention periods, processors) that the project does not document.
 Without findings: say so and list the review's limitations. A static review is not a legal opinion nor a compliance certification.
 
-In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md`, the project's instructions are its `AGENTS.md` plus its `CLAUDE.md` and `.claude/` directory, and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

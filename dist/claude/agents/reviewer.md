@@ -41,4 +41,4 @@ Findings ordered by severity (critical, high, medium, low), each with: file:line
 Without findings: say so and list the review's limitations and the tests not executed.
 A static review is not equivalent to passing tests, nor an authorization to merge or publish.
 
-In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md`, the project's instructions are its `AGENTS.md` plus its `CLAUDE.md` and `.claude/` directory, and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

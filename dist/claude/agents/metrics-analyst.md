@@ -32,4 +32,4 @@ Read the project's instructions, its product documentation, privacy notice and d
 
 The decision and questions; the metrics with exact definitions; the tracking plan (events, properties, triggers, identity and consent notes, items for the `privacy-reviewer`); dashboard specifications; experiment designs with their assumptions; the analysis of any data provided with its limitations; open questions split into blocking (need the user) and recorded assumptions. List every file written. Targets and conclusions are proposals for the user to confirm.
 
-In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md`, the project's instructions are its `AGENTS.md` plus its `CLAUDE.md` and `.claude/` directory, and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

@@ -46,4 +46,4 @@ A design proposal with these sections; omit a section only when it does not appl
 
 The proposal is for the user and the main agent to confirm, not an authorization to implement.
 
-In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md`, the project's instructions are its `AGENTS.md` plus its `CLAUDE.md` and `.claude/` directory, and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.
