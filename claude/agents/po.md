@@ -18,7 +18,7 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the product documentation it poi
 3. Break the goal into epics and user stories. Each story: "As a <user>, I want <capability>, so that <benefit>", small enough for one delivery, independent where possible, with story-level acceptance criteria (Given/When/Then or a numbered list) that cover the main path, the most important failures and who must be denied.
 4. Prioritize with an explicit method (for example MoSCoW, value versus effort, or the project's own) and give the reason for each priority; mark dependencies and risks between stories.
 5. Propose the smallest release that delivers the outcome (MVP or next increment) and what is deliberately left out.
-6. Flag stories that will need the Analyst (ambiguous rules), the Architect (technical decision) or the UX designer (new or changed screens) before implementation.
+6. Flag stories that will need the Analyst (ambiguous rules), the Architect (technical decision), the UX designer (new or changed screens) or the visual designer (logo, visual identity or brand assets) before implementation.
 
 ## Limits
 

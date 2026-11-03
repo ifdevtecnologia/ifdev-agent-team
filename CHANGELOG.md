@@ -8,6 +8,13 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `designer` global agent: a senior visual and brand designer for logos and monograms, visual
+  identity (palette, typography, icon and favicon, lockups, usage rules) and graphic assets. It
+  proposes several distinct options with their rationale, respects the user's references and
+  constraints, checks legibility at small sizes and on light and dark grounds, delivers an SVG
+  master with raster previews, flags font and asset licensing and writes only design files where
+  the main agent says. It runs when a request creates or changes a logo, visual identity or brand
+  assets, before the `ux` agent when both apply.
 - `scripts/context_budget.py`: lists the files loaded in every session (`claude/CLAUDE.md` and the
   rules without `paths`) with bytes and estimated tokens (`ceil(bytes / 4)`, not a tokenizer
   count). The README records the current baseline as an estimate.
@@ -149,7 +156,7 @@ before this file existed and has no Git tag.
 
 ### Upgrade
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
-  `analyst`, `architect`, `ux`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
+  `analyst`, `architect`, `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
   `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,
   `performance-reviewer` and `qa` agents in `~/.claude/agents/` and the `flutter-dev`, `web-dev`,
   `supabase-dev`, `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in

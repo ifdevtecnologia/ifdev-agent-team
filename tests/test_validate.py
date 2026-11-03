@@ -212,6 +212,7 @@ class FrontmatterTests(ValidatorTestCase):
 
     WRITING_AGENTS = (
         "claude/agents/ux.md",
+        "claude/agents/designer.md",
         "claude/agents/dev.md",
         "claude/agents/devops.md",
         "claude/agents/tech-writer.md",
@@ -416,7 +417,7 @@ class ManagedItemsTests(ValidatorTestCase):
     NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
 
     def test_required_agents_must_be_managed(self) -> None:
-        for agent in ("analyst", "architect", "ux", "security-reviewer", "privacy-reviewer", "db-reviewer", "performance-reviewer", "dev", "devops", "tech-writer", "po", "debugger", "api-reviewer", "metrics-analyst"):
+        for agent in ("analyst", "architect", "ux", "designer", "security-reviewer", "privacy-reviewer", "db-reviewer", "performance-reviewer", "dev", "devops", "tech-writer", "po", "debugger", "api-reviewer", "metrics-analyst"):
             with self.subTest(agent=agent):
                 item = f'  "claude/agents/{agent}.md|.claude/agents/{agent}.md"\n'
                 original = (self.root / self.COMMON).read_text(encoding="utf-8")
