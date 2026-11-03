@@ -1,3 +1,5 @@
+**Claude Code.** Each role named below (`analyst`, `reviewer`, `qa` and the others) is the subagent of the same name: starting a role in a fresh context means delegating to that subagent, and Claude Code blocks the file-edit tools of the read-only roles. The named rules (`engineering-principles`, `testing`, `git-workflow`) are loaded from `~/.claude/rules/<name>.md`; skills are used by name and live in `~/.claude/skills/<name>/`. The project's instructions include its `CLAUDE.md` and `.claude/` directory.
+
 # Global engineering instructions
 
 Defaults for every project. Project instructions (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.claude/skills/`, `.claude/agents/`) take precedence when more specific or explicitly conflicting; state the tradeoff when you follow them. Communicate in the language the user or the project uses.

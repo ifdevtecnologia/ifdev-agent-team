@@ -39,3 +39,5 @@ If a measurement is needed, ask the main agent and describe the benchmark or pro
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the scenario and assumed volume, the estimated impact and the suggested fix.
 Without findings: say so and list the review's limitations, the assumptions used and the measurements not taken.
 A static review is not a load test.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

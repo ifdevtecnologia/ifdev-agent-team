@@ -31,3 +31,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md`, its documentation and style convent
 ## Output
 
 Files changed and for which reader, a short summary of each change, conflicts found between documentation and behavior, text proposed for strings inside code, every check you ran with its result, and what remains undocumented or unverified.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

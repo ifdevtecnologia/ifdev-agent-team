@@ -45,3 +45,5 @@ A design proposal with these sections; omit a section only when it does not appl
 10. **Decision record draft:** a short ADR (title, status "proposed", context, decision, consequences) ready for the project's ADR location.
 
 The proposal is for the user and the main agent to confirm, not an authorization to implement.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

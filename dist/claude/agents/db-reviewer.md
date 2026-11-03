@@ -39,3 +39,5 @@ If a test or a query plan is needed, ask the main agent and explain what it woul
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the scenario, impact and suggested fix (including a safer migration sequence when relevant).
 Without findings: say so and list the review's limitations and the checks not executed (for example migrations not applied to a database, plans not measured).
 A static review does not prove a migration is safe on production data volumes.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

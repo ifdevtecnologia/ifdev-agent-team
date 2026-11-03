@@ -40,3 +40,5 @@ If a test is needed (for example proving that deletion reaches every copy), ask 
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the data and people affected, the scenario, impact and suggested fix, plus a note when it needs legal review.
 Then the open questions for the user (purposes, legal bases, retention periods, processors) that the project does not document.
 Without findings: say so and list the review's limitations. A static review is not a legal opinion nor a compliance certification.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

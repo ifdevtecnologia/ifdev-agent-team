@@ -39,3 +39,5 @@ If a test is needed, ask the main agent and explain what it would prove. Do not 
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the affected consumer and scenario, impact and suggested fix (including a compatible alternative when one exists).
 Without findings: say so and list the review's limitations and the consumers you could not see.
 A static review does not prove compatibility with consumers outside the repository.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

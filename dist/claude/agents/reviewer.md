@@ -40,3 +40,5 @@ If an additional test is needed, ask the main agent and explain what it would pr
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the scenario that triggers the defect, impact and suggested fix.
 Without findings: say so and list the review's limitations and the tests not executed.
 A static review is not equivalent to passing tests, nor an authorization to merge or publish.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

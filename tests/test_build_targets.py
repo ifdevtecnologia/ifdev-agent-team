@@ -1,8 +1,9 @@
 """Tests for scripts/build_targets.py.
 
-Generator behavior is tested on copies of the sources in temporary directories; the golden test
-compares the committed Claude output with the installed files of the last commit before the
-neutral layout (decision record 0004), read from Git rather than from hard-coded copies.
+Generator behavior is tested on copies of the sources in temporary directories; the golden tests
+compare the shape of the committed Claude output (files, agent frontmatter, adapter and footer)
+with the installed files of the last commit before the neutral layout (decision record 0004),
+read from Git rather than from hard-coded copies.
 """
 
 from __future__ import annotations
@@ -28,10 +29,19 @@ def git_show(commit: str, rel: str) -> bytes | None:
     return result.stdout if result.returncode == 0 else None
 
 
-class GoldenTest(unittest.TestCase):
-    """Slice A of 0004 moves files without changing what Claude Code loads."""
+def frontmatter(text: str) -> str:
+    """The frontmatter block of a Markdown definition, delimiters included."""
+    lines = text.split("\n")
+    return "\n".join(lines[: lines.index("---", 1) + 1])
 
-    def test_generated_claude_files_are_byte_identical_to_the_pre_0004_sources(self) -> None:
+
+class GoldenTest(unittest.TestCase):
+    """What Claude Code loads keeps its shape across decision record 0004: slice A moved the files
+    unchanged, and slice B only prepends the adapter, appends the agent footer and rewords the
+    neutral text, so the files, the agent frontmatter (tool lists included) and the adapter and
+    footer positions are compared, not the wording."""
+
+    def setUp(self) -> None:
         listing = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "ls-tree", "--name-only", PRE_0004_COMMIT, "claude/agents/"],
             capture_output=True,
@@ -40,15 +50,38 @@ class GoldenTest(unittest.TestCase):
         if listing.returncode != 0:
             # Shallow clones (the CI checkout) do not contain older commits.
             self.skipTest(f"commit {PRE_0004_COMMIT} is not available in this clone")
-        old_agents = sorted(Path(rel).name for rel in listing.stdout.split())
-        self.assertEqual(old_agents, sorted(p.name for p in (REPO_ROOT / "dist/claude/agents").iterdir()))
+        self.old_agents = sorted(Path(rel).name for rel in listing.stdout.split())
+        self.adapter = (REPO_ROOT / "targets/claude/adapter.md").read_text(encoding="utf-8")
+        self.footer = (REPO_ROOT / "targets/claude/agent-footer.md").read_text(encoding="utf-8")
 
-        pairs = {"claude/CLAUDE.md": "dist/claude/CLAUDE.md"}
-        pairs.update({f"claude/agents/{name}": f"dist/claude/agents/{name}" for name in old_agents})
-        for old, new in pairs.items():
-            with self.subTest(file=new):
-                self.assertEqual((REPO_ROOT / new).read_bytes(), git_show(PRE_0004_COMMIT, old))
+    def test_the_same_agents_are_generated(self) -> None:
+        self.assertEqual(self.old_agents, sorted(p.name for p in (REPO_ROOT / "dist/claude/agents").iterdir()))
 
+    def test_agent_frontmatter_including_tool_lists_is_unchanged(self) -> None:
+        for name in self.old_agents:
+            with self.subTest(agent=name):
+                old = git_show(PRE_0004_COMMIT, f"claude/agents/{name}").decode("utf-8")
+                new = (REPO_ROOT / f"dist/claude/agents/{name}").read_text(encoding="utf-8")
+                self.assertEqual(frontmatter(new), frontmatter(old))
+
+    def test_the_adapter_comes_first_and_every_agent_ends_with_the_footer(self) -> None:
+        self.assertTrue(self.adapter.strip() and self.footer.strip(), "the Claude adapter and footer are empty")
+        claude_md = (REPO_ROOT / "dist/claude/CLAUDE.md").read_text(encoding="utf-8")
+        self.assertTrue(claude_md.startswith(self.adapter.rstrip("\n") + "\n\n"))
+        self.assertIn("# Global engineering instructions", claude_md)
+        for name in self.old_agents:
+            with self.subTest(agent=name):
+                agent = (REPO_ROOT / f"dist/claude/agents/{name}").read_text(encoding="utf-8")
+                self.assertTrue(agent.endswith("\n\n" + self.footer))
+                self.assertEqual(agent.count(self.footer.strip()), 1)
+
+    def test_the_adapter_and_footer_stay_small(self) -> None:
+        # Decision record 0004: an adapter under 1 KB and a footer of two or three lines.
+        self.assertLess(len(self.adapter.encode("utf-8")), 1024)
+        self.assertLessEqual(len(self.footer.strip().split("\n")), 3)
+
+
+class FreshnessTest(unittest.TestCase):
     def test_committed_output_is_fresh(self) -> None:
         self.assertEqual(build_targets.problems(REPO_ROOT), [])
 

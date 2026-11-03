@@ -38,3 +38,5 @@ If a test or a manual check is needed (for example a component test of the error
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the user scenario that triggers the problem (client, screen size, input method or locale), impact on the person using it and suggested fix.
 Without findings: say so and list the review's limitations (for example interface not run, clients not compared).
 A static review is not equivalent to usability or accessibility testing, nor an authorization to merge or publish.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

@@ -41,3 +41,5 @@ If a test is needed (for example an integration test proving that another owner'
 Findings ordered by severity (critical, high, medium, low), each with: file:line, the attack scenario, impact and suggested fix.
 Without findings: say so and list the review's limitations and the checks not executed (for example policies not tested against a database).
 A static review is not a penetration test, nor an authorization to merge or publish.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

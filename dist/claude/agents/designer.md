@@ -33,3 +33,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and any brand, design system or asse
 ## Output
 
 A design document with: the brief restated as constraints; the options, each with concept, rationale, tradeoffs and preview files; for the chosen or refined option, the identity elements requested (palette, typography, lockups, clear space, minimum size, usage rules); the legibility and contrast checks with their results; the licensing of every font and asset; open questions split into blocking (need the user before continuing) and recorded assumptions (each with its reason). List every file written (SVG masters and raster previews) and any check you ran with its result. The design is a proposal for the user and the main agent to confirm, not an authorization to publish or register.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

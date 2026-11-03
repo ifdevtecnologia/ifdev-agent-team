@@ -38,3 +38,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules for the areas you will
 ## Output
 
 What changed (files and behavior), checks added or updated, every command you ran with its result, and what could only be verified in a real environment. List the remote steps the main agent would need authorization for (operation, destination, order and rollback), the risks of downtime, data loss or cost, and whether the change touches secrets, permissions or dependencies so the main agent can call the `security-reviewer`. A check you did not run is not a passing check.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

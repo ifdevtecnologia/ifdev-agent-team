@@ -33,3 +33,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules for the affected areas
 ## Output
 
 The symptom as reproduced (command and result) or why it could not be reproduced; the hypotheses tested with their evidence; the root cause and the chain to the symptom; the proposed fix and alternatives; the regression test to write; other places at risk; every command you ran with its result; a closing `git status` of the user's checkout, reporting any tracked file that changed; and what remains uncertain. A cause you did not confirm is a hypothesis, and you say so.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

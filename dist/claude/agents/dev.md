@@ -32,3 +32,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules that apply to the area
 ## Output
 
 What changed (files and behavior), tests added or updated, every check you ran with its command and result, and open questions or known limitations. A check you did not run is not a passing check.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

@@ -35,3 +35,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md`, the rules for the affected areas an
 ## Output
 
 A design document with: users and goals; flows (main, alternatives and errors); screen inventory with the states of each screen; interaction, focus and accessibility notes; copy; the mapping from acceptance criteria to screens and states; open questions split into blocking (need the user before implementing) and recorded assumptions (each with its reason). List every file written (specification and prototype) and what each prototype demonstrates, plus any check you ran on it with its result. The design is a proposal for the user and the main agent to confirm, not an authorization to implement or publish.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

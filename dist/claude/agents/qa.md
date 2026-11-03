@@ -41,3 +41,5 @@ The Dev writes unit tests from the implementation; you write tests from the acce
 ## Output
 
 A table of scenarios with status (covered and passing, covered by a new acceptance test, failing, not covered), the files you wrote, every command run with working directory and result, failures with the relevant excerpt, remaining gaps ordered by risk and a final verdict: ready, ready with listed risks, or not ready. Checks that could not run are BLOCKED, not passing.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

@@ -32,3 +32,5 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the product documentation it poi
 ## Output
 
 A product document with: problem, users and outcome with success measures; epics and user stories with acceptance criteria; the prioritized backlog with the method and reasons; dependencies and risks; the proposed release cut and what is out; stories that need the Analyst, Architect or UX designer; open questions split into blocking (need the user) and recorded assumptions (each with its reason). List every file written. The backlog is a proposal for the user to confirm and reprioritize, not an authorization to implement.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

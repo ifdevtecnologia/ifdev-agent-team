@@ -43,3 +43,5 @@ A requirements document with these sections; omit a section only when it does no
 11. **Suggested slicing:** small, independent deliveries in order, each with the acceptance criteria it satisfies.
 
 The document is a proposal for the user and the main agent to confirm, not an authorization to implement.
+
+In Claude Code, a named rule is `~/.claude/rules/<name>.md`, the global instructions are `~/.claude/CLAUDE.md` and a named skill is used by reading `~/.claude/skills/<name>/SKILL.md`.

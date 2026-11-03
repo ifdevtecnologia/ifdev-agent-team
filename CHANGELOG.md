@@ -120,10 +120,11 @@ before this file existed and has no Git tag.
 - New source layout: the tool-neutral instructions, rules, agents and skills live in `core/`,
   tool-specific files (the Claude hook, the Codex `notify` adapter) in `targets/`, and the files
   Claude Code loads (`CLAUDE.md` and the agents) are generated into `dist/claude/` by
-  `scripts/build_targets.py` and committed. Agents declare `read_only` instead of tool lists. What
-  Claude Code loads is unchanged: the generated files are byte-identical to the previous ones, and
-  the same thirty-three destinations are installed. The validator checks that `dist/` is up to
-  date.
+  `scripts/build_targets.py` and committed. Agents declare `read_only` instead of tool lists. Claude
+  Code loads the same files with the same agent tool lists, and the same thirty-three destinations
+  are installed. The validator checks that `dist/` is up to date.
+- For Claude Code, a short note at the top of `~/.claude/CLAUDE.md` and a footer in every agent say
+  that roles are the subagents of the same name and where the named rules and skills are.
 - The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
   existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
   `./scripts/install.sh` only if you move or rename your local checkout.
