@@ -11,6 +11,13 @@ before this file existed and has no Git tag.
 - `scripts/context_budget.py`: lists the files loaded in every session (`claude/CLAUDE.md` and the
   rules without `paths`) with bytes and estimated tokens (`ceil(bytes / 4)`, not a tokenizer
   count). The README records the current baseline as an estimate.
+- Per-project customization guide (`docs/customization.md`) for teams adopting the toolkit: what
+  stays global and what goes in each project, the precedence rule, how project `CLAUDE.md`,
+  `AGENTS.md`, path-scoped rules, agents and skills load, which global defaults a project may
+  override (no board, no `CHANGELOG.md`, stricter Git workflow, own validation commands) and
+  common pitfalls. Minimal templates for a project `CLAUDE.md`/`AGENTS.md`, a path-scoped rule and
+  a read-only project reviewer are in `docs/templates/project/`.
+- Apache License 2.0 (`LICENSE`), mentioned in the README.
 - Stack skills `flutter-dev`, `web-dev` and `supabase-dev`: guidance for Flutter apps, web front
   ends (Angular, Astro and similar) and Supabase backends (structure, state, accessibility,
   platform, security and privacy pitfalls, test levels and local-only verification). The agents
@@ -91,6 +98,9 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
+  existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
+  `./scripts/install.sh` only if you move or rename your local checkout.
 - Project board rule: new `Canceled` status after Done for discarded items. Canceling is the
   user's decision; the agent proposes it with the reason, closes the issue as not planned once the
   user agrees and only proposes closing the open pull request and branch.
