@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Codex CLI native `notify` adapter: forwards Codex's turn-notification payload to the
 # shared scripts/agent-notify.sh notifier. Opt-in only: this toolkit never edits the
-# base ~/.codex/config.toml (see README); add manually, one line, to use it:
+# base ~/.codex/config.toml (see docs/notifications.md); add manually, one line, to use it:
 #
 #   notify = ["bash", "-c", '"$HOME/.codex/notify/agent-notify-codex.sh" "$1"', "_"]
 #
