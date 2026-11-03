@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,42 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 MANAGED = {
+    ".claude/CLAUDE.md": "dist/claude/CLAUDE.md",
+    ".claude/rules/engineering-principles.md": "core/rules/engineering-principles.md",
+    ".claude/rules/testing.md": "core/rules/testing.md",
+    ".claude/rules/git-workflow.md": "core/rules/git-workflow.md",
+    ".claude/agents/po.md": "dist/claude/agents/po.md",
+    ".claude/agents/analyst.md": "dist/claude/agents/analyst.md",
+    ".claude/agents/architect.md": "dist/claude/agents/architect.md",
+    ".claude/agents/ux.md": "dist/claude/agents/ux.md",
+    ".claude/agents/designer.md": "dist/claude/agents/designer.md",
+    ".claude/agents/devops.md": "dist/claude/agents/devops.md",
+    ".claude/agents/tech-writer.md": "dist/claude/agents/tech-writer.md",
+    ".claude/agents/debugger.md": "dist/claude/agents/debugger.md",
+    ".claude/agents/metrics-analyst.md": "dist/claude/agents/metrics-analyst.md",
+    ".claude/agents/api-reviewer.md": "dist/claude/agents/api-reviewer.md",
+    ".claude/agents/reviewer.md": "dist/claude/agents/reviewer.md",
+    ".claude/agents/ux-reviewer.md": "dist/claude/agents/ux-reviewer.md",
+    ".claude/agents/security-reviewer.md": "dist/claude/agents/security-reviewer.md",
+    ".claude/agents/privacy-reviewer.md": "dist/claude/agents/privacy-reviewer.md",
+    ".claude/agents/db-reviewer.md": "dist/claude/agents/db-reviewer.md",
+    ".claude/agents/performance-reviewer.md": "dist/claude/agents/performance-reviewer.md",
+    ".claude/agents/dev.md": "dist/claude/agents/dev.md",
+    ".claude/agents/qa.md": "dist/claude/agents/qa.md",
+    ".claude/skills/work-session": "core/skills/work-session",
+    ".claude/skills/verify-changes": "core/skills/verify-changes",
+    ".claude/skills/flutter-dev": "core/skills/flutter-dev",
+    ".claude/skills/web-dev": "core/skills/web-dev",
+    ".claude/skills/supabase-dev": "core/skills/supabase-dev",
+    ".claude/skills/safe-refactor": "core/skills/safe-refactor",
+    ".claude/skills/java-spring-dev": "core/skills/java-spring-dev",
+    ".claude/skills/e2e-testing": "core/skills/e2e-testing",
+    ".claude/hooks/agent-notify.sh": "scripts/agent-notify.sh",
+    ".claude/hooks/agent-notify-hook.sh": "targets/claude/hooks/agent-notify-hook.sh",
+    ".codex/notify/agent-notify-codex.sh": "targets/codex/notify/agent-notify-codex.sh",
+}
+# Pre-0004 sources of every destination: what a machine installed before the move links to.
+LEGACY_SOURCES = {
     ".claude/CLAUDE.md": "claude/CLAUDE.md",
     ".claude/rules/engineering-principles.md": "claude/rules/engineering-principles.md",
     ".claude/rules/testing.md": "claude/rules/testing.md",
@@ -52,6 +89,12 @@ MANAGED = {
     ".codex/notify/agent-notify-codex.sh": "codex/notify/agent-notify-codex.sh",
 }
 MANAGED_COUNT = len(MANAGED)
+MOVED_COUNT = sum(LEGACY_SOURCES[d] != source for d, source in MANAGED.items())
+# The last commit before the neutral layout (decision record 0004): the Claude target must keep
+# installing exactly the destinations it managed there.
+PRE_0004_COMMIT = "e79c8ae9e4c284cfa9a2ca6a501591299584fae7"
+TARGETS_STATE = ".ifdev-ai-tools/targets"
+CLAUDE = ("--target", "claude")
 # Formerly managed destination and its old source; the source no longer exists in the checkout.
 RETIRED = ".claude/agents/senior-reviewer.md"
 RETIRED_SOURCE = "claude/agents/senior-reviewer.md"
@@ -103,7 +146,7 @@ class InstallerTestCase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = self.tmp / "repo with spaces"
         ignore = shutil.ignore_patterns("__pycache__")
-        for name in ("scripts", "claude", "codex"):
+        for name in ("scripts", "core", "dist", "targets", "claude", "codex"):
             shutil.copytree(REPO_ROOT / name, self.repo / name, symlinks=True, ignore=ignore)
         self.repo_real = self.repo.resolve()
         self.home = self.tmp / "home dir"
@@ -152,8 +195,8 @@ class InstallerTestCase(unittest.TestCase):
     def assert_ok(self, result: subprocess.CompletedProcess) -> None:
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def install(self) -> subprocess.CompletedProcess:
-        result = self.run_script("install.sh")
+    def install(self, *args: str) -> subprocess.CompletedProcess:
+        result = self.run_script("install.sh", *(args or CLAUDE))
         self.assert_ok(result)
         return result
 
@@ -164,7 +207,7 @@ class InstallerTestCase(unittest.TestCase):
         os.symlink(self.repo_real / RETIRED_SOURCE, path)
         return path
 
-    def run_with_retired_link_swapped(self, foreign: Path, script: str) -> subprocess.CompletedProcess:
+    def run_with_retired_link_swapped(self, foreign: Path, script: str, *args: str) -> subprocess.CompletedProcess:
         """Runs <script> with a readlink wrapper that, on the third read of the retired path
         (after the initial plan and the re-plan under the lock), replaces that link with one
         to <foreign>: a concurrent change between planning and removal."""
@@ -193,7 +236,7 @@ class InstallerTestCase(unittest.TestCase):
         wrapper.chmod(0o700)
         env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
         result = subprocess.run(
-            ["bash", str(self.repo / "scripts" / script)],
+            ["bash", str(self.repo / "scripts" / script), *args],
             env=env,
             cwd=self.tmp,
             stdout=subprocess.PIPE,
@@ -203,6 +246,11 @@ class InstallerTestCase(unittest.TestCase):
         )
         self.assertEqual(int(counter.read_text().strip()), 3, result.stdout + result.stderr)
         return result
+
+    @staticmethod
+    def target_args(script: str) -> tuple[str, ...]:
+        """A fresh machine must choose a target to install; uninstall keeps its bare form."""
+        return CLAUDE if script == "install.sh" else ()
 
     def assert_absent(self, path: Path) -> None:
         self.assertFalse(path.exists() or path.is_symlink(), path)
@@ -215,7 +263,7 @@ class InstallTests(InstallerTestCase):
         self.write_home(SETTINGS_JSON, SETTINGS_JSON_CONTENT)
         before = snapshot(self.home)
 
-        result = self.run_script("install.sh", "--dry-run")
+        result = self.run_script("install.sh", *CLAUDE, "--dry-run")
 
         self.assert_ok(result)
         self.assertIn("would back up ~/.claude/CLAUDE.md", result.stdout)
@@ -339,7 +387,7 @@ class InstallTests(InstallerTestCase):
         os.symlink(self.outside, self.home / ".claude/rules")
         before = snapshot(self.home)
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("refusing symlinked parent directory", result.stderr)
@@ -351,16 +399,27 @@ class InstallTests(InstallerTestCase):
         os.symlink(self.outside, self.home / ".ifdev-ai-tools")
         before = snapshot(self.home)
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(snapshot(self.home), before)
         self.assertEqual(list(self.outside.iterdir()), [])
 
-    def test_missing_source_aborts_before_any_change(self) -> None:
-        (self.repo / "claude/rules/testing.md").unlink()
+    def test_source_below_a_symlinked_checkout_directory_is_rejected_without_changes(self) -> None:
+        # The link would point into the checkout but load content from outside it.
+        shutil.move(str(self.repo / "core/rules"), str(self.outside / "rules"))
+        os.symlink(self.outside / "rules", self.repo / "core/rules")
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"refusing symlinked parent directory: {self.repo_real}/core/rules", result.stderr)
+        self.assertEqual(snapshot(self.home), {})
+
+    def test_missing_source_aborts_before_any_change(self) -> None:
+        (self.repo / "core/rules/testing.md").unlink()
+
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("managed source is missing", result.stderr)
@@ -369,7 +428,7 @@ class InstallTests(InstallerTestCase):
     def test_held_lock_blocks_concurrent_run(self) -> None:
         (self.home / ".ifdev-ai-tools/lock").mkdir(parents=True)
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("lock", result.stderr)
@@ -386,7 +445,7 @@ class InstallTests(InstallerTestCase):
     def test_invalid_settings_json_aborts_before_any_symlink_is_created(self) -> None:
         self.write_home(SETTINGS_JSON, "{ not json")
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not valid JSON", result.stderr)
@@ -401,7 +460,7 @@ class InstallTests(InstallerTestCase):
         (self.home / ".claude").mkdir()
         os.symlink(real, self.home / SETTINGS_JSON)
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("refusing symlinked path", result.stderr)
@@ -411,7 +470,7 @@ class InstallTests(InstallerTestCase):
     def test_malformed_managed_hooks_shape_aborts_before_any_symlink_is_created(self) -> None:
         self.write_home(SETTINGS_JSON, json.dumps({"hooks": {"Stop": "not-a-list"}}))
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('"hooks.Stop"', result.stderr)
@@ -465,7 +524,7 @@ class RetiredItemInstallTests(InstallerTestCase):
         self.link_retired_to_checkout()
         before = snapshot(self.home)
 
-        result = self.run_script("install.sh", "--dry-run")
+        result = self.run_script("install.sh", *CLAUDE, "--dry-run")
 
         self.assert_ok(result)
         self.assertIn(f"would remove retired link: ~/{RETIRED}", result.stdout)
@@ -488,7 +547,7 @@ class RetiredItemInstallTests(InstallerTestCase):
         retired = self.link_retired_to_checkout()
         foreign = self.outside / "foreign.md"
 
-        result = self.run_with_retired_link_swapped(foreign, "install.sh")
+        result = self.run_with_retired_link_swapped(foreign, "install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("changed while removing retired links", result.stderr)
@@ -520,7 +579,7 @@ class RetiredItemInstallTests(InstallerTestCase):
         os.symlink(self.outside / "agents", self.home / ".claude/agents")
         before_outside = snapshot(self.outside)
 
-        result = self.run_script("install.sh")
+        result = self.run_script("install.sh", *CLAUDE)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("refusing symlinked parent directory", result.stderr)
@@ -675,7 +734,7 @@ class RetiredSupervisionTests(InstallerTestCase):
 
         for script in ("install.sh", "uninstall.sh"):
             with self.subTest(script):
-                result = self.run_script(script, "--dry-run")
+                result = self.run_script(script, *self.target_args(script), "--dry-run")
 
                 self.assert_ok(result)
                 for destination in RETIRED_SUPERVISION:
@@ -703,7 +762,7 @@ class RetiredSupervisionTests(InstallerTestCase):
                 self.assertTrue(before)
 
                 for script in ("install.sh", "uninstall.sh"):
-                    result = self.run_script(script)
+                    result = self.run_script(script, *self.target_args(script))
 
                     self.assert_ok(result)
                     for destination in RETIRED_SUPERVISION:
@@ -800,7 +859,7 @@ class UninstallTests(InstallerTestCase):
     def test_uninstall_refuses_symlinked_parent(self) -> None:
         # A parent symlink could make a matching link outside HOME look managed.
         (self.outside / "notify").mkdir()
-        os.symlink(self.repo_real / "codex/notify/agent-notify-codex.sh", self.outside / "notify/agent-notify-codex.sh")
+        os.symlink(self.repo_real / MANAGED[".codex/notify/agent-notify-codex.sh"], self.outside / "notify/agent-notify-codex.sh")
         (self.home / ".codex").mkdir()
         os.symlink(self.outside / "notify", self.home / ".codex/notify")
         before_outside = snapshot(self.outside)
@@ -911,7 +970,7 @@ class UninstallTests(InstallerTestCase):
 
 class InstalledHookExecutionTests(InstallerTestCase):
     """The installed hook script keeps its regular, non-executable tracked file mode
-    (see claude/hooks/agent-notify-hook.sh); Claude Code must still be able to run it
+    (see targets/claude/hooks/agent-notify-hook.sh); Claude Code must still be able to run it
     through the exact managed command string written into settings.json."""
 
     def test_installed_stop_hook_runs_via_the_managed_command_despite_default_file_mode(self) -> None:
@@ -940,6 +999,300 @@ class InstalledHookExecutionTests(InstallerTestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("\a", result.stdout, result.stderr)  # no desktop/sound backend in PATH: BEL fallback
+
+
+def managed_destinations(common_sh: str) -> set[str]:
+    """Destinations of the MANAGED_ITEMS array in a common.sh text (two- or three-field entries)."""
+    block = re.search(r"^MANAGED_ITEMS=\((.*?)^\)", common_sh, re.MULTILINE | re.DOTALL).group(1)
+    return {match.split("|")[1] for match in re.findall(r'^\s*"([^"]+)"\s*$', block, re.MULTILINE)}
+
+
+class TargetTests(InstallerTestCase):
+    def state(self) -> str:
+        return (self.home / TARGETS_STATE).read_text()
+
+    def test_fresh_machine_without_target_refuses_and_changes_nothing(self) -> None:
+        self.write_siblings()
+        before = snapshot(self.home)
+        for args in ((), ("--dry-run",)):
+            with self.subTest(args=args):
+                result = self.run_script("install.sh", *args)
+
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("choose --target", result.stderr)
+                self.assertEqual(snapshot(self.home), before)
+
+    def test_unsupported_or_missing_targets_are_rejected_without_changes(self) -> None:
+        for script in ("install.sh", "uninstall.sh"):
+            for name in ("codex", "cursor", "other"):
+                with self.subTest(script=script, target=name):
+                    result = self.run_script(script, "--target", name)
+
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn(f"target '{name}' is not supported yet; available targets: claude", result.stderr)
+            with self.subTest(script=script, target=None):
+                result = self.run_script(script, "--target")
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("--target needs a value", result.stderr)
+        self.assertEqual(snapshot(self.home), {})
+
+    def test_install_records_the_target_atomically_and_reruns_unchanged(self) -> None:
+        result = self.install()
+
+        self.assertIn("recorded targets: claude", result.stdout)
+        self.assertEqual(self.state(), "claude\n")
+        # Written through a temporary file that is renamed into place: no temporary file is left.
+        self.assertEqual([p.name for p in (self.home / ".ifdev-ai-tools").iterdir()], ["targets"])
+        before = snapshot(self.home)
+
+        for args in (CLAUDE, ("--target", "all"), ("--target", "claude", "--target", "all")):
+            with self.subTest(args=args):
+                rerun = self.install(*args)
+
+                self.assertEqual(snapshot(self.home), before)
+                self.assertNotIn("recorded targets", rerun.stdout)
+                self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
+
+    def test_bare_install_reinstalls_the_recorded_targets(self) -> None:
+        self.install()
+        (self.home / ".claude/rules/testing.md").unlink()
+
+        result = self.run_script("install.sh")
+
+        self.assert_ok(result)
+        self.assert_all_links()
+        self.assertIn(f"1 linked, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
+        self.assertEqual(self.state(), "claude\n")
+
+    def test_unsafe_or_unsupported_state_refuses_without_changes(self) -> None:
+        cases = {
+            "directory": lambda path: path.mkdir(parents=True),
+            "symlink": lambda path: (path.parent.mkdir(parents=True), os.symlink(self.outside / "targets", path)),
+            "unsupported name": lambda path: (path.parent.mkdir(parents=True), path.write_text("claude\nother\n")),
+            "padded unsupported name": lambda path: (path.parent.mkdir(parents=True), path.write_text(" other \r\n")),
+            "two names on a line": lambda path: (path.parent.mkdir(parents=True), path.write_text("claude claude\n")),
+        }
+        for label, create in cases.items():
+            with self.subTest(label):
+                shutil.rmtree(self.home)
+                self.home.mkdir()
+                create(self.home / TARGETS_STATE)
+                before = snapshot(self.home)
+                for script in ("install.sh", "uninstall.sh"):
+                    result = self.run_script(script)
+
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertEqual(snapshot(self.home), before)
+
+    def test_hand_edited_state_with_whitespace_and_blank_lines_is_accepted(self) -> None:
+        self.install()
+        (self.home / TARGETS_STATE).write_text("\n  claude \t\r\n\r\n\n")
+        (self.home / ".claude/rules/testing.md").unlink()
+
+        result = self.run_script("install.sh")
+
+        self.assert_ok(result)
+        self.assert_all_links()
+        self.assertIn(f"1 linked, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
+
+        uninstall = self.run_script("uninstall.sh")
+
+        self.assert_ok(uninstall)
+        self.assertIn(f"done: {MANAGED_COUNT} removed", uninstall.stdout)
+        self.assert_absent(self.home / TARGETS_STATE)
+
+    def test_uninstall_follows_targets_recorded_while_it_waited_for_the_lock(self) -> None:
+        # A second synthetic target makes the selection able to change: the first read sees only
+        # "extra", and a concurrent run records "claude" just before the lock is taken.
+        common = self.repo / "scripts/lib/common.sh"
+        common.write_text(common.read_text().replace('AVAILABLE_TARGETS="claude"', 'AVAILABLE_TARGETS="claude extra"', 1))
+        self.install()
+        state = self.home / TARGETS_STATE
+        state.write_text("extra\n")
+        real_mkdir = shutil.which("mkdir")
+        self.assertIsNotNone(real_mkdir)
+        fake_bin = self.tmp / "fake-bin"
+        fake_bin.mkdir()
+        wrapper = fake_bin / "mkdir"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "${*: -1}" == */lock ]]; then\n'
+            f'  printf \'claude\\n\' > "{state}"\n'
+            "fi\n"
+            f'exec "{real_mkdir}" "$@"\n'
+        )
+        wrapper.chmod(0o700)
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+
+        result = subprocess.run(
+            ["bash", str(self.repo / "scripts/uninstall.sh")],
+            env=env,
+            cwd=self.tmp,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+
+        self.assert_ok(result)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assertNotIn("agent-notify-hook.sh", (self.home / SETTINGS_JSON).read_text())
+
+    def test_uninstall_target_removes_its_links_and_its_record(self) -> None:
+        self.install()
+        dry = self.run_script("uninstall.sh", *CLAUDE, "--dry-run")
+        self.assert_ok(dry)
+        self.assertIn("would record targets: none", dry.stdout)
+        self.assertEqual(self.state(), "claude\n")
+
+        result = self.run_script("uninstall.sh", *CLAUDE)
+
+        self.assert_ok(result)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assertIn(f"done: {MANAGED_COUNT} removed", result.stdout)
+        self.assertIn("recorded targets: none", result.stdout)
+        self.assert_absent(self.home / TARGETS_STATE)
+
+    def test_bare_uninstall_removes_the_recorded_targets(self) -> None:
+        self.install()
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assert_absent(self.home / TARGETS_STATE)
+        self.assertNotIn("agent-notify-hook.sh", (self.home / SETTINGS_JSON).read_text())
+
+
+class LegacyInstallTests(InstallerTestCase):
+    """A machine installed before decision record 0004 links every destination to the old source
+    paths, which keep resolving through the tracked compatibility links in claude/ and codex/."""
+
+    def link_legacy_install(self) -> None:
+        for destination, source in LEGACY_SOURCES.items():
+            path = self.home / destination
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.symlink(self.repo_real / source, path)
+
+    def test_claude_install_creates_exactly_the_pre_0004_destinations(self) -> None:
+        self.assertEqual(set(MANAGED), set(LEGACY_SOURCES))
+        self.assertEqual(managed_destinations((self.repo / "scripts/lib/common.sh").read_text()), set(MANAGED))
+
+        self.install()
+
+        links = {rel for rel, value in snapshot(self.home).items() if value[0] == "link"}
+        self.assertEqual(links, set(MANAGED))
+        self.assert_all_links()
+
+    def test_claude_destinations_match_the_pre_0004_commit(self) -> None:
+        old = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "show", f"{PRE_0004_COMMIT}:scripts/lib/common.sh"],
+            capture_output=True,
+            text=True,
+        )
+        if old.returncode != 0:
+            # Shallow clones (the CI checkout) do not contain older commits.
+            self.skipTest(f"commit {PRE_0004_COMMIT} is not available in this clone")
+        self.assertEqual(managed_destinations(old.stdout), set(MANAGED))
+
+    def test_old_links_still_resolve_after_a_pull(self) -> None:
+        self.link_legacy_install()
+
+        for destination, source in MANAGED.items():
+            installed = self.home / destination
+            new = self.repo / source
+            if new.is_dir():
+                self.assertEqual(sorted(p.name for p in installed.iterdir()), sorted(p.name for p in new.iterdir()))
+            else:
+                self.assertEqual(installed.read_bytes(), new.read_bytes(), destination)
+
+    def test_bare_install_relinks_moved_sources_without_backups_and_records_claude(self) -> None:
+        self.write_siblings()
+        self.link_legacy_install()
+
+        result = self.run_script("install.sh")
+
+        self.assert_ok(result)
+        self.assert_all_links()
+        self.assert_siblings_intact()
+        self.assertEqual(self.backup_dirs(), [])
+        self.assertEqual(result.stdout.count("(moved source)"), MOVED_COUNT)
+        self.assertIn(f"{MOVED_COUNT} linked, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
+        self.assertEqual((self.home / TARGETS_STATE).read_text(), "claude\n")
+
+        before = snapshot(self.home)
+        rerun = self.run_script("install.sh")
+        self.assert_ok(rerun)
+        self.assertEqual(snapshot(self.home), before)
+        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
+
+    def test_dry_run_on_legacy_install_reports_relinks_without_changes(self) -> None:
+        self.link_legacy_install()
+        before = snapshot(self.home)
+
+        result = self.run_script("install.sh", "--dry-run")
+
+        self.assert_ok(result)
+        self.assertEqual(result.stdout.count("would relink: "), MOVED_COUNT)
+        self.assertIn("would record targets: claude", result.stdout)
+        self.assertEqual(snapshot(self.home), before)
+
+    def test_new_source_links_without_a_state_file_are_detected_as_claude(self) -> None:
+        self.install()
+        (self.home / TARGETS_STATE).unlink()
+        before = {rel: value for rel, value in snapshot(self.home).items() if rel != TARGETS_STATE}
+
+        result = self.run_script("install.sh")
+
+        self.assert_ok(result)
+        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
+        self.assertEqual((self.home / TARGETS_STATE).read_text(), "claude\n")
+        self.assertTrue(all(snapshot(self.home).get(rel) == value for rel, value in before.items()))
+
+    def test_link_to_another_checkouts_old_source_is_backed_up_not_relinked(self) -> None:
+        other = self.outside / "claude/CLAUDE.md"
+        other.parent.mkdir()
+        other.write_text("other checkout\n")
+        (self.home / ".claude").mkdir()
+        os.symlink(other, self.home / ".claude/CLAUDE.md")
+
+        result = self.install()
+
+        self.assert_all_links()
+        self.assertNotIn("(moved source)", result.stdout)
+        self.assertIn("1 backed up", result.stdout)
+        self.assertEqual(os.readlink(self.backup_dirs()[0] / ".claude/CLAUDE.md"), str(other))
+
+    def test_bare_uninstall_removes_legacy_links_as_today(self) -> None:
+        self.write_siblings()
+        self.link_legacy_install()
+
+        result = self.run_script("uninstall.sh")
+
+        self.assert_ok(result)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assert_siblings_intact()
+        self.assertIn(f"done: {MANAGED_COUNT} removed, 0 retired removed", result.stdout)
+        self.assert_absent(self.home / TARGETS_STATE)
+
+    def test_empty_moved_list_is_accepted(self) -> None:
+        common = self.repo / "scripts/lib/common.sh"
+        content = common.read_text()
+        start = content.index("MOVED_ITEMS=(")
+        end = content.index("\n)\n", start) + 3
+        common.write_text(content[:start] + "MOVED_ITEMS=()\n" + content[end:])
+        self.link_legacy_install()
+
+        # Without the moved list the old links are foreign: backed up, never silently dropped.
+        result = self.install()
+
+        self.assert_all_links()
+        self.assertIn(f"{MOVED_COUNT} linked, {MOVED_COUNT} backed up", result.stdout)
+        self.assert_ok(self.run_script("uninstall.sh"))
 
 
 if __name__ == "__main__":

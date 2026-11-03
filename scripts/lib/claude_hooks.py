@@ -34,7 +34,7 @@ from pathlib import Path
 #
 # Explicitly invoked through "bash" rather than executed directly: the linked hook
 # script keeps this repository's regular, non-executable tracked file mode (see
-# claude/hooks/agent-notify-hook.sh), so nothing here needs its own execute bit set or
+# targets/claude/hooks/agent-notify-hook.sh), so nothing here needs its own execute bit set or
 # weakened to run.
 HOOK_COMMANDS = {
     "Stop": "bash ~/.claude/hooks/agent-notify-hook.sh stop-success",
@@ -45,7 +45,7 @@ HOOK_COMMANDS = {
 # Claude Code's documented attention-required "notification_type" values for the
 # Notification hook. Used to narrow the "matcher" this module attaches to the managed
 # Notification group below (see HOOK_MATCHERS): defense-in-depth only, since
-# claude/hooks/agent-notify-hook.sh already filters on this same field itself and must
+# targets/claude/hooks/agent-notify-hook.sh already filters on this same field itself and must
 # keep working even against a Claude Code version that ignores this matcher.
 ATTENTION_NOTIFICATION_TYPES = (
     "permission_prompt",

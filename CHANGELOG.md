@@ -8,6 +8,12 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `install.sh --target claude` and `uninstall.sh --target claude` (repeatable; `all` means every
+  available target) choose what to install or remove; `claude` is the only target so far. The
+  installed targets are recorded in `~/.ifdev-ai-tools/targets`: a bare `install.sh` reinstalls
+  them and a bare `uninstall.sh` removes them. A machine installed before targets were recorded is
+  detected as `claude`; on a machine with nothing installed, a bare `install.sh` refuses and
+  changes nothing until a target is chosen.
 - Mobile-first rule for websites and web applications in the `web-dev` skill. The phone layout comes
   first: base CSS for the phone, wider screens added with `min-width` queries, touch-sized targets,
   and checks at phone width first. The global instructions, the Dev, the UX designer, the UX
@@ -109,6 +115,15 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- `install.sh` also refuses, before changing anything, a managed source below a symlinked
+  directory of the checkout, so every installed link loads content from the checkout itself.
+- New source layout: the tool-neutral instructions, rules, agents and skills live in `core/`,
+  tool-specific files (the Claude hook, the Codex `notify` adapter) in `targets/`, and the files
+  Claude Code loads (`CLAUDE.md` and the agents) are generated into `dist/claude/` by
+  `scripts/build_targets.py` and committed. Agents declare `read_only` instead of tool lists. What
+  Claude Code loads is unchanged: the generated files are byte-identical to the previous ones, and
+  the same thirty-three destinations are installed. The validator checks that `dist/` is up to
+  date.
 - The project is renamed from `ifdev-ai-tools` to `ifdev-agent-team`. GitHub redirects the old URL,
   existing clones keep working, and the state directory stays `~/.ifdev-ai-tools`. Rerun
   `./scripts/install.sh` only if you move or rename your local checkout.
@@ -159,6 +174,11 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
+- `git pull` keeps existing installations working: the old paths in `claude/` and `codex/` are now
+  compatibility links to the new locations, kept for one release. Run `./scripts/install.sh` once
+  after pulling to move your links to the new sources; links to the old paths are relinked without
+  backups and the `claude` target is recorded. On a new machine, install with
+  `./scripts/install.sh --target claude`.
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
   `analyst`, `architect`, `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
   `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,

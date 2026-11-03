@@ -2,7 +2,7 @@
 
 The README baseline is pinned to a commit, so its numbers are compared exactly against the script
 run on that commit's tree (exported to a temporary directory), not against the working tree: edits
-to the content of `claude/CLAUDE.md` or the rules must not break the suite, but the recorded
+to the content of `core/instructions.md` or the rules must not break the suite, but the recorded
 baseline must stay true. Against the working tree only the stable invariants are checked: the same
 set of files and an internally consistent table. Adding a rule, or giving one `paths`, changes the
 set of always-loaded files and requires updating the README baseline.
@@ -72,7 +72,7 @@ class ContextBaselineAcceptanceTest(unittest.TestCase):
         report = script_report()
 
         files = [name for name, _, _ in report]
-        self.assertEqual(files[0], "claude/CLAUDE.md")
+        self.assertEqual(files[0], "dist/claude/CLAUDE.md")
         self.assertEqual(files[-1], "total")
         for name, size, tokens in report:
             self.assertEqual(tokens, -(-size // 4), name)
@@ -104,12 +104,13 @@ class ContextBaselineAcceptanceTest(unittest.TestCase):
             self.skipTest("tarfile extraction filters need Python 3.12+ or a security backport")
         commit = COMMIT.search(self.section)["commit"]
         archive = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", commit, "claude"],
+            ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", commit, "core/rules", "dist/claude"],
             capture_output=True,
         )
         if archive.returncode != 0:
-            # Shallow clones (the CI checkout) do not contain older commits.
-            self.skipTest(f"baseline commit {commit} is not available in this clone")
+            # Shallow clones (the CI checkout) do not contain older commits, and a commit before
+            # the core/ and dist/ layout (decision record 0004) has none of these paths.
+            self.skipTest(f"baseline commit {commit} is not available in this clone or predates core/ and dist/")
         root = Path(tempfile.mkdtemp(prefix="ifdev-ai-tools-baseline-"))
         self.addCleanup(shutil.rmtree, root)
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:

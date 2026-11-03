@@ -4,7 +4,11 @@
 
 This repository holds only **global** defaults that make sense for any project: engineering principles, testing and Git rules, general-purpose skills and agents. Product names, business domains, stack-specific business rules, project-specific reviewers and machine-specific paths belong in each project's own `CLAUDE.md` and `.claude/` directory, not here.
 
-Keep instructions concise and non-contradictory. Rules live in one place (`claude/rules/`); skills, agents and `claude/CLAUDE.md` reference them instead of copying them. Always-loaded files stay short; phase-specific skill procedures go in the skill's `references/` directory. See [Context efficiency](README.md#context-efficiency). Do not claim token or runtime savings that were not measured.
+Keep instructions concise and non-contradictory. Rules live in one place (`core/rules/`); skills, agents and `core/instructions.md` reference them instead of copying them. Always-loaded files stay short; phase-specific skill procedures go in the skill's `references/` directory. See [Context efficiency](README.md#context-efficiency). Do not claim token or runtime savings that were not measured.
+
+## Editing content
+
+Edit the tool-neutral sources in `core/` and the tool-specific files in `targets/<tool>/`, then run `python3 scripts/build_targets.py` to regenerate `dist/<tool>/` and commit the result with the source change. Never edit `dist/` by hand: the validator (`build_targets.py --check`) rejects stale, missing or extra generated files. Agents in `core/agents/` declare `read_only: true` or `false` instead of tool lists; each target maps it to its own permissions.
 
 ## Changing scripts
 
@@ -24,14 +28,15 @@ Keep instructions concise and non-contradictory. Rules live in one place (`claud
 ```bash
 python3 -m pip install -r requirements-dev.txt   # once
 for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
+python3 scripts/build_targets.py --check
 ./scripts/validate.sh
 python3 -m unittest discover -s tests -v
 ```
 
-Add an entry under **Unreleased** in `CHANGELOG.md` for every user-visible change; a change that adds a managed item also adds an **Upgrade** note telling installed machines to rerun `./scripts/install.sh`.
+Add an entry under **Unreleased** in `CHANGELOG.md` for every user-visible change; a change that adds, moves or retires a managed item also adds an **Upgrade** note telling installed machines to rerun `./scripts/install.sh`.
 
 All must pass locally; CI runs the same commands.
 
 ## Commits and pull requests
 
-Follow [claude/rules/git-workflow.md](claude/rules/git-workflow.md): a dedicated branch per task, one commit per logical change with the emoji Conventional Commits format, and a pull request that a human reviews and merges. Describe in the pull request what was validated and any risk to existing installations (renamed or removed managed paths affect every machine that installed the toolkit).
+Follow [core/rules/git-workflow.md](core/rules/git-workflow.md): a dedicated branch per task, one commit per logical change with the emoji Conventional Commits format, and a pull request that a human reviews and merges. Describe in the pull request what was validated and any risk to existing installations (renamed or removed managed paths affect every machine that installed the toolkit).

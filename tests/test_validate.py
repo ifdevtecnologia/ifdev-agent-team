@@ -13,6 +13,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,9 +31,13 @@ FIXTURE_ITEMS = (
     "AGENTS.md",
     "CLAUDE.md",
     ".editorconfig",
+    ".gitattributes",
     ".gitignore",
     "requirements-dev.txt",
     ".github",
+    "core",
+    "dist",
+    "targets",
     "claude",
     "codex",
     "scripts",
@@ -114,10 +119,19 @@ class ValidatorTestCase(unittest.TestCase):
         """Asserts a problem for rel regardless of the reported line number."""
         self.assertRegex(output, rf"(?m)^ERROR {re.escape(rel)}(?::\d+)?: {re.escape(message)}")
 
+    def build(self) -> None:
+        """Regenerates the fixture's dist/ after a change to its core/ or targets/ sources."""
+        subprocess.run(
+            ["python3", str(self.root / "scripts/build_targets.py")], env=self.env, check=True, capture_output=True
+        )
+
     def load_validator(self):
         spec = importlib.util.spec_from_file_location("fixture_validate", self.root / "scripts/validate.py")
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # As when run as a script, the validator imports its sibling generator from the fixture.
+        with mock.patch.dict(sys.modules), mock.patch.object(sys, "path", [str(self.root / "scripts"), *sys.path]):
+            sys.modules.pop("build_targets", None)
+            spec.loader.exec_module(module)
         return module
 
     def validate_in_process(self, validator):
@@ -165,22 +179,22 @@ def definition(name: str) -> str:
 
 class FrontmatterTests(ValidatorTestCase):
     def test_read_only_agents_must_block_write_and_edit(self) -> None:
-        self.replace("claude/agents/debugger.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
-        self.replace("claude/agents/reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
+        self.replace("dist/claude/agents/debugger.md", "disallowedTools: Write, Edit", "disallowedTools: Write")
+        self.replace("dist/claude/agents/reviewer.md", "tools: Read, Glob, Grep, Bash", "tools: Read, Glob, Grep, Bash, Edit")
         output = self.assert_fails_with()
-        self.assert_reported(output, "claude/agents/debugger.md", "read-only agent must list 'Edit' in disallowedTools")
-        self.assert_reported(output, "claude/agents/reviewer.md", "read-only agent must not allow 'Edit'")
+        self.assert_reported(output, "dist/claude/agents/debugger.md", "read-only agent must list 'Edit' in disallowedTools")
+        self.assert_reported(output, "dist/claude/agents/reviewer.md", "read-only agent must not allow 'Edit'")
 
     NEW_READ_ONLY_AGENTS = (
-        "claude/agents/analyst.md",
-        "claude/agents/architect.md",
-        "claude/agents/ux-reviewer.md",
-        "claude/agents/security-reviewer.md",
-        "claude/agents/privacy-reviewer.md",
-        "claude/agents/db-reviewer.md",
-        "claude/agents/performance-reviewer.md",
-        "claude/agents/api-reviewer.md",
-        "claude/agents/debugger.md",
+        "dist/claude/agents/analyst.md",
+        "dist/claude/agents/architect.md",
+        "dist/claude/agents/ux-reviewer.md",
+        "dist/claude/agents/security-reviewer.md",
+        "dist/claude/agents/privacy-reviewer.md",
+        "dist/claude/agents/db-reviewer.md",
+        "dist/claude/agents/performance-reviewer.md",
+        "dist/claude/agents/api-reviewer.md",
+        "dist/claude/agents/debugger.md",
     )
 
     def test_analyst_and_specialized_reviewers_must_stay_read_only(self) -> None:
@@ -200,7 +214,7 @@ class FrontmatterTests(ValidatorTestCase):
                     (self.root / rel).write_text(original, encoding="utf-8")
 
     def test_analyst_and_specialized_reviewers_are_required(self) -> None:
-        for rel in self.NEW_READ_ONLY_AGENTS:
+        for rel in self.NEW_READ_ONLY_AGENTS + tuple(r.replace("dist/claude/", "core/") for r in self.NEW_READ_ONLY_AGENTS):
             with self.subTest(agent=rel):
                 original = (self.root / rel).read_text(encoding="utf-8")
                 (self.root / rel).unlink()
@@ -211,18 +225,18 @@ class FrontmatterTests(ValidatorTestCase):
                     (self.root / rel).write_text(original, encoding="utf-8")
 
     WRITING_AGENTS = (
-        "claude/agents/ux.md",
-        "claude/agents/designer.md",
-        "claude/agents/dev.md",
-        "claude/agents/devops.md",
-        "claude/agents/tech-writer.md",
-        "claude/agents/po.md",
-        "claude/agents/metrics-analyst.md",
-        "claude/agents/qa.md",
+        "dist/claude/agents/ux.md",
+        "dist/claude/agents/designer.md",
+        "dist/claude/agents/dev.md",
+        "dist/claude/agents/devops.md",
+        "dist/claude/agents/tech-writer.md",
+        "dist/claude/agents/po.md",
+        "dist/claude/agents/metrics-analyst.md",
+        "dist/claude/agents/qa.md",
     )
 
     def test_writing_agents_are_required(self) -> None:
-        for rel in self.WRITING_AGENTS:
+        for rel in self.WRITING_AGENTS + tuple(r.replace("dist/claude/", "core/") for r in self.WRITING_AGENTS):
             with self.subTest(agent=rel):
                 original = (self.root / rel).read_text(encoding="utf-8")
                 (self.root / rel).unlink()
@@ -233,12 +247,12 @@ class FrontmatterTests(ValidatorTestCase):
                     (self.root / rel).write_text(original, encoding="utf-8")
 
     NEW_SKILLS = (
-        "claude/skills/flutter-dev/SKILL.md",
-        "claude/skills/web-dev/SKILL.md",
-        "claude/skills/supabase-dev/SKILL.md",
-        "claude/skills/safe-refactor/SKILL.md",
-        "claude/skills/java-spring-dev/SKILL.md",
-        "claude/skills/e2e-testing/SKILL.md",
+        "core/skills/flutter-dev/SKILL.md",
+        "core/skills/web-dev/SKILL.md",
+        "core/skills/supabase-dev/SKILL.md",
+        "core/skills/safe-refactor/SKILL.md",
+        "core/skills/java-spring-dev/SKILL.md",
+        "core/skills/e2e-testing/SKILL.md",
     )
 
     def test_new_skills_are_required(self) -> None:
@@ -253,101 +267,135 @@ class FrontmatterTests(ValidatorTestCase):
                     (self.root / rel).write_text(original, encoding="utf-8")
 
     def test_qa_may_write_acceptance_tests(self) -> None:
-        text = (self.root / "claude/agents/qa.md").read_text(encoding="utf-8")
+        text = (self.root / "dist/claude/agents/qa.md").read_text(encoding="utf-8")
         self.assertRegex(text, r"(?m)^tools: Read, Glob, Grep, Bash, Write, Edit$")
         self.assertNotRegex(text, r"(?m)^disallowedTools:")
         self.assert_passes()
 
     def test_read_only_agents_accept_sequence_tool_lists(self) -> None:
         self.replace(
-            "claude/agents/debugger.md",
+            "dist/claude/agents/debugger.md",
             "tools: Read, Glob, Grep, Bash\ndisallowedTools: Write, Edit",
             "tools: [Read, Glob, Grep, Bash]\ndisallowedTools: [Write, Edit]",
         )
+        # The hand edit makes the generated file stale, but the read-only check accepts the sequence form.
+        output = self.assert_fails_with("dist/claude/agents/debugger.md: generated file is stale")
+        self.assertNotIn("read-only agent", output)
+        self.assertEqual(output.count("ERROR "), 1, output)
+
+    def test_read_only_roles_must_stay_read_only_in_core(self) -> None:
+        self.replace("core/agents/reviewer.md", "read_only: true", "read_only: false")
+        self.build()
+        output = self.assert_fails_with()
+        self.assert_reported(output, "core/agents/reviewer.md", "read-only role must set 'read_only: true'")
+        self.assert_reported(output, "dist/claude/agents/reviewer.md", "read-only agent must not allow 'Write'")
+
+    def test_any_agent_marked_read_only_is_checked_in_dist(self) -> None:
+        self.replace("core/agents/dev.md", "read_only: false", "read_only: true")
+        self.build()
         self.assert_passes()
+        self.replace("dist/claude/agents/dev.md", "disallowedTools: Write, Edit\n", "")
+        output = self.assert_fails_with()
+        self.assert_reported(output, "dist/claude/agents/dev.md", "read-only agent must list 'Write' in disallowedTools")
+
+    def test_neutral_agents_need_a_boolean_read_only_and_no_tool_keys(self) -> None:
+        self.replace("core/agents/dev.md", "read_only: false", 'read_only: "no"')
+        self.replace("core/agents/qa.md", "read_only: false", "read_only: false\ntools: Read")
+        output = self.assert_fails_with()
+        self.assert_reported(output, "core/agents/dev.md", "frontmatter 'read_only' must be true or false")
+        self.assert_reported(
+            output, "core/agents/qa.md", "tool-specific key 'tools' does not belong in a neutral agent (use read_only)"
+        )
+        self.assert_reported(output, "dist", "cannot generate the target files")
 
     def test_name_mismatch_missing_description_and_duplicate_key_fail(self) -> None:
-        self.replace("claude/skills/work-session/SKILL.md", "name: work-session", "name: other-session")
-        self.replace("claude/skills/verify-changes/SKILL.md", "description:", "summary:")
-        self.replace("claude/agents/reviewer.md", "tools: Read", "name: reviewer\ntools: Read")
+        self.replace("core/skills/work-session/SKILL.md", "name: work-session", "name: other-session")
+        self.replace("core/skills/verify-changes/SKILL.md", "description:", "summary:")
+        self.replace("core/agents/reviewer.md", "read_only:", "name: reviewer\nread_only:")
         output = self.assert_fails_with()
-        self.assert_reported(output, "claude/skills/work-session/SKILL.md", "name 'other-session' must match 'work-session'")
+        self.assert_reported(output, "core/skills/work-session/SKILL.md", "name 'other-session' must match 'work-session'")
         self.assert_reported(
-            output, "claude/skills/verify-changes/SKILL.md", "frontmatter 'description' must be a non-empty string"
+            output, "core/skills/verify-changes/SKILL.md", "frontmatter 'description' must be a non-empty string"
         )
-        self.assert_reported(output, "claude/agents/reviewer.md", "duplicate frontmatter key 'name'")
+        self.assert_reported(output, "core/agents/reviewer.md", "duplicate frontmatter key 'name'")
 
     def test_invalid_yaml_frontmatter_fails(self) -> None:
-        self.write("claude/agents/bad-quote.md", '---\nname: bad-quote\ndescription: "unclosed\n---\n')
-        self.write("claude/agents/bad-colon.md", "---\nname: bad-colon\ndescription: invalid: mapping\n---\n")
+        self.write("core/agents/bad-quote.md", '---\nname: bad-quote\ndescription: "unclosed\n---\n')
+        self.write("core/agents/bad-colon.md", "---\nname: bad-colon\ndescription: invalid: mapping\n---\n")
         # SafeLoader must refuse to construct arbitrary Python objects.
         self.write(
-            "claude/agents/unsafe-tag.md",
+            "core/agents/unsafe-tag.md",
             '---\nname: unsafe-tag\ndescription: !!python/object/apply:os.system ["true"]\n---\n',
         )
         output = self.assert_fails_with()
-        for rel in ("claude/agents/bad-quote.md", "claude/agents/bad-colon.md", "claude/agents/unsafe-tag.md"):
+        for rel in ("core/agents/bad-quote.md", "core/agents/bad-colon.md", "core/agents/unsafe-tag.md"):
             self.assert_reported(output, rel, "invalid YAML frontmatter")
 
     def test_wrong_frontmatter_types_fail(self) -> None:
-        self.write("claude/agents/list-name.md", "---\nname: [list-name]\ndescription: Synthetic.\n---\n")
-        self.write("claude/agents/number-description.md", "---\nname: number-description\ndescription: 42\n---\n")
-        self.write("claude/agents/empty-description.md", "---\nname: empty-description\ndescription:\n---\n")
-        self.write("claude/agents/sequence.md", "---\n- sequence\n---\n")
+        self.write("core/agents/list-name.md", "---\nname: [list-name]\ndescription: Synthetic.\n---\n")
+        self.write("core/agents/number-description.md", "---\nname: number-description\ndescription: 42\n---\n")
+        self.write("core/agents/empty-description.md", "---\nname: empty-description\ndescription:\n---\n")
+        self.write("core/agents/sequence.md", "---\n- sequence\n---\n")
         output = self.assert_fails_with()
-        self.assert_reported(output, "claude/agents/list-name.md", "frontmatter 'name' must be a non-empty string")
-        for rel in ("claude/agents/number-description.md", "claude/agents/empty-description.md"):
+        self.assert_reported(output, "core/agents/list-name.md", "frontmatter 'name' must be a non-empty string")
+        for rel in ("core/agents/number-description.md", "core/agents/empty-description.md"):
             self.assert_reported(output, rel, "frontmatter 'description' must be a non-empty string")
-        self.assert_reported(output, "claude/agents/sequence.md", "frontmatter must be a YAML mapping")
+        self.assert_reported(output, "core/agents/sequence.md", "frontmatter must be a YAML mapping")
 
     def test_duplicate_definition_names_fail(self) -> None:
-        self.write("claude/agents/copy-reviewer.md", definition("reviewer"))
-        self.write("codex/skills/alpha/SKILL.md", definition("alpha"))
-        self.write("codex/skills/copy-alpha/SKILL.md", definition("alpha"))
+        self.write("core/agents/copy-reviewer.md", definition("reviewer"))
+        self.write("core/skills/alpha/SKILL.md", definition("alpha"))
+        self.write("core/skills/copy-alpha/SKILL.md", definition("alpha"))
         output = self.assert_fails_with(
-            "duplicate claude agent name 'reviewer'",
-            "duplicate codex skill name 'alpha'",
+            "duplicate core agent name 'reviewer'",
+            "duplicate skill name 'alpha'",
         )
-        self.assert_reported(output, "claude/agents/copy-reviewer.md", "name 'reviewer' must match 'copy-reviewer'")
+        self.assert_reported(output, "core/agents/copy-reviewer.md", "name 'reviewer' must match 'copy-reviewer'")
 
     def test_multiline_and_typed_yaml_frontmatter_passes(self) -> None:
         self.write(
-            "claude/agents/extra-agent.md",
-            "---\nname: extra-agent\ndescription: >\n  Folded synthetic text\n  across lines.\n"
-            'tools: Read, Grep\ndisable-model-invocation: true\nargument-hint: "<objective>"\n---\n',
+            "core/skills/extra-skill/SKILL.md",
+            "---\nname: extra-skill\ndescription: >\n  Folded synthetic text\n  across lines.\n"
+            'allowed-tools: Read, Grep\ndisable-model-invocation: true\nargument-hint: "<objective>"\n---\n',
         )
+        self.write(
+            "core/agents/extra-agent.md",
+            "---\nname: extra-agent\ndescription: >\n  Folded synthetic text\n  across lines.\n"
+            "read_only: false\nmodel: inherit\n---\n",
+        )
+        self.build()
         self.assert_passes()
 
     def test_skill_directory_without_skill_file_fails(self) -> None:
-        self.write("codex/skills/empty-skill/notes.md", "notes\n")
-        self.assert_fails_with("codex/skills/empty-skill: skill directory has no readable SKILL.md")
+        self.write("core/skills/empty-skill/notes.md", "notes\n")
+        self.assert_fails_with("core/skills/empty-skill: skill directory has no readable SKILL.md")
 
     def test_missing_or_unterminated_frontmatter_fails(self) -> None:
-        self.write("claude/agents/plain-agent.md", "# no frontmatter\n")
-        self.write("claude/agents/open-agent.md", "---\nname: open-agent\n")
+        self.write("core/agents/plain-agent.md", "# no frontmatter\n")
+        self.write("core/agents/open-agent.md", "---\nname: open-agent\n")
         self.assert_fails_with(
-            "claude/agents/plain-agent.md: missing frontmatter",
-            "claude/agents/open-agent.md: unterminated frontmatter",
+            "core/agents/plain-agent.md: missing frontmatter",
+            "core/agents/open-agent.md: unterminated frontmatter",
         )
 
     def test_unreadable_or_symlinked_definitions_fail(self) -> None:
-        self.make_unreadable(self.write("claude/agents/locked-agent.md", definition("locked-agent")))
-        (self.root / "claude/skills/linked-skill").mkdir()
-        os.symlink("../work-session/SKILL.md", self.root / "claude/skills/linked-skill/SKILL.md")
+        self.make_unreadable(self.write("core/agents/locked-agent.md", definition("locked-agent")))
+        (self.root / "core/skills/linked-skill").mkdir()
+        os.symlink("../work-session/SKILL.md", self.root / "core/skills/linked-skill/SKILL.md")
         self.assert_fails_with(
-            "claude/agents/locked-agent.md: agent definition is missing, unreadable or unsafe",
-            "claude/skills/linked-skill: skill directory has no readable SKILL.md",
+            "core/agents/locked-agent.md: agent definition is missing, unreadable or unsafe",
+            "core/skills/linked-skill: skill directory has no readable SKILL.md",
         )
 
     def test_tracked_definitions_deleted_from_worktree_fail(self) -> None:
-        agent = self.write("claude/agents/gone-agent.md", definition("gone-agent"))
-        skill = self.write("codex/skills/gone-skill/SKILL.md", definition("gone-skill"))
-        self.git("add", "claude/agents/gone-agent.md", "codex/skills/gone-skill/SKILL.md")
+        agent = self.write("core/agents/gone-agent.md", definition("gone-agent"))
+        skill = self.write("core/skills/gone-skill/SKILL.md", definition("gone-skill"))
+        self.git("add", "core/agents/gone-agent.md", "core/skills/gone-skill/SKILL.md")
         agent.unlink()
         skill.unlink()
         self.assert_fails_with(
-            "claude/agents/gone-agent.md: agent definition is missing, unreadable or unsafe",
-            "codex/skills/gone-skill: skill directory has no readable SKILL.md",
+            "core/agents/gone-agent.md: agent definition is missing, unreadable or unsafe",
+            "core/skills/gone-skill: skill directory has no readable SKILL.md",
         )
 
 
@@ -366,8 +414,17 @@ class ReferenceTests(ValidatorTestCase):
         self.assert_passes()
 
     def test_missing_installed_rule_reference_fails(self) -> None:
-        self.append("claude/CLAUDE.md", "\nAlso apply `~/.claude/rules/missing-rule.md`.\n")
-        self.assert_fails_with("reference ~/.claude/rules/missing-rule.md has no source claude/rules/missing-rule.md")
+        self.append("core/instructions.md", "\nAlso apply `~/.claude/rules/missing-rule.md`.\n")
+        self.assert_fails_with("core/instructions.md:", "reference ~/.claude/rules/missing-rule.md has no managed source")
+
+    def test_installed_references_resolve_through_the_managed_items(self) -> None:
+        self.append(
+            "core/rules/testing.md",
+            "\nSee `~/.claude/skills/web-dev/SKILL.md`, `~/.claude/agents/` and `~/.claude/CLAUDE.md`.\n",
+        )
+        self.assert_passes()
+        self.append("core/rules/testing.md", "\nAlso `~/.claude/skills/web-dev/missing.md`.\n")
+        self.assert_fails_with("reference ~/.claude/skills/web-dev/missing.md has no managed source")
 
     def test_unmanaged_global_paths_are_not_required(self) -> None:
         self.append("README.md", "\nSettings in `~/.claude/settings.json` stay untouched.\n")
@@ -375,8 +432,8 @@ class ReferenceTests(ValidatorTestCase):
 
 
 class SkillReferenceTests(ValidatorTestCase):
-    SKILL = "claude/skills/work-session/SKILL.md"
-    REFERENCE = "claude/skills/work-session/references/commit-proposal.md"
+    SKILL = "core/skills/work-session/SKILL.md"
+    REFERENCE = "core/skills/work-session/references/commit-proposal.md"
 
     def test_missing_mandatory_reference_fails(self) -> None:
         (self.root / self.REFERENCE).unlink()
@@ -396,30 +453,30 @@ class SkillReferenceTests(ValidatorTestCase):
         self.assert_reported(output, self.REFERENCE, "symlink points outside the repository")
 
     def test_reference_prose_needs_no_frontmatter(self) -> None:
-        self.write("claude/skills/work-session/references/extra.md", "# Extra\n\nPlain reference prose.\n")
-        self.write("claude/skills/verify-changes/references/extra.md", "Plain reference prose.\n")
+        self.write("core/skills/work-session/references/extra.md", "# Extra\n\nPlain reference prose.\n")
+        self.write("core/skills/verify-changes/references/extra.md", "Plain reference prose.\n")
         self.assert_passes()
 
     def test_references_are_checked_for_unsafe_and_obsolete_instructions(self) -> None:
         self.append(self.REFERENCE, "\nThen run `sudo make install`.\n")
-        self.append("claude/skills/verify-changes/references/commit-messages.md", "\nNever push automatically.\n")
+        self.append("core/skills/verify-changes/references/commit-messages.md", "\nNever push automatically.\n")
         output = self.assert_fails_with()
         self.assert_reported(output, self.REFERENCE, "unsafe prescription without a prohibition (sudo)")
         self.assert_reported(
             output,
-            "claude/skills/verify-changes/references/commit-messages.md",
+            "core/skills/verify-changes/references/commit-messages.md",
             "obsolete delivery instruction (unconditional push prohibition)",
         )
 
 
 class ManagedItemsTests(ValidatorTestCase):
     COMMON = "scripts/lib/common.sh"
-    NOTIFY_ITEM = '"codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"'
+    NOTIFY_ITEM = '"targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude"'
 
     def test_required_agents_must_be_managed(self) -> None:
         for agent in ("analyst", "architect", "ux", "designer", "security-reviewer", "privacy-reviewer", "db-reviewer", "performance-reviewer", "dev", "devops", "tech-writer", "po", "debugger", "api-reviewer", "metrics-analyst"):
             with self.subTest(agent=agent):
-                item = f'  "claude/agents/{agent}.md|.claude/agents/{agent}.md"\n'
+                item = f'  "dist/claude/agents/{agent}.md|.claude/agents/{agent}.md|claude"\n'
                 original = (self.root / self.COMMON).read_text(encoding="utf-8")
                 self.replace(self.COMMON, item, "")
                 try:
@@ -427,29 +484,30 @@ class ManagedItemsTests(ValidatorTestCase):
                     self.assert_reported(
                         output,
                         self.COMMON,
-                        f"agent 'claude/agents/{agent}.md' must be managed as '.claude/agents/{agent}.md'",
+                        f"agent 'dist/claude/agents/{agent}.md' must be managed as '.claude/agents/{agent}.md'",
                     )
                 finally:
                     (self.root / self.COMMON).write_text(original, encoding="utf-8")
 
     def test_agent_managed_at_wrong_destination_fails(self) -> None:
-        self.replace(self.COMMON, "|.claude/agents/ux-reviewer.md", "|.claude/agents/other.md")
-        self.assert_fails_with("agent 'claude/agents/ux-reviewer.md' must be managed as '.claude/agents/ux-reviewer.md'")
+        self.replace(self.COMMON, "|.claude/agents/ux-reviewer.md|", "|.claude/agents/other.md|")
+        self.assert_fails_with("agent 'dist/claude/agents/ux-reviewer.md' must be managed as '.claude/agents/ux-reviewer.md'")
 
     def test_base_codex_config_can_never_be_managed(self) -> None:
-        self.replace(self.COMMON, self.NOTIFY_ITEM, '"codex/notify/agent-notify-codex.sh|.codex/config.toml"')
+        self.replace(self.COMMON, self.NOTIFY_ITEM, '"targets/codex/notify/agent-notify-codex.sh|.codex/config.toml|claude"')
         self.assert_fails_with("managed items must never replace the base Codex config")
 
     def test_missing_source_duplicate_destination_and_malformed_entry_fail(self) -> None:
         self.replace(
             self.COMMON,
             self.NOTIFY_ITEM,
-            self.NOTIFY_ITEM + '\n  "claude/missing.md|.claude/CLAUDE.md"\n  unquoted|entry',
+            self.NOTIFY_ITEM + '\n  "claude/missing.md|.claude/CLAUDE.md|claude"\n  unquoted|entry\n  "core/rules/testing.md|.claude/rules/two-fields.md"',
         )
         output = self.assert_fails_with()
         self.assert_reported(output, self.COMMON, "managed source 'claude/missing.md' is missing or unsafe")
         self.assert_reported(output, self.COMMON, "duplicate managed destination '.claude/CLAUDE.md'")
         self.assert_reported(output, self.COMMON, "malformed MANAGED_ITEMS entry")
+        self.assertEqual(output.count("malformed MANAGED_ITEMS entry"), 2, output)
 
     def test_missing_managed_items_array_fails(self) -> None:
         self.replace(self.COMMON, "MANAGED_ITEMS=(", "OTHER_ITEMS=(")
@@ -513,8 +571,8 @@ class ContentTests(ValidatorTestCase):
         self.assert_fails_with("docs/notes.md:1: hardcoded machine-specific home path")
 
     def test_product_term_fails(self) -> None:
-        self.append("claude/rules/testing.md", "\nCover " + "house" + "hold membership rules.\n")
-        self.assert_fails_with("claude/rules/testing.md", "product/domain-specific term")
+        self.append("core/rules/testing.md", "\nCover " + "house" + "hold membership rules.\n")
+        self.assert_fails_with("core/rules/testing.md", "product/domain-specific term")
 
     def test_validator_source_is_not_exempt_from_product_terms(self) -> None:
         self.append("scripts/validate.py", "\n# " + "la" + "relo\n")
@@ -522,7 +580,7 @@ class ContentTests(ValidatorTestCase):
 
     def test_obsolete_delivery_instructions_fail(self) -> None:
         self.append(
-            "claude/CLAUDE.md",
+            "core/instructions.md",
             "\nEvery commit requires explicit user approval.\n"
             "\nAsk for approval before each commit.\n"
             "\nCommit somente com aprovação explícita.\n"
@@ -530,20 +588,24 @@ class ContentTests(ValidatorTestCase):
             "\nNunca faça push automaticamente.\n"
             "\nClaude must never push.\n",
         )
-        # Installed Codex content has no implementer-only allowance either.
-        self.write("codex/skills/other/SKILL.md", definition("other") + "\nClaude must never push.\n")
+        # Installed skills have no implementer-only allowance either.
+        self.write("core/skills/other/SKILL.md", definition("other") + "\nClaude must never push.\n")
         output = self.assert_fails_with()
 
         def count(rel: str, label: str) -> int:
             return len(re.findall(rf"(?m)^ERROR {re.escape(rel)}:\d+: obsolete delivery instruction \({label}\)", output))
 
-        self.assertEqual(count("claude/CLAUDE.md", "per-commit approval"), 3, output)
-        self.assertEqual(count("claude/CLAUDE.md", "unconditional push prohibition"), 3, output)
-        self.assertEqual(count("codex/skills/other/SKILL.md", "unconditional push prohibition"), 1, output)
+        self.assertEqual(count("core/instructions.md", "per-commit approval"), 3, output)
+        self.assertEqual(count("core/instructions.md", "unconditional push prohibition"), 3, output)
+        self.assertEqual(count("core/skills/other/SKILL.md", "unconditional push prohibition"), 1, output)
+        # The generated copy carries the same content and is checked too.
+        self.build()
+        output = self.assert_fails_with()
+        self.assertEqual(count("dist/claude/CLAUDE.md", "per-commit approval"), 3, output)
 
     def test_narrower_delivery_restrictions_pass(self) -> None:
         self.append(
-            "claude/rules/git-workflow.md",
+            "core/rules/git-workflow.md",
             "\nWhen the user explicitly restricts delivery, do not push and ask for approval before each commit.\n"
             "\nUnless the task authorizes delivery, ask for approval before each commit.\n"
             "\nDo not push without authorization.\n"
@@ -553,7 +615,7 @@ class ContentTests(ValidatorTestCase):
 
     def test_unsafe_prescriptions_fail(self) -> None:
         self.append(
-            "claude/skills/work-session/SKILL.md",
+            "core/skills/work-session/SKILL.md",
             "\nAlways run `claude --dangerously-skip-permissions` to save time.\n"
             "\nCommit with `git commit --no-verify` when hooks are slow.\n"
             "\n- Publish with `git push --force origin main`.\n"
@@ -569,7 +631,7 @@ class ContentTests(ValidatorTestCase):
 
     def test_prohibitions_of_unsafe_actions_pass(self) -> None:
         self.append(
-            "claude/skills/work-session/SKILL.md",
+            "core/skills/work-session/SKILL.md",
             "\nNever run `claude --dangerously-skip-permissions`, `git push --force` or `sudo`.\n"
             "\n- Do not commit with\n  `--no-verify`, e.g. to skip slow hooks.\n"
             "\nAgents must not enable auto-merge; deny `git reset --hard`.\n"
@@ -579,22 +641,22 @@ class ContentTests(ValidatorTestCase):
 
     def test_prohibition_does_not_cover_a_later_sentence(self) -> None:
         self.append(
-            "claude/skills/work-session/SKILL.md",
+            "core/skills/work-session/SKILL.md",
             "\nNever skip reviews. Then run `sudo make install`.\n",
         )
         self.assert_fails_with("unsafe prescription without a prohibition (sudo)")
 
     def test_commit_emoji_mismatch_fails(self) -> None:
-        self.append("claude/CLAUDE.md", "\nExample: `\U0001f41b feat: add export`.\n")
-        self.assert_fails_with("claude/CLAUDE.md", "commit emoji does not match type 'feat'")
+        self.append("core/instructions.md", "\nExample: `\U0001f41b feat: add export`.\n")
+        self.assert_fails_with("core/instructions.md", "commit emoji does not match type 'feat'")
 
     def test_missing_variation_selector_fails(self) -> None:
         recycle_without_selector = chr(0x267B)
-        self.append("claude/CLAUDE.md", f"\nExample: `{recycle_without_selector} refactor: extract parser`.\n")
+        self.append("core/instructions.md", f"\nExample: `{recycle_without_selector} refactor: extract parser`.\n")
         self.assert_fails_with("commit emoji does not match type 'refactor'")
 
     def test_incomplete_commit_table_fails(self) -> None:
-        path = self.root / "claude/rules/git-workflow.md"
+        path = self.root / "core/rules/git-workflow.md"
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         path.write_text("".join(line for line in lines if "| `perf` |" not in line), encoding="utf-8")
         self.assert_fails_with("commit type table must list exactly the nine emoji/type pairs")
@@ -644,17 +706,17 @@ class SensitiveContentTests(ValidatorTestCase):
     def test_other_diagnostics_never_echo_credential_values(self) -> None:
         github_value = "gh" + "p_" + "A" * 36
         self.write(
-            "claude/agents/dup-key.md",
+            "core/agents/dup-key.md",
             f"---\nname: dup-key\ndescription: Synthetic.\n{github_value}: a\n{github_value}: b\n---\n",
         )
-        self.write("claude/agents/bad-tag.md", f"---\nname: bad-tag\ndescription: !{github_value} value\n---\n")
+        self.write("core/agents/bad-tag.md", f"---\nname: bad-tag\ndescription: !{github_value} value\n---\n")
         self.append("README.md", f"\nSee [missing](docs/{github_value}.md).\n")
         # A function body must be a compound command, so bash reports the word as the unexpected token.
         self.write("scripts/broken-token.sh", f"#!/usr/bin/env bash\nf() {github_value}\n")
 
         output = self.assert_fails_with()
-        self.assert_reported(output, "claude/agents/dup-key.md", "duplicate frontmatter key")
-        self.assert_reported(output, "claude/agents/bad-tag.md", "invalid YAML frontmatter")
+        self.assert_reported(output, "core/agents/dup-key.md", "duplicate frontmatter key")
+        self.assert_reported(output, "core/agents/bad-tag.md", "invalid YAML frontmatter")
         self.assert_reported(output, "README.md", "broken local link")
         self.assert_reported(output, "scripts/broken-token.sh", "bash syntax error")
         self.assertNotIn(github_value, output)
@@ -695,7 +757,7 @@ class SensitiveContentTests(ValidatorTestCase):
             "README.md",
             "docs/authentication.md",
             "docs/author.md",
-            "claude/skills/verify-changes/SKILL.md",
+            "core/skills/verify-changes/SKILL.md",
             "scripts/validate.py",
             ".config/tool/settings.toml",
             ".github/workflows/validate.yml",
@@ -766,6 +828,107 @@ class SensitiveContentTests(ValidatorTestCase):
         output = self.assert_fails_with("docs/guide.md: parent path is a symlink or not a directory (not read)")
         self.assertNotIn("possible credential", output)
         self.assertNotIn(MARKER, output)
+
+
+class GeneratedTargetTests(ValidatorTestCase):
+    COMMON = "scripts/lib/common.sh"
+
+    def test_stale_missing_and_extra_generated_files_fail(self) -> None:
+        self.replace("core/agents/dev.md", "Senior developer", "Senior engineer")
+        (self.root / "dist/claude/CLAUDE.md").unlink()
+        self.write("dist/claude/agents/hand-written.md", definition("hand-written"))
+        output = self.assert_fails_with()
+        hint = "; run python3 scripts/build_targets.py"
+        self.assert_reported(output, "dist/claude/agents/dev.md", "generated file is stale" + hint)
+        self.assert_reported(output, "dist/claude/CLAUDE.md", "generated file is missing" + hint)
+        self.assert_reported(output, "dist/claude/agents/hand-written.md", "file is not produced by the generator" + hint)
+
+    def test_regenerated_output_passes(self) -> None:
+        self.replace("core/agents/dev.md", "Senior developer", "Senior engineer")
+        self.append("core/instructions.md", "\nOne more synthetic paragraph.\n")
+        self.build()
+        self.assert_passes()
+        self.assertIn("Senior engineer", (self.root / "dist/claude/agents/dev.md").read_text(encoding="utf-8"))
+
+    def test_missing_generator_stops_validation(self) -> None:
+        (self.root / "scripts/build_targets.py").unlink()
+        self.assert_fails_with("No module named 'build_targets'")
+
+
+class CompatLinkTests(ValidatorTestCase):
+    def test_compat_links_are_required_with_their_exact_targets(self) -> None:
+        (self.root / "claude/rules").unlink()
+        (self.root / "claude/agents").unlink()
+        os.symlink("../core/agents", self.root / "claude/agents")
+        output = self.assert_fails_with()
+        self.assert_reported(output, "claude/rules", "compatibility link must be a symlink to '../core/rules'")
+        self.assert_reported(output, "claude/agents", "compatibility link must be a symlink to '../dist/claude/agents'")
+
+    def test_dangling_compat_link_fails(self) -> None:
+        shutil.rmtree(self.root / "targets/codex")
+        output = self.assert_fails_with("codex/notify: compatibility link is dangling")
+        self.assertIn("targets/codex/notify/agent-notify-codex.sh: required file is missing", output)
+
+    def test_unlisted_symlink_inside_the_repository_fails(self) -> None:
+        os.symlink("../core/rules/testing.md", self.root / "docs-testing.md")
+        self.assert_fails_with("docs-testing.md: symlink is not a listed compatibility link")
+
+    def test_retired_source_recreated_through_a_compat_link_fails(self) -> None:
+        # claude/agents is a compat link, so this lands in dist/claude/agents/senior-reviewer.md.
+        self.write("claude/agents/senior-reviewer.md", definition("senior-reviewer"))
+        output = self.assert_fails_with()
+        self.assert_reported(
+            output, "scripts/lib/common.sh", "retired source 'claude/agents/senior-reviewer.md' still exists in the checkout"
+        )
+
+
+class MovedAndTargetItemsTests(ValidatorTestCase):
+    COMMON = "scripts/lib/common.sh"
+    MOVED_ITEM = '"claude/CLAUDE.md|.claude/CLAUDE.md"'
+
+    def test_moved_item_must_map_a_managed_destination_from_a_gone_source(self) -> None:
+        self.write("docs/old-instructions.md", "old\n")
+        self.replace(
+            self.COMMON,
+            self.MOVED_ITEM,
+            self.MOVED_ITEM
+            + '\n  "claude/rules/old.md|.claude/rules/not-managed.md"'
+            + '\n  "core/rules/testing.md|.claude/rules/testing.md"'
+            + '\n  "docs/old-instructions.md|.claude/rules/git-workflow.md"'
+            + '\n  "claude/rules/testing.md|.claude/rules/engineering-principles.md"'
+            + "\n  malformed|moved",
+        )
+        output = self.assert_fails_with()
+        self.assert_reported(output, self.COMMON, "moved destination '.claude/rules/not-managed.md' is not a managed destination")
+        self.assert_reported(
+            output, self.COMMON, "moved source 'core/rules/testing.md' is still the managed source of '.claude/rules/testing.md'"
+        )
+        self.assert_reported(
+            output, self.COMMON, "moved source 'docs/old-instructions.md' still exists outside the compatibility links"
+        )
+        self.assert_reported(
+            output,
+            self.COMMON,
+            "moved source 'claude/rules/testing.md' does not resolve to the managed source of"
+            " '.claude/rules/engineering-principles.md'",
+        )
+        self.assert_reported(output, self.COMMON, "malformed MOVED_ITEMS entry")
+        self.assertNotIn("moved source 'claude/CLAUDE.md'", output)
+
+    def test_missing_moved_items_array_fails_and_an_empty_one_passes(self) -> None:
+        content = (self.root / self.COMMON).read_text(encoding="utf-8")
+        start = content.index("MOVED_ITEMS=(")
+        end = content.index("\n)\n", start) + 3
+        (self.root / self.COMMON).write_text(content[:start] + "MOVED_ITEMS=()\n" + content[end:], encoding="utf-8")
+        self.assert_passes()
+        self.replace(self.COMMON, "MOVED_ITEMS=()", "OTHER_MOVED=()")
+        self.assert_fails_with("MOVED_ITEMS array not found")
+
+    def test_managed_item_targets_must_be_available(self) -> None:
+        self.replace(self.COMMON, "|.claude/rules/testing.md|claude", "|.claude/rules/testing.md|claude,cursor")
+        self.assert_fails_with("managed item '.claude/rules/testing.md' has unsupported targets: cursor")
+        self.replace(self.COMMON, 'AVAILABLE_TARGETS="claude"', "OTHER_TARGETS=claude")
+        self.assert_fails_with("AVAILABLE_TARGETS not found")
 
 
 if __name__ == "__main__":

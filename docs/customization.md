@@ -6,17 +6,17 @@ This guide is for the tech lead of a team that adopts the toolkit. It shows how 
 
 | Global (this toolkit, installed into `~/.claude/`) | Project (versioned in each repository) |
 | --- | --- |
-| Lifecycle, team roles and when each role runs ([`claude/CLAUDE.md`](../claude/CLAUDE.md)) | Stack, architecture and module layout |
-| Engineering principles, testing and Git rules ([`claude/rules/`](../claude/rules/)) | Build, lint, test and validation commands |
-| The seventeen team agents ([`claude/agents/`](../claude/agents/)) | Domain and business rules, glossary |
-| General-purpose and stack skills ([`claude/skills/`](../claude/skills/)) | Rules for one area of the code (`.claude/rules/` with `paths`) |
+| Lifecycle, team roles and when each role runs ([`core/instructions.md`](../core/instructions.md)) | Stack, architecture and module layout |
+| Engineering principles, testing and Git rules ([`core/rules/`](../core/rules/)) | Build, lint, test and validation commands |
+| The seventeen team agents ([`core/agents/`](../core/agents/)) | Domain and business rules, glossary |
+| General-purpose and stack skills ([`core/skills/`](../core/skills/)) | Rules for one area of the code (`.claude/rules/` with `paths`) |
 | Changelog convention, safety and delivery limits | Project reviewers (`.claude/agents/`) and procedures (`.claude/skills/`) |
 
 Do not put product names, business domains or project reviewers in the toolkit; see [CONTRIBUTING.md](../CONTRIBUTING.md#scope). Changes to the global defaults go through a pull request to this repository.
 
 ## The precedence rule
 
-The installed [`claude/CLAUDE.md`](../claude/CLAUDE.md) states:
+The global instructions ([`core/instructions.md`](../core/instructions.md), installed as `~/.claude/CLAUDE.md`) state:
 
 > Project instructions (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.claude/skills/`, `.claude/agents/`) take precedence when more specific or explicitly conflicting; state the tradeoff when you follow them.
 
@@ -74,20 +74,20 @@ Below are common overrides the global rules explicitly allow; other more specifi
 
 | Situation | What the global rule says | What to write in the project |
 | --- | --- | --- |
-| No GitHub Project board | [git-workflow.md](../claude/rules/git-workflow.md#project-board): without a GitHub Project, propose creating one once, *unless the project's instructions name another tracker or opt out*. | `Work tracking: this project does not use a GitHub Project board; do not propose one.` or `Work tracking: issues live in <tracker>; reference them as <issue key format>.` |
-| Board without preview or staging | [git-workflow.md](../claude/rules/git-workflow.md#project-board): statuses that do not apply to the product are skipped; without a preview or staging, an item goes from the merge to To Deploy, or to Done when nothing is deployed. | `Board: there is no preview or staging; after the merge, items go to To Deploy (Done when nothing is deployed).` |
-| No `CHANGELOG.md` | [claude/CLAUDE.md](../claude/CLAUDE.md#changelog): the changelog entry is required *when the project keeps a `CHANGELOG.md`*. | Nothing is needed. If you record changes elsewhere, say where: `Release notes: add an entry to <release notes file> instead of a CHANGELOG.md.` |
-| Stricter Git workflow | [git-workflow.md](../claude/rules/git-workflow.md): it applies *unless the project documents a stricter workflow*; scopes follow the ones the project documents. | `Git: branch names include the issue number (<type>/<issue>-<topic>); commit scopes are <scope list>; pull requests need two human approvals.` |
-| Own validation commands | [testing.md](../claude/rules/testing.md): follow the project's testing conventions and select commands from the project. | A `Validation` section with the exact non-interactive commands, as in the [`AGENTS.md` template](templates/project/AGENTS.md). |
-| Different testing tools or conventions | [testing.md](../claude/rules/testing.md): explicit project conflicts take precedence and must be explained. | `Testing: unit tests live next to the source as <pattern>; we do not write snapshot tests because <reason>.` |
-| Code conventions that differ from the principles | [engineering-principles.md](../claude/rules/engineering-principles.md): on explicit conflict, follow the project's conventions and explain the tradeoff. | `Conventions: <convention> because <reason>.` |
+| No GitHub Project board | [git-workflow.md](../core/rules/git-workflow.md#project-board): without a GitHub Project, propose creating one once, *unless the project's instructions name another tracker or opt out*. | `Work tracking: this project does not use a GitHub Project board; do not propose one.` or `Work tracking: issues live in <tracker>; reference them as <issue key format>.` |
+| Board without preview or staging | [git-workflow.md](../core/rules/git-workflow.md#project-board): statuses that do not apply to the product are skipped; without a preview or staging, an item goes from the merge to To Deploy, or to Done when nothing is deployed. | `Board: there is no preview or staging; after the merge, items go to To Deploy (Done when nothing is deployed).` |
+| No `CHANGELOG.md` | [core/instructions.md](../core/instructions.md#changelog): the changelog entry is required *when the project keeps a `CHANGELOG.md`*. | Nothing is needed. If you record changes elsewhere, say where: `Release notes: add an entry to <release notes file> instead of a CHANGELOG.md.` |
+| Stricter Git workflow | [git-workflow.md](../core/rules/git-workflow.md): it applies *unless the project documents a stricter workflow*; scopes follow the ones the project documents. | `Git: branch names include the issue number (<type>/<issue>-<topic>); commit scopes are <scope list>; pull requests need two human approvals.` |
+| Own validation commands | [testing.md](../core/rules/testing.md): follow the project's testing conventions and select commands from the project. | A `Validation` section with the exact non-interactive commands, as in the [`AGENTS.md` template](templates/project/AGENTS.md). |
+| Different testing tools or conventions | [testing.md](../core/rules/testing.md): explicit project conflicts take precedence and must be explained. | `Testing: unit tests live next to the source as <pattern>; we do not write snapshot tests because <reason>.` |
+| Code conventions that differ from the principles | [engineering-principles.md](../core/rules/engineering-principles.md): on explicit conflict, follow the project's conventions and explain the tradeoff. | `Conventions: <convention> because <reason>.` |
 
 The toolkit offers no project opt-out for these, so do not write project instructions that try to relax them:
 
 - the Git workflow in a looser direction: a project can only make it stricter;
-- the safety rules in `claude/CLAUDE.md` (secrets, destructive operations, permissions and hooks, the user's work) and the deploy and remote-operation limits;
+- the safety rules in `core/instructions.md` (secrets, destructive operations, permissions and hooks, the user's work) and the deploy and remote-operation limits;
 - the completion rule in `testing.md`: mandatory checks and test coverage for meaningful behavior stay mandatory;
-- the team flow: roles are skipped only on the criteria `claude/CLAUDE.md` defines, and never silently.
+- the team flow: roles are skipped only on the criteria `core/instructions.md` defines, and never silently.
 
 An explicit restriction from the user in a session still wins over any project or global default.
 

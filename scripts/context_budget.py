@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Estimates the context that the installed global instructions load in every session.
 
-Always loaded: `claude/CLAUDE.md` and every Markdown file under `claude/rules/` (searched
+Reported for the Claude target, the only one so far. Always loaded: the generated
+`dist/claude/CLAUDE.md` and every Markdown file under `core/rules/` (searched
 recursively, as Claude Code does) without a non-empty `paths` key in its YAML frontmatter. Rules
 with `paths` patterns load only when Claude reads matching files, so they are listed as on demand
 and not counted. A rule whose frontmatter cannot be parsed, or whose `paths` is empty, is counted
@@ -21,8 +22,8 @@ from pathlib import Path
 from validate import Report, parse_frontmatter
 
 BYTES_PER_TOKEN = 4
-ENTRY_POINT = "claude/CLAUDE.md"
-RULES_DIR = "claude/rules"
+ENTRY_POINT = "dist/claude/CLAUDE.md"
+RULES_DIR = "core/rules"
 
 
 def estimate_tokens(size: int) -> int:

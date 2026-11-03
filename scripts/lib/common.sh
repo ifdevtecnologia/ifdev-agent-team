@@ -2,9 +2,52 @@
 # Shared helpers for install.sh and uninstall.sh. Sourced, never executed directly.
 # Kept compatible with Bash 3.2 (macOS default): no mapfile, no empty-array expansion.
 
-# Managed items as "<source relative to the repository>|<destination relative to $HOME>".
+# Managed items as "<source relative to the repository>|<destination relative to $HOME>|<targets>",
+# where <targets> is the comma-separated list of install targets that own the item.
 # Only these exact paths are ever linked or unlinked; their parent directories are never replaced.
 MANAGED_ITEMS=(
+  "dist/claude/CLAUDE.md|.claude/CLAUDE.md|claude"
+  "core/rules/engineering-principles.md|.claude/rules/engineering-principles.md|claude"
+  "core/rules/testing.md|.claude/rules/testing.md|claude"
+  "core/rules/git-workflow.md|.claude/rules/git-workflow.md|claude"
+  "dist/claude/agents/po.md|.claude/agents/po.md|claude"
+  "dist/claude/agents/analyst.md|.claude/agents/analyst.md|claude"
+  "dist/claude/agents/architect.md|.claude/agents/architect.md|claude"
+  "dist/claude/agents/ux.md|.claude/agents/ux.md|claude"
+  "dist/claude/agents/designer.md|.claude/agents/designer.md|claude"
+  "dist/claude/agents/devops.md|.claude/agents/devops.md|claude"
+  "dist/claude/agents/tech-writer.md|.claude/agents/tech-writer.md|claude"
+  "dist/claude/agents/debugger.md|.claude/agents/debugger.md|claude"
+  "dist/claude/agents/metrics-analyst.md|.claude/agents/metrics-analyst.md|claude"
+  "dist/claude/agents/reviewer.md|.claude/agents/reviewer.md|claude"
+  "dist/claude/agents/ux-reviewer.md|.claude/agents/ux-reviewer.md|claude"
+  "dist/claude/agents/security-reviewer.md|.claude/agents/security-reviewer.md|claude"
+  "dist/claude/agents/privacy-reviewer.md|.claude/agents/privacy-reviewer.md|claude"
+  "dist/claude/agents/db-reviewer.md|.claude/agents/db-reviewer.md|claude"
+  "dist/claude/agents/performance-reviewer.md|.claude/agents/performance-reviewer.md|claude"
+  "dist/claude/agents/api-reviewer.md|.claude/agents/api-reviewer.md|claude"
+  "dist/claude/agents/dev.md|.claude/agents/dev.md|claude"
+  "dist/claude/agents/qa.md|.claude/agents/qa.md|claude"
+  "core/skills/work-session|.claude/skills/work-session|claude"
+  "core/skills/verify-changes|.claude/skills/verify-changes|claude"
+  "core/skills/flutter-dev|.claude/skills/flutter-dev|claude"
+  "core/skills/web-dev|.claude/skills/web-dev|claude"
+  "core/skills/supabase-dev|.claude/skills/supabase-dev|claude"
+  "core/skills/safe-refactor|.claude/skills/safe-refactor|claude"
+  "core/skills/java-spring-dev|.claude/skills/java-spring-dev|claude"
+  "core/skills/e2e-testing|.claude/skills/e2e-testing|claude"
+  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters (the Codex
+  # adapter stays with the claude target, as it was before targets existed).
+  "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh|claude"
+  "targets/claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh|claude"
+  "targets/codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh|claude"
+)
+
+# Sources that moved to a new path (decision record 0004), as "<old source>|<destination>". A
+# destination that is still an exact link to this checkout's old source belongs to the toolkit:
+# install.sh relinks it to the new source without a backup and uninstall.sh removes it. The old
+# paths stay resolvable for one release through the tracked compatibility links in claude/ and codex/.
+MOVED_ITEMS=(
   "claude/CLAUDE.md|.claude/CLAUDE.md"
   "claude/rules/engineering-principles.md|.claude/rules/engineering-principles.md"
   "claude/rules/testing.md|.claude/rules/testing.md"
@@ -35,13 +78,11 @@ MANAGED_ITEMS=(
   "claude/skills/safe-refactor|.claude/skills/safe-refactor"
   "claude/skills/java-spring-dev|.claude/skills/java-spring-dev"
   "claude/skills/e2e-testing|.claude/skills/e2e-testing"
-  # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters.
-  "scripts/agent-notify.sh|.claude/hooks/agent-notify.sh"
   "claude/hooks/agent-notify-hook.sh|.claude/hooks/agent-notify-hook.sh"
   "codex/notify/agent-notify-codex.sh|.codex/notify/agent-notify-codex.sh"
 )
 
-# Formerly managed items, same format. Their sources no longer exist; install.sh and
+# Formerly managed items, as "<old source>|<destination>". Their sources no longer exist; install.sh and
 # uninstall.sh remove a destination only when it is still an exact link to this checkout's
 # old source, and leave anything else at that path untouched.
 RETIRED_ITEMS=(
@@ -54,8 +95,17 @@ RETIRED_ITEMS=(
 RETIRED_PLAN=()
 RETIRED_REMOVED=0
 
+# Install targets that --target accepts, in their canonical order. codex is planned and cursor
+# is deferred (decision record 0004); both are refused until their items exist.
+AVAILABLE_TARGETS="claude"
+REQUESTED_TARGETS=""
+RECORDED_TARGETS=""
+SELECTED_TARGETS=""
+
 STATE_DIR_REL=".ifdev-ai-tools"
 BACKUPS_DIR_REL="$STATE_DIR_REL/backups"
+# The installed targets, one name per line. Written only under the lock.
+TARGETS_FILE_REL="$STATE_DIR_REL/targets"
 LOCK_DIR=""
 
 log() { printf '%s\n' "$*"; }
@@ -66,7 +116,120 @@ die() {
 }
 
 item_source() { printf '%s' "${1%%|*}"; }
-item_destination() { printf '%s' "${1#*|}"; }
+item_destination() {
+  local rest=${1#*|}
+  printf '%s' "${rest%%|*}"
+}
+# Only for MANAGED_ITEMS, the one table with a third field.
+item_targets() { printf '%s' "${1##*|}"; }
+
+# True when the space-separated <list> contains <name>.
+list_contains() {
+  local name
+  for name in $1; do
+    [[ "$name" == "$2" ]] && return 0
+  done
+  return 1
+}
+
+# True when the managed <item> is owned by a target in the space-separated <targets>.
+item_in_targets() {
+  local name owners
+  owners=$(item_targets "$1")
+  for name in $2; do
+    list_contains "${owners//,/ }" "$name" && return 0
+  done
+  return 1
+}
+
+# Prints the names of the space-separated <list> in canonical order, without duplicates.
+canonical_targets() {
+  local name result=""
+  for name in $AVAILABLE_TARGETS; do
+    list_contains "$1" "$name" && result="${result:+$result }$name"
+  done
+  printf '%s' "$result"
+}
+
+# Validates a --target value (exit 2 on an unsupported one) and adds it to REQUESTED_TARGETS.
+add_requested_target() {
+  local name=$1
+  if [[ "$name" == "all" ]]; then
+    REQUESTED_TARGETS=$AVAILABLE_TARGETS
+    return 0
+  fi
+  if ! list_contains "$AVAILABLE_TARGETS" "$name"; then
+    error "target '$name' is not supported yet; available targets: $AVAILABLE_TARGETS"
+    exit 2
+  fi
+  REQUESTED_TARGETS=$(canonical_targets "$REQUESTED_TARGETS $name")
+}
+
+# Prints the old source of a moved <destination>, or nothing when it did not move.
+moved_source() {
+  local item
+  [[ ${#MOVED_ITEMS[@]} -gt 0 ]] || return 0
+  for item in "${MOVED_ITEMS[@]}"; do
+    if [[ "$(item_destination "$item")" == "$1" ]]; then
+      item_source "$item"
+      return 0
+    fi
+  done
+}
+
+# True when <destination> is an exact link to the moved item's old source in this checkout.
+is_moved_link() {
+  local old
+  old=$(moved_source "$1")
+  [[ -n "$old" ]] && is_managed_link "$HOME/$1" "$REPO_ROOT/$old"
+}
+
+# Reads ~/.ifdev-ai-tools/targets into RECORDED_TARGETS (empty when the file is absent).
+# Refuses an unsafe state directory or file and any name this checkout does not support.
+read_recorded_targets() {
+  local file="$HOME/$TARGETS_FILE_REL" problem name
+  RECORDED_TARGETS=""
+  problem=$(parent_problem "$STATE_DIR_REL")
+  [[ -z "$problem" ]] || die "$problem"
+  [[ -e "$file" || -L "$file" ]] || return 0
+  [[ -f "$file" && ! -L "$file" ]] || die "targets state is not a regular file: $file"
+  while IFS= read -r name || [[ -n "$name" ]]; do
+    # Tolerates hand edits: surrounding whitespace, CRLF line endings and blank lines.
+    name=${name#"${name%%[![:space:]]*}"}
+    name=${name%"${name##*[![:space:]]}"}
+    [[ -n "$name" ]] || continue
+    list_contains "$AVAILABLE_TARGETS" "$name" || die "unsupported target '$name' recorded in $file"
+    RECORDED_TARGETS=$(canonical_targets "$RECORDED_TARGETS $name")
+  done <"$file"
+}
+
+# True when any managed destination is an exact link to this checkout, at its current or its
+# old (moved) source: a machine installed before targets were recorded.
+has_legacy_install() {
+  local item destination_rel
+  for item in "${MANAGED_ITEMS[@]}"; do
+    destination_rel=$(item_destination "$item")
+    if is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Writes the space-separated <targets> atomically (temporary file, then rename); an empty list
+# removes the file. Call only while holding the lock, after read_recorded_targets.
+write_recorded_targets() {
+  local file="$HOME/$TARGETS_FILE_REL" tmp name
+  if [[ -z "$1" ]]; then
+    rm -f -- "$file"
+    return 0
+  fi
+  tmp=$(mktemp "$HOME/$STATE_DIR_REL/targets.XXXXXX")
+  for name in $1; do
+    printf '%s\n' "$name"
+  done >"$tmp"
+  mv -f -- "$tmp" "$file"
+}
 
 require_commands() {
   local cmd
@@ -83,10 +246,11 @@ require_home() {
   [[ -d "$HOME" ]] || die "HOME is not a directory: $HOME"
 }
 
-# Prints a problem when a directory between $HOME and <relative dir> is a symlink or not a
-# directory. Following such a parent could write into, or unlink from, a tree outside HOME.
+# Prints a problem when a directory between <base> (default $HOME) and <relative dir> is a
+# symlink or not a directory. Following such a parent could write into, or unlink from, a tree
+# outside <base>.
 parent_problem() {
-  local rel_dir=$1 path=$HOME part
+  local rel_dir=$1 path=${2:-$HOME} part
   local -a parts
   [[ "$rel_dir" == "." || -z "$rel_dir" ]] && return 0
   IFS=/ read -r -a parts <<<"$rel_dir"
