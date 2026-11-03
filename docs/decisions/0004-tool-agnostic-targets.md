@@ -32,7 +32,7 @@ The owner wants the toolkit to be tool-agnostic, with Claude Code, OpenAI Codex 
 
 A per-tool plugin set (0003's C) stays rejected: no Codex global instructions and Cursor plugins need copies.
 
-## Decision (proposed)
+## Decision
 
 Adopt **B**. Sources become tool-neutral; every tool-specific file is either a small hand-written adapter in `targets/<tool>/` or generated into `dist/<tool>/`, committed and checked fresh by the validator.
 
@@ -126,7 +126,7 @@ The owner accepted the recommended defaults:
 
 ## Open questions
 
-Blocking (owner), with the recommended default:
+Resolved: the owner answered every blocking question below on 2026-11-02 (see [Owner decisions](#owner-decisions-2026-11-02)). Kept for the record, with the recommended default:
 
 1. Bare `install.sh` on a fresh machine: fail with "choose `--target`" and change nothing (default), or install `claude` as before.
 2. Generated output committed in `dist/` (default) or git-ignored and built at install time.

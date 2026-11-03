@@ -90,7 +90,7 @@ cd ifdev-agent-team
 
 The entry-point scripts are versioned with the executable bit (the validator enforces it). If your checkout lost it, `bash scripts/install.sh` works the same way.
 
-The clone location is free: links point to wherever the repository lives, so keep the checkout in place after installing. Updating is a normal `git pull`; the links already point to the updated files. If you move the checkout, run `./scripts/install.sh` again from the new location (the old, now dangling links are backed up and replaced).
+The clone location is free: links point to wherever the repository lives, so keep the checkout in place after installing. Updating is a normal `git pull`; the links already point to the updated files. If you move the checkout, run `./scripts/install.sh --target claude` again from the new location (the old, now dangling links are backed up and replaced); a bare run may refuse there, because nothing links to the new location yet and a checkout installed before targets were recorded has no recorded target.
 
 `--target` chooses what to install; `claude` is the only target so far (`all` means every available target). The installed targets are recorded in `~/.ifdev-ai-tools/targets`, so a later bare `./scripts/install.sh` reinstalls them. A machine installed before targets were recorded (any link to this checkout) is treated as `claude`; on a machine with nothing installed, a bare `./scripts/install.sh` refuses and changes nothing until you choose a target.
 
