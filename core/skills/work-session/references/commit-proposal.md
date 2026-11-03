@@ -1,6 +1,6 @@
 # Commit proposal format
 
-Read this only when delivery is not authorized and commits must be proposed instead of created. Messages follow `~/.claude/rules/git-workflow.md`; check them with `verify-changes`.
+Read this only when delivery is not authorized and commits must be proposed instead of created. Messages follow the `git-workflow` rule; check them with `verify-changes`.
 
 Per commit:
 

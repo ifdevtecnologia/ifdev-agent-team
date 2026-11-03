@@ -5,7 +5,7 @@ description: Stack guidance for implementing, testing or reviewing a change in a
 
 # Java and Spring Boot development
 
-Apply this on top of the project's own instructions, which win when they are more specific: its `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, build configuration, static analysis setup and the patterns already in the codebase. General rules stay in `~/.claude/rules/engineering-principles.md` and `~/.claude/rules/testing.md`; this skill adds only what is specific to Java and Spring.
+Apply this on top of what the project defines, which wins when it is more specific: the project's instructions, build configuration, static analysis setup and the patterns already in the codebase. General rules stay in the `engineering-principles` and `testing` rules; this skill adds only what is specific to Java and Spring.
 
 ## Before writing code
 

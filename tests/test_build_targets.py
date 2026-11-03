@@ -1,12 +1,14 @@
 """Tests for scripts/build_targets.py.
 
-Generator behavior is tested on copies of the sources in temporary directories; the golden test
-compares the committed Claude output with the installed files of the last commit before the
-neutral layout (decision record 0004), read from Git rather than from hard-coded copies.
+Generator behavior is tested on copies of the sources in temporary directories; the golden tests
+compare the committed Claude output (files, agent frontmatter, adapter, footer and the exact body
+wording) with the installed files of the last commit before the neutral layout (decision record
+0004), read from Git rather than from hard-coded copies.
 """
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -28,10 +30,71 @@ def git_show(commit: str, rel: str) -> bytes | None:
     return result.stdout if result.returncode == 0 else None
 
 
-class GoldenTest(unittest.TestCase):
-    """Slice A of 0004 moves files without changing what Claude Code loads."""
+def frontmatter(text: str) -> str:
+    """The frontmatter block of a Markdown definition, delimiters included."""
+    lines = text.split("\n")
+    return "\n".join(lines[: lines.index("---", 1) + 1])
 
-    def test_generated_claude_files_are_byte_identical_to_the_pre_0004_sources(self) -> None:
+
+def split_frontmatter(text: str) -> tuple[str, str]:
+    """(frontmatter with its delimiters, body); a text without frontmatter is all body."""
+    if not text.startswith("---\n"):
+        return "", text
+    head = frontmatter(text)
+    return head, text[len(head) :]
+
+
+# Slice B of decision record 0004 rewords the neutral text and changes nothing else. Applied in
+# order to the bodies of the pre-0004 files, these edits must give the generated bodies exactly:
+# any other wording change, deletion or insertion fails the golden test.
+NEUTRAL_WORDING = (
+    ("Blocked Write/Edit tools do not prevent writing through Bash;", "Even where file-edit tools are blocked, the shell can still write;"),
+    (r"\bBash\b", "the shell"),
+    ("the project's `CLAUDE.md`, `AGENTS.md`", "the project's instructions"),
+    ("read its `~/.claude/skills/<name>/SKILL.md`", "use that skill"),
+    (r"`~/\.claude/rules/([\w-]+)\.md`", r"the `\1` rule"),
+    (r"`~/\.claude/skills/([\w-]+)/SKILL\.md`", r"the `\1` skill"),
+)
+FRESH_CONTEXT_FALLBACK = (
+    "the tool cannot start a role in a fresh context, run each role in a new session with a written"
+    " hand-off (objective, acceptance criteria, scope and the previous role's report); when that is not"
+    ' possible either, state "independent review not performed" for that role and report PARTIAL. When '
+)
+# One-off sentences, applied before NEUTRAL_WORDING; each must occur exactly once in its file.
+ONE_OFF_WORDING = {
+    "CLAUDE.md": (
+        (
+            "Project instructions (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.claude/skills/`, `.claude/agents/`)",
+            "The **project's instructions** are its `AGENTS.md` plus the coding tool's own project files (for"
+            " example `CLAUDE.md` and `.claude/` with its rules, skills and agents, or `.codex/`); they",
+        ),
+        ("Project-specific reviewers (`.claude/agents/`),", "Project-specific reviewers defined in the project's instructions,"),
+        ("agents read a skill at `~/.claude/skills/<name>/SKILL.md`", "agents use a skill by name"),
+        ("never skip a role silently. When ", "never skip a role silently. When " + FRESH_CONTEXT_FALLBACK),
+    ),
+    "agents/db-reviewer.md": (
+        (
+            "read `~/.claude/skills/supabase-dev/SKILL.md` or `~/.claude/skills/java-spring-dev/SKILL.md`",
+            "use the `supabase-dev` or `java-spring-dev` skill",
+        ),
+    ),
+    "agents/security-reviewer.md": (
+        (
+            "If the project provides a specialized security or access reviewer in `.claude/agents/`,",
+            "If the project's instructions provide a specialized security or access reviewer,",
+        ),
+    ),
+}
+
+
+class GoldenTest(unittest.TestCase):
+    """The generated Claude files (CLAUDE.md and the agents) are unchanged across decision record
+    0004 except for the planned edits (rules and skills are linked from core/ and not compared here):
+    slice A moved the files unchanged, and slice B only prepends the adapter, appends the agent
+    footer and applies the wording edits listed above, so the files, the agent frontmatter (tool
+    lists included), the adapter and footer positions and the exact bodies are compared."""
+
+    def setUp(self) -> None:
         listing = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "ls-tree", "--name-only", PRE_0004_COMMIT, "claude/agents/"],
             capture_output=True,
@@ -40,15 +103,66 @@ class GoldenTest(unittest.TestCase):
         if listing.returncode != 0:
             # Shallow clones (the CI checkout) do not contain older commits.
             self.skipTest(f"commit {PRE_0004_COMMIT} is not available in this clone")
-        old_agents = sorted(Path(rel).name for rel in listing.stdout.split())
-        self.assertEqual(old_agents, sorted(p.name for p in (REPO_ROOT / "dist/claude/agents").iterdir()))
+        self.old_agents = sorted(Path(rel).name for rel in listing.stdout.split())
+        self.adapter = (REPO_ROOT / "targets/claude/adapter.md").read_text(encoding="utf-8")
+        self.footer = (REPO_ROOT / "targets/claude/agent-footer.md").read_text(encoding="utf-8")
 
-        pairs = {"claude/CLAUDE.md": "dist/claude/CLAUDE.md"}
-        pairs.update({f"claude/agents/{name}": f"dist/claude/agents/{name}" for name in old_agents})
-        for old, new in pairs.items():
-            with self.subTest(file=new):
-                self.assertEqual((REPO_ROOT / new).read_bytes(), git_show(PRE_0004_COMMIT, old))
+    def test_the_same_agents_are_generated(self) -> None:
+        self.assertEqual(self.old_agents, sorted(p.name for p in (REPO_ROOT / "dist/claude/agents").iterdir()))
 
+    def test_agent_frontmatter_including_tool_lists_is_unchanged(self) -> None:
+        for name in self.old_agents:
+            with self.subTest(agent=name):
+                old = git_show(PRE_0004_COMMIT, f"claude/agents/{name}").decode("utf-8")
+                new = (REPO_ROOT / f"dist/claude/agents/{name}").read_text(encoding="utf-8")
+                self.assertEqual(frontmatter(new), frontmatter(old))
+
+    def test_the_adapter_comes_first_and_every_agent_ends_with_the_footer(self) -> None:
+        self.assertTrue(self.adapter.strip() and self.footer.strip(), "the Claude adapter and footer are empty")
+        claude_md = (REPO_ROOT / "dist/claude/CLAUDE.md").read_text(encoding="utf-8")
+        self.assertTrue(claude_md.startswith(self.adapter.rstrip("\n") + "\n\n"))
+        self.assertIn("# Global engineering instructions", claude_md)
+        for name in self.old_agents:
+            with self.subTest(agent=name):
+                agent = (REPO_ROOT / f"dist/claude/agents/{name}").read_text(encoding="utf-8")
+                self.assertTrue(agent.endswith("\n\n" + self.footer))
+                self.assertEqual(agent.count(self.footer.strip()), 1)
+
+    def generated_body(self, rel: str) -> str:
+        """A dist/claude file without the adapter or the agent footer, as the old file ended."""
+        text = (REPO_ROOT / "dist/claude" / rel).read_text(encoding="utf-8")
+        if rel == "CLAUDE.md":
+            prefix = self.adapter.rstrip("\n") + "\n\n"
+            self.assertTrue(text.startswith(prefix), "the adapter does not come first")
+            return text[len(prefix) :]
+        suffix = "\n\n" + self.footer
+        self.assertTrue(text.endswith(suffix), f"{rel} does not end with the footer")
+        return text[: -len(suffix)] + "\n"
+
+    def test_bodies_differ_from_the_old_files_only_by_the_listed_wording_edits(self) -> None:
+        names = ["CLAUDE.md", *(f"agents/{name}" for name in self.old_agents)]
+        unused = {pattern for pattern, _ in NEUTRAL_WORDING}
+        for rel in names:
+            with self.subTest(file=rel):
+                head, body = split_frontmatter(git_show(PRE_0004_COMMIT, f"claude/{rel}").decode("utf-8"))
+                for old, new in ONE_OFF_WORDING.get(rel, ()):
+                    self.assertEqual(body.count(old), 1, f"one-off edit source not found once: {old!r}")
+                    body = body.replace(old, new)
+                for pattern, replacement in NEUTRAL_WORDING:
+                    body, count = re.subn(pattern, replacement, body)
+                    if count:
+                        unused.discard(pattern)
+                self.assertEqual(self.generated_body(rel), head + body)
+        self.assertEqual(unused, set(), "wording edits that no file needs")
+        self.assertEqual(set(ONE_OFF_WORDING) - set(names), set(), "one-off edits for files that are not generated")
+
+    def test_the_adapter_and_footer_stay_small(self) -> None:
+        # Decision record 0004: an adapter under 1 KB and a footer of two or three lines.
+        self.assertLess(len(self.adapter.encode("utf-8")), 1024)
+        self.assertLessEqual(len(self.footer.strip().split("\n")), 3)
+
+
+class FreshnessTest(unittest.TestCase):
     def test_committed_output_is_fresh(self) -> None:
         self.assertEqual(build_targets.problems(REPO_ROOT), [])
 

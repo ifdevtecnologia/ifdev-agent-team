@@ -18,7 +18,11 @@
 # payload still falls back to a plain "complete" ping below, never to "blocked".
 set -uo pipefail
 
-NOTIFY="$HOME/.claude/hooks/agent-notify.sh"
+# The shared notifier is installed next to this adapter by the Codex target; a Claude-target
+# install (which has also installed this adapter since before targets existed) has it in the
+# Claude hooks directory instead.
+NOTIFY="$HOME/.codex/notify/agent-notify.sh"
+[[ -x "$NOTIFY" ]] || NOTIFY="$HOME/.claude/hooks/agent-notify.sh"
 
 # Extracts a top-level JSON string field with a small, dependency-free pattern match.
 # Never evaluates the input; on anything unexpected it falls back to a fixed default.

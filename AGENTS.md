@@ -7,6 +7,7 @@ These instructions are for working **on** this repository. They are not installe
 - This repository is the global source of truth for the files listed in `MANAGED_ITEMS` (`scripts/lib/common.sh`). Keep content general: no product names, business domains, project-specific reviewers or machine-specific paths.
 - Preserve compatibility for machines that already installed the toolkit. Removing a managed path requires moving it to `RETIRED_ITEMS`, and moving a source to a new path requires listing its old path in `MOVED_ITEMS`, updating the validator's required files, the tests and the README, and explaining the migration in the pull request.
 - Rules are defined once in `core/rules/`; other files reference them instead of duplicating content.
+- `core/` is tool-neutral: it names rules, skills and roles ("the `testing` rule", "the `web-dev` skill") and says "the project's instructions"; tool paths and tool wording go in `targets/<tool>/` (adapter and agent footer). The validator enforces this.
 
 ## Scripts
 

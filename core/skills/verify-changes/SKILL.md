@@ -6,12 +6,12 @@ argument-hint: "[diff | all | commit | <area or path>]"
 
 # Verify changes
 
-Input: `$ARGUMENTS`. Without an argument, verify the current task's diff; do not guess a base branch.
-Work from the repository root. The rule sources are `~/.claude/rules/testing.md`, `~/.claude/rules/engineering-principles.md` and `~/.claude/rules/git-workflow.md` (in the toolkit repository: `claude/rules/`). Use them without duplicating their content here.
+Input: the request that invoked this skill (`diff`, `all`, `commit` or an area or path). When it names none, verify the current task's diff; do not guess a base branch.
+Work from the repository root. The rule sources are the `testing`, `engineering-principles` and `git-workflow` rules. Use them without duplicating their content here.
 
 ## Discover the commands
 
-1. Read the project instructions: `CLAUDE.md`, `AGENTS.md` and, under `.claude/rules/`, the rules for the changed areas (verification sections, when present).
+1. Read the project's instructions, including the rules for the changed areas (verification sections, when present).
 2. Read manifests, scripts (`package.json`, `Makefile`, `scripts/`, `pyproject.toml`, `pubspec.yaml`, etc.) and the CI configuration.
 3. Prefer the command the project already uses, in its non-interactive form (no watch mode, formatters in check mode). Do not invent a missing script or assume an aggregate script exists.
 4. Inspect a script before its first execution: a name such as `test` or `check` does not guarantee the absence of remote calls, deploys or data resets.
@@ -33,7 +33,7 @@ Do not update lockfiles or format files unrelated to the task just to run a chec
 
 Before finishing, review the diff against the self-review checklist in `engineering-principles.md`: correctness, security (secrets, authorization, input validation), error handling, unnecessary complexity and overengineering, duplication, dead code and deprecated APIs. Confirm no obvious unjustified violations were introduced. Record relevant findings and tradeoffs without demanding refactors of unrelated code.
 
-When commit messages are proposed (or `$ARGUMENTS` asks for `commit`), apply [the commit message checks](references/commit-messages.md).
+When commit messages are proposed (or the request that invoked this skill asks for `commit`), apply [the commit message checks](references/commit-messages.md).
 
 ## Result
 

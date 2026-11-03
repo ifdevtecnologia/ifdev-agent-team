@@ -5,7 +5,7 @@ description: Guidance for writing and running automated acceptance and end-to-en
 
 # Acceptance and end-to-end testing
 
-The levels and coverage rules are in `~/.claude/rules/testing.md`; stack details are in the stack skills (`flutter-dev`, `web-dev`, `supabase-dev`, `java-spring-dev`). This skill adds how to turn acceptance criteria into stable tests above the unit level.
+The levels and coverage rules are in the `testing` rule; stack details are in the stack skills (`flutter-dev`, `web-dev`, `supabase-dev`, `java-spring-dev`). This skill adds how to turn acceptance criteria into stable tests above the unit level.
 
 ## Choose the level
 

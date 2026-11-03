@@ -413,18 +413,28 @@ class ReferenceTests(ValidatorTestCase):
         self.append("README.md", "\n```\n[example](does/not/exist.md)\n```\n")
         self.assert_passes()
 
+    # Installed paths are allowed outside core/ (tool-neutral since decision record 0004), for
+    # example in the README, the target adapters and the generated files.
     def test_missing_installed_rule_reference_fails(self) -> None:
-        self.append("core/instructions.md", "\nAlso apply `~/.claude/rules/missing-rule.md`.\n")
-        self.assert_fails_with("core/instructions.md:", "reference ~/.claude/rules/missing-rule.md has no managed source")
+        self.append("README.md", "\nAlso apply `~/.claude/rules/missing-rule.md`.\n")
+        self.assert_fails_with("README.md:", "reference ~/.claude/rules/missing-rule.md has no managed source")
 
     def test_installed_references_resolve_through_the_managed_items(self) -> None:
         self.append(
-            "core/rules/testing.md",
-            "\nSee `~/.claude/skills/web-dev/SKILL.md`, `~/.claude/agents/` and `~/.claude/CLAUDE.md`.\n",
+            "README.md",
+            "\nSee `~/.claude/skills/web-dev/SKILL.md`, `~/.claude/agents/`, `~/.claude/CLAUDE.md` and"
+            " `~/.codex/notify/agent-notify-codex.sh`.\n",
         )
         self.assert_passes()
-        self.append("core/rules/testing.md", "\nAlso `~/.claude/skills/web-dev/missing.md`.\n")
+        self.append("README.md", "\nAlso `~/.claude/skills/web-dev/missing.md`.\n")
         self.assert_fails_with("reference ~/.claude/skills/web-dev/missing.md has no managed source")
+
+    def test_references_in_the_target_adapter_are_checked(self) -> None:
+        self.append("targets/claude/agent-footer.md", "Also `~/.claude/rules/missing-rule.md`.\n")
+        self.build()
+        output = self.assert_fails_with("reference ~/.claude/rules/missing-rule.md has no managed source")
+        self.assert_reported(output, "targets/claude/agent-footer.md", "reference ~/.claude/rules/missing-rule.md has no managed source")
+        self.assertNotIn("tool-specific", output)
 
     def test_unmanaged_global_paths_are_not_required(self) -> None:
         self.append("README.md", "\nSettings in `~/.claude/settings.json` stay untouched.\n")
@@ -562,6 +572,55 @@ class ManagedItemsTests(ValidatorTestCase):
         start = content.index("RETIRED_ITEMS=(")
         end = content.index("\n)\n", start) + 3
         (self.root / self.COMMON).write_text(content[:start] + "RETIRED_ITEMS=()\n" + content[end:], encoding="utf-8")
+        self.assert_passes()
+
+
+class ToolNeutralCoreTests(ValidatorTestCase):
+    """core/ names rules, skills and roles; tool paths and wording live in targets/ (decision record 0004)."""
+
+    def test_tool_specific_text_in_core_fails(self) -> None:
+        cases = {
+            "core/instructions.md": ("Apply `~/.claude/rules/testing.md`.", "tool home path '~/.claude'"),
+            "core/rules/testing.md": ("See ~/.codex/AGENTS.md.", "tool home path '~/.codex'"),
+            "core/agents/dev.md": ("Rules in `~/.cursor` apply.", "tool home path '~/.cursor'"),
+            "core/agents/reviewer.md": ("Run `ls $HOME/.claude/agents`.", "tool home path '$HOME/.claude'"),
+            "core/skills/safe-refactor/SKILL.md": ('Use "${HOME}/.codex/notify".', "tool home path '${HOME}/.codex'"),
+            "core/rules/git-workflow.md": ("Check ${HOME}/.cursor.", "tool home path '${HOME}/.cursor'"),
+            "core/skills/work-session/SKILL.md": ("Input: `$ARGUMENTS`.", "$ARGUMENTS placeholder '$ARGUMENTS'"),
+            "core/skills/verify-changes/references/commit-messages.md": (
+                "Load it with the Skill tool.",
+                "tool name 'Skill tool'",
+            ),
+            "core/agents/qa.md": ("Never use the Agent tool.", "tool name 'Agent tool'"),
+            "core/skills/web-dev/SKILL.md": ("The rules are in claude/rules/.", "toolkit source path 'claude/rules'"),
+        }
+        for rel, (text, message) in cases.items():
+            with self.subTest(rel=rel):
+                original = (self.root / rel).read_text(encoding="utf-8")
+                self.append(rel, f"\n{text}\n")
+                self.build()
+
+                output = self.assert_fails_with()
+                self.assert_reported(output, rel, f"tool-specific {message} in core/")
+                (self.root / rel).write_text(original, encoding="utf-8")
+                self.build()
+
+    def test_tool_neutral_wording_and_project_paths_in_core_pass(self) -> None:
+        self.append(
+            "core/instructions.md",
+            "\nProject files such as `CLAUDE.md`, `.claude/rules/`, `.codex/` and `.cursor/rules/` are project"
+            " instructions. Use the `testing` rule and the `web-dev` skill; pass the request that invoked this"
+            " skill. An agent tooling note, `~/.claudeish`, `$HOME/.claude-backup` and `${HOME}/.config` are not"
+            " tool homes.\n",
+        )
+        self.build()
+        self.assert_passes()
+
+    def test_tool_specific_text_outside_core_passes(self) -> None:
+        self.append(
+            "README.md",
+            "\nInput: `$ARGUMENTS` via the Skill tool, from `~/.claude/rules/testing.md` or `$HOME/.codex`.\n",
+        )
         self.assert_passes()
 
 

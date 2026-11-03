@@ -221,6 +221,30 @@ class CodexNotifyAdapterTests(unittest.TestCase):
         (call,) = self.calls()
         self.assertEqual(call, ["codex", "complete", "Codex finished its turn"])
 
+    def test_prefers_the_notifier_next_to_the_adapter(self) -> None:
+        codex_log = self.tmp / "codex-log.txt"
+        codex_notify_dir = self.home / ".codex" / "notify"
+        codex_notify_dir.mkdir(parents=True)
+        codex_fake = codex_notify_dir / "agent-notify.sh"
+        codex_fake.write_text(FAKE_NOTIFY.replace('"$LOG"', f"'{codex_log}'"), encoding="utf-8")
+        codex_fake.chmod(0o700)
+
+        result = self.run_adapter('{"last-assistant-message":"hi"}')
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(codex_log.read_text(encoding="utf-8"), "codex\ncomplete\nhi\n===END===\n")
+
+    def test_falls_back_to_the_claude_notifier_when_the_codex_one_is_not_executable(self) -> None:
+        codex_notify_dir = self.home / ".codex" / "notify"
+        codex_notify_dir.mkdir(parents=True)
+        (codex_notify_dir / "agent-notify.sh").write_text(FAKE_NOTIFY, encoding="utf-8")  # not executable
+
+        result = self.run_adapter('{"last-assistant-message":"hi"}')
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.calls(), [["codex", "complete", "hi"]])
+
     def test_missing_notifier_never_fails(self) -> None:
         (self.home / ".claude" / "hooks" / "agent-notify.sh").unlink()
 
