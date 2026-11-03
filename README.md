@@ -340,15 +340,15 @@ Moving skill procedures to `references/` shortened the skill entrypoints; no byt
 
 `python3 scripts/context_budget.py` (needs the pinned dev dependency) lists the files the Claude target loads in every session: the generated `dist/claude/CLAUDE.md` and each Markdown file under `core/rules/` (searched recursively) without a non-empty `paths` frontmatter key. Rules with `paths` patterns are listed as on demand and not counted. Tokens are **estimated** as `ceil(bytes / 4)`, a rough average for English Markdown, not a tokenizer count; the real number depends on the model's tokenizer.
 
-Baseline at commit `dac3291` (estimate):
+Baseline at commit `24c72c9` (estimate):
 
 | File | Bytes | ~Tokens |
 | --- | ---: | ---: |
-| `dist/claude/CLAUDE.md` | 13336 | 3334 |
+| `dist/claude/CLAUDE.md` | 14199 | 3550 |
 | `core/rules/engineering-principles.md` | 6727 | 1682 |
-| `core/rules/git-workflow.md` | 7080 | 1770 |
+| `core/rules/git-workflow.md` | 7510 | 1878 |
 | `core/rules/testing.md` | 7495 | 1874 |
-| **Total** | **34638** | **8660** |
+| **Total** | **35931** | **8983** |
 
 No rule is on demand yet. Compare against this baseline before claiming a context saving.
 
