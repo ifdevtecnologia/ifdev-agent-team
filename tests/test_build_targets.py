@@ -88,7 +88,8 @@ ONE_OFF_WORDING = {
 
 
 class GoldenTest(unittest.TestCase):
-    """What Claude Code loads is unchanged across decision record 0004 except for the planned edits:
+    """The generated Claude files (CLAUDE.md and the agents) are unchanged across decision record
+    0004 except for the planned edits (rules and skills are linked from core/ and not compared here):
     slice A moved the files unchanged, and slice B only prepends the adapter, appends the agent
     footer and applies the wording edits listed above, so the files, the agent frontmatter (tool
     lists included), the adapter and footer positions and the exact bodies are compared."""
