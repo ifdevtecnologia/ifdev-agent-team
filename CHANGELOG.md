@@ -8,6 +8,10 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Mobile-first rule for websites and web applications in the `web-dev` skill. The phone layout comes
+  first: base CSS for the phone, wider screens added with `min-width` queries, touch-sized targets,
+  and checks at phone width first. The global instructions, the Dev, the UX designer, the UX
+  reviewer and QA now follow it, unless the project documents otherwise.
 - `designer` global agent: a senior visual and brand designer for logos and monograms, visual
   identity (palette, typography, icon and favicon, lockups, usage rules) and graphic assets. It
   proposes several distinct options with their rationale, respects the user's references and

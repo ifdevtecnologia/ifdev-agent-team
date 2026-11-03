@@ -20,8 +20,19 @@ Apply this on top of the project's own instructions, which win when they are mor
 - Handle every state a user can see: loading, empty, error, success and partial data. Keep the user's input when a request fails.
 - Forms: validate on the client for feedback and on the server for trust; show errors next to their fields and announce them to assistive technology.
 - Accessibility: semantic HTML first (buttons, links, headings, landmarks, labels), ARIA only to fill gaps, full keyboard operation with visible focus, contrast from the design tokens, text alternatives, and reduced motion respected.
-- Responsive and resilient layout: mobile first, no horizontal scroll, text that can grow, and content that still works when scripts are slow.
+- Resilient layout: no horizontal scroll, text that can grow, and content that still works when scripts are slow.
 - Performance: ship as little JavaScript as the page needs, lazy-load routes and heavy components, size and lazy-load images, and avoid layout shifts. Measure before optimizing.
+
+## Mobile-first
+
+Websites and web applications are mobile-first unless the project documents otherwise:
+
+- Design and build the phone layout first (about 360–390 CSS px wide), still usable at 320 CSS px with no horizontal scroll (WCAG reflow); larger screens add to it, they do not take away from a desktop layout.
+- In CSS the base rules are the phone rules, and wider layouts are added with `min-width` media or container queries. Use `max-width` queries only for a narrow exception, never as the main structure.
+- Content and primary actions come first in the document order and stay reachable on the phone; navigation collapses into an accessible menu instead of being hidden.
+- Touch first: targets of at least 44×44 CSS px (WCAG's 24×24 is the floor; a project that chooses less documents why), no behavior that depends on hover, and inputs with the right `type`, `inputmode` and `autocomplete` for on-screen keyboards.
+- Keep the phone fast: images sized for the viewport (`srcset`, `sizes`), lazy-loaded below the fold, and no heavy script before the first content.
+- Verify at phone width first, then at tablet and desktop widths, including the menu, forms and dialogs.
 
 ## Framework notes
 

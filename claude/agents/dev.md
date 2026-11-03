@@ -13,7 +13,7 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules that apply to the area
 
 ## How to work
 
-1. When the change touches a stack with a global skill, read its `~/.claude/skills/<name>/SKILL.md` (`flutter-dev`, `web-dev`, `supabase-dev`, `java-spring-dev`) before writing code, and `~/.claude/skills/safe-refactor/SKILL.md` when the task is a refactoring; the project's own rules still win.
+1. When the change touches a stack with a global skill, read its `~/.claude/skills/<name>/SKILL.md` (`flutter-dev`, `web-dev`, `supabase-dev`, `java-spring-dev`) before writing code, and `~/.claude/skills/safe-refactor/SKILL.md` when the task is a refactoring; the project's own rules still win. Websites and web applications are built mobile-first, as the `web-dev` skill describes.
 2. Before writing new code, search for code to reuse or extend, as the "Reuse and simplicity" principles describe.
 3. Implement the smallest coherent change that meets the objective, following the project's architecture, naming and patterns (see `~/.claude/rules/engineering-principles.md`). No unrelated refactors, dependencies or architecture changes.
 4. Add or update automated tests for every new or changed behavior, including negative and edge cases (see `~/.claude/rules/testing.md`).

@@ -20,7 +20,8 @@ Read the project's `CLAUDE.md`, `AGENTS.md`, the rules for the affected areas an
 5. Design for accessibility from the start (WCAG 2.2 AA as the baseline unless the project sets another): native controls with labels, visible focus, full keyboard operation, contrast of at least 4.5:1 for text and 3:1 for large text and interface components, targets of at least 24×24 CSS px (44 px or the platform guideline recommended), status never conveyed by color alone, announcements for dynamic messages, small screens and text scaling.
 6. Write the user-facing copy in the project's language and tone: short, specific, free of jargon; errors say what happened and what to do next.
 7. When asked for a prototype, build it with the format or tool the main agent names (for example static HTML or the project's design-canvas format). Use synthetic data, mark placeholders and illustrative values visibly, keep files self-contained and check that any script it contains runs without errors, without installing dependencies, running the project's application scripts or accessing remote services.
-8. Map each screen and state to the acceptance criteria it satisfies, and flag criteria that no screen covers.
+8. For websites and web applications, design mobile-first, as `~/.claude/skills/web-dev/SKILL.md` describes: the phone layout comes first, and wider screens add to it. When you deliver several widths, show the phone one first.
+9. Map each screen and state to the acceptance criteria it satisfies, and flag criteria that no screen covers.
 
 ## Limits
 

@@ -14,7 +14,7 @@ Read the project's `CLAUDE.md`, `AGENTS.md` and the rules for the changed areas;
 ## What to do
 
 1. Check `git status` first and note the files you did not write.
-2. Turn the objective into a short list of scenarios: happy paths, validation failures, error paths, boundaries, authorization (allowed and denied access), state transitions and regressions of nearby behavior.
+2. Turn the objective into a short list of scenarios: happy paths, validation failures, error paths, boundaries, authorization (allowed and denied access), state transitions and regressions of nearby behavior. For websites and web applications, which are mobile-first, run the user-facing scenarios at phone width first, then at the wider widths the `web-dev` skill lists.
 3. Map each scenario to existing automated tests. Mark scenarios with no test as gaps; do not count unrelated tests as coverage.
 4. Close the gaps with acceptance tests (see below) when the project's test tooling allows it.
 5. Run the project's local verification for every affected area (formatting, linting, type checks, unit/component/integration/end-to-end tests, builds), using the project's own commands in check-only mode (for example `--check`, `--set-exit-if-changed`; never `--write`, `--fix` or snapshot/golden updates, except the project's formatter and the first baseline of a snapshot or golden test, both only on files you created) and keeping full logs on disk.
