@@ -82,6 +82,32 @@ class ContextBudgetTest(unittest.TestCase):
         self.assertRegex(output, r"\n\s+17\s+5\s+total\n")
         self.assertIn("(none)", output)
 
+    def test_codex_counts_its_global_file_whole_and_nothing_on_demand(self) -> None:
+        (self.root / "dist/codex").mkdir(parents=True)
+        self.write("dist/codex/AGENTS.md", "c" * 9)
+        self.write("core/rules/scoped.md", "---\npaths: ['*.py']\n---\n")
+
+        self.assertEqual(context_budget.classify_codex(self.root), ([("dist/codex/AGENTS.md", 9)], []))
+
+    def test_report_lists_each_generated_target_and_skips_missing_ones(self) -> None:
+        self.write("dist/claude/CLAUDE.md", "x" * 8)
+
+        claude_only = context_budget.report(self.root)
+
+        self.assertTrue(claude_only.startswith("Target: claude\n"))
+        self.assertNotIn("Target: codex", claude_only)
+
+        (self.root / "dist/codex").mkdir(parents=True)
+        self.write("dist/codex/AGENTS.md", "c" * 12)
+        both = context_budget.report(self.root)
+
+        claude, codex = both.split("\n\nTarget: codex\n")
+        self.assertRegex(claude, r"\n\s+8\s+2\s+total\n")
+        self.assertRegex(codex, r"\n\s+12\s+3\s+dist/codex/AGENTS.md\n\s+12\s+3\s+total\n")
+
+    def test_report_without_any_generated_target_says_so(self) -> None:
+        self.assertIn("No generated entry point found", context_budget.report(self.root))
+
     def test_cli_prints_report_for_root(self) -> None:
         self.write("dist/claude/CLAUDE.md", "x" * 8)
         self.write("core/rules/scoped.md", "---\npaths: ['*.md']\n---\n")

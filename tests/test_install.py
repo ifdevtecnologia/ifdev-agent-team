@@ -1002,9 +1002,11 @@ class InstalledHookExecutionTests(InstallerTestCase):
 
 
 def managed_destinations(common_sh: str) -> set[str]:
-    """Destinations of the MANAGED_ITEMS array in a common.sh text (two- or three-field entries)."""
+    """Destinations of the claude target in the MANAGED_ITEMS array of a common.sh text: three-field
+    entries owned by claude, or every two-field entry (from before targets existed)."""
     block = re.search(r"^MANAGED_ITEMS=\((.*?)^\)", common_sh, re.MULTILINE | re.DOTALL).group(1)
-    return {match.split("|")[1] for match in re.findall(r'^\s*"([^"]+)"\s*$', block, re.MULTILINE)}
+    entries = [match.split("|") for match in re.findall(r'^\s*"([^"]+)"\s*$', block, re.MULTILINE)]
+    return {fields[1] for fields in entries if len(fields) == 2 or "claude" in fields[2].split(",")}
 
 
 class TargetTests(InstallerTestCase):
@@ -1024,12 +1026,12 @@ class TargetTests(InstallerTestCase):
 
     def test_unsupported_or_missing_targets_are_rejected_without_changes(self) -> None:
         for script in ("install.sh", "uninstall.sh"):
-            for name in ("codex", "cursor", "other"):
+            for name in ("cursor", "other"):
                 with self.subTest(script=script, target=name):
                     result = self.run_script(script, "--target", name)
 
                     self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-                    self.assertIn(f"target '{name}' is not supported yet; available targets: claude", result.stderr)
+                    self.assertIn(f"target '{name}' is not supported yet; available targets: claude codex", result.stderr)
             with self.subTest(script=script, target=None):
                 result = self.run_script(script, "--target")
                 self.assertEqual(result.returncode, 2)
@@ -1045,7 +1047,7 @@ class TargetTests(InstallerTestCase):
         self.assertEqual([p.name for p in (self.home / ".ifdev-ai-tools").iterdir()], ["targets"])
         before = snapshot(self.home)
 
-        for args in (CLAUDE, ("--target", "all"), ("--target", "claude", "--target", "all")):
+        for args in (CLAUDE, ("--target", "claude", "--target", "claude")):
             with self.subTest(args=args):
                 rerun = self.install(*args)
 
@@ -1105,7 +1107,7 @@ class TargetTests(InstallerTestCase):
         # A second synthetic target makes the selection able to change: the first read sees only
         # "extra", and a concurrent run records "claude" just before the lock is taken.
         common = self.repo / "scripts/lib/common.sh"
-        common.write_text(common.read_text().replace('AVAILABLE_TARGETS="claude"', 'AVAILABLE_TARGETS="claude extra"', 1))
+        common.write_text(common.read_text().replace('AVAILABLE_TARGETS="claude codex"', 'AVAILABLE_TARGETS="claude codex extra"', 1))
         self.install()
         state = self.home / TARGETS_STATE
         state.write_text("extra\n")
