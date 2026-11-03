@@ -1,11 +1,11 @@
 """Acceptance tests for the always-loaded context baseline (issue #34).
 
-The README baseline is pinned to a commit, so its numbers are compared exactly against the script
+The baseline in docs/development.md is pinned to a commit, so its numbers are compared exactly against the script
 run on that commit's tree (exported to a temporary directory), not against the working tree: edits
 to the content of `core/instructions.md` or the rules must not break the suite, but the recorded
 baseline must stay true. Against the working tree only the stable invariants are checked: the same
 targets and files and internally consistent tables. Adding a rule, giving one `paths` or adding a
-target changes the always-loaded files and requires updating the README baseline, which has one
+target changes the always-loaded files and requires updating that baseline, which has one
 table per target.
 """
 
@@ -22,6 +22,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+BASELINE_DOC = REPO_ROOT / "docs/development.md"
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import context_budget  # noqa: E402
@@ -35,10 +36,10 @@ SCRIPT_TARGET = re.compile(r"^Target: (\S+)$", re.MULTILINE)
 
 
 def baseline_section() -> str:
-    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    start = readme.index(SECTION_HEADING)
-    end = readme.find("\n### ", start + len(SECTION_HEADING))
-    return readme[start : end if end != -1 else len(readme)]
+    doc = BASELINE_DOC.read_text(encoding="utf-8")
+    start = doc.index(SECTION_HEADING)
+    end = doc.find("\n### ", start + len(SECTION_HEADING))
+    return doc[start : end if end != -1 else len(doc)]
 
 
 def baseline_tables(section: str) -> dict[str, tuple[list[tuple[str, int, int]], tuple[int, int]]]:
@@ -56,7 +57,7 @@ def baseline_tables(section: str) -> dict[str, tuple[list[tuple[str, int, int]],
         elif match := TOTAL_ROW.match(line):
             tables[target] = (tables[target][0], (int(match["bytes"]), int(match["tokens"])))
     if not tables or any(total is None for _, total in tables.values()):
-        raise AssertionError("README baseline needs a table with a Total row for each target")
+        raise AssertionError("The baseline needs a table with a Total row for each target")
     return tables
 
 
@@ -96,14 +97,14 @@ class ContextBaselineAcceptanceTest(unittest.TestCase):
                     self.assertEqual(tokens, -(-size // 4), name)
                 self.assertEqual(report[-1][1], sum(size for _, size, _ in report[:-1]))
 
-    def test_ac1_ac2_readme_documents_estimate_method_and_marks_baseline_as_estimate(self) -> None:
+    def test_ac1_ac2_doc_documents_estimate_method_and_marks_baseline_as_estimate(self) -> None:
         self.assertIn("python3 scripts/context_budget.py", self.section)
         self.assertIn("`ceil(bytes / 4)`", self.section)
         self.assertIn("not a tokenizer count", self.section)
         self.assertIn("**estimated**", self.section)
         self.assertRegex(self.section, COMMIT)
-        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertLess(readme.index("## Context efficiency"), readme.index(SECTION_HEADING))
+        doc = BASELINE_DOC.read_text(encoding="utf-8")
+        self.assertLess(doc.index("## Context efficiency"), doc.index(SECTION_HEADING))
 
     def test_ac2_baseline_table_is_internally_consistent(self) -> None:
         for target, (rows, (total_bytes, total_tokens)) in self.tables.items():

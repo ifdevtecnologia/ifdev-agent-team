@@ -30,6 +30,7 @@ FIXTURE_ITEMS = (
     "CONTRIBUTING.md",
     "AGENTS.md",
     "CLAUDE.md",
+    "docs",
     ".editorconfig",
     ".gitattributes",
     ".gitignore",

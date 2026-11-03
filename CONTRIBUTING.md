@@ -2,9 +2,9 @@
 
 ## Scope
 
-This repository holds only **global** defaults that make sense for any project: engineering principles, testing and Git rules, general-purpose skills and agents. Product names, business domains, stack-specific business rules, project-specific reviewers and machine-specific paths belong in each project's own `CLAUDE.md` and `.claude/` directory, not here.
+This repository holds only **global** defaults that make sense for any project: engineering principles, testing and Git rules, general-purpose skills and agents. Product names, business domains, stack-specific business rules, project-specific reviewers and machine-specific paths belong in each project's own instructions (its `AGENTS.md` plus the tool's project files; see [docs/customization.md](docs/customization.md)), not here.
 
-Keep instructions concise and non-contradictory. Rules live in one place (`core/rules/`); skills, agents and `core/instructions.md` reference them instead of copying them. Always-loaded files stay short; phase-specific skill procedures go in the skill's `references/` directory. See [Context efficiency](README.md#context-efficiency). Do not claim token or runtime savings that were not measured.
+Keep instructions concise and non-contradictory. Rules live in one place (`core/rules/`); skills, agents and `core/instructions.md` reference them instead of copying them. Always-loaded files stay short; phase-specific skill procedures go in the skill's `references/` directory. See [Context efficiency](docs/development.md#context-efficiency). Do not claim token or runtime savings that were not measured.
 
 ## Editing content
 
@@ -14,7 +14,7 @@ Edit the tool-neutral sources in `core/` and the tool-specific files in `targets
 
 - `scripts/install.sh` and `scripts/uninstall.sh` must stay safe and idempotent: validate everything before mutating, never replace whole parent directories, never delete unknown content, move (not delete) anything they replace, and refuse symlinked parent directories.
 - Every behavior change in a script needs automated tests in `tests/`. Tests run scripts in subprocesses with a temporary `HOME`; never run them against, or monkeypatch, your real home directory.
-- Keep scripts portable to Bash 3.2 and Python 3.9+. `scripts/install.sh` and `scripts/uninstall.sh` require only the standard-library `python3` itself (no pinned dependency, no PyYAML): `scripts/lib/claude_hooks.py` uses it for the safe, structured JSON merge/removal of this toolkit's hooks in `~/.claude/settings.json`, a file the installer cannot symlink like everything else because it is user-owned and mutable. The validator and tests separately depend on the pinned PyYAML in `requirements-dev.txt` (for real, safe YAML frontmatter parsing). Do not add dependencies without a concrete need; if one becomes necessary, pin it there and document it in the README and CI.
+- Keep scripts portable to Bash 3.2 and Python 3.9+. `scripts/install.sh` and `scripts/uninstall.sh` require only the standard-library `python3` itself (no pinned dependency, no PyYAML): `scripts/lib/claude_hooks.py` uses it for the safe, structured JSON merge/removal of this toolkit's hooks in `~/.claude/settings.json`, a file the installer cannot symlink like everything else because it is user-owned and mutable. The validator and tests separately depend on the pinned PyYAML in `requirements-dev.txt` (for real, safe YAML frontmatter parsing). Do not add dependencies without a concrete need; if one becomes necessary, pin it there and document it in [docs/development.md](docs/development.md#prerequisites) and CI.
 - Keep the executable bit on `scripts/install.sh`, `scripts/uninstall.sh` and `scripts/validate.sh`; the validator rejects them otherwise.
 - When changing the validator, add both a failing fixture and a passing counterpart (for example a forbidden instruction and the same words used as a prohibition). Never weaken a security check to make the repository pass; fix the content instead.
 
