@@ -261,6 +261,18 @@ class PriorInstallUpgradeTests(unittest.TestCase):
         self.assert_claude_installed()
         self.assert_no_codex_only_items()
 
+    def test_adding_codex_to_a_pre_0004_install_records_both_and_keeps_claude(self) -> None:
+        """A machine installed before targets were recorded is a claude install: adding codex
+        must record claude too, or a later bare uninstall drops the adapter claude still owns."""
+        self.install_at_and_pull(PRE_0004_COMMIT)
+
+        self.assert_ok(self.run_script("install.sh", *CODEX))
+
+        self.assertEqual(self.state(), "claude\ncodex\n")
+        self.assert_ok(self.run_script("uninstall.sh", *CODEX))
+        self.assertTrue((self.home / SHARED_ADAPTER).is_symlink(), "the claude-owned notify adapter was removed")
+        self.assertTrue(self.links_to_checkout())
+
 
 if __name__ == "__main__":
     unittest.main()
