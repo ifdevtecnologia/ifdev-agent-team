@@ -196,7 +196,8 @@ before this file existed and has no Git tag.
 
 ### Upgrade
 - To use the toolkit with Codex, run `./scripts/install.sh --target codex` (once; the target is then
-  recorded and a bare `./scripts/install.sh` reinstalls it). A Claude-only install needs no action.
+  recorded and a bare `./scripts/install.sh` reinstalls it). A Claude-only install needs no action;
+  on one made before targets were recorded, adding Codex records `claude` too.
   Review `./scripts/install.sh --target codex --dry-run` first if you keep your own
   `~/.codex/AGENTS.md`: it is moved to the backups, not merged.
 - `git pull` keeps existing installations working: the old paths in `claude/` and `codex/` are now

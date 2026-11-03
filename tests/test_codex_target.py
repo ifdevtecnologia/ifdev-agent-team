@@ -162,6 +162,23 @@ class CodexInstallTests(CodexTestCase):
         self.assertIn("choose --target", result.stderr)
         self.assertEqual(snapshot(self.home), before)
 
+    def test_adding_codex_without_state_also_records_a_legacy_claude_install(self) -> None:
+        self.install()
+        (self.home / TARGETS_STATE).unlink()
+        before = snapshot(self.home)
+
+        dry = self.run_script("install.sh", *CODEX, "--dry-run")
+        self.assert_ok(dry)
+        self.assertIn("would record targets: claude codex", dry.stdout)
+        self.assertEqual(snapshot(self.home), before)
+
+        self.assert_ok(self.run_script("install.sh", *CODEX))
+        self.assertEqual(self.state(), "claude\ncodex\n")
+
+        # A bare install then reinstalls both.
+        self.assert_ok(self.run_script("install.sh"))
+        self.assertEqual(self.links(), self.expected_links(MANAGED, CODEX_MANAGED))
+
     def test_all_installs_both_targets(self) -> None:
         result = self.install("--target", "all")
 
@@ -240,6 +257,39 @@ class CodexUninstallTests(CodexTestCase):
 
         self.assert_ok(result)
         self.assertEqual(snapshot(self.home), before)
+        self.assertEqual(self.state(), "claude\n")
+
+    def test_uninstalling_codex_without_state_keeps_a_legacy_claude_install(self) -> None:
+        # A machine installed before targets were recorded has the claude items, shared adapter
+        # included, and no state file.
+        self.install()
+        (self.home / TARGETS_STATE).unlink()
+        settings = (self.home / SETTINGS_JSON).read_text()
+        before = snapshot(self.home)
+
+        dry = self.run_script("uninstall.sh", *CODEX, "--dry-run")
+        self.assert_ok(dry)
+        self.assertIn(f"kept (shared with a target that stays installed): ~/{SHARED_ADAPTER}", dry.stdout)
+        self.assertIn("would record targets: claude", dry.stdout)
+        self.assertEqual(snapshot(self.home), before)
+
+        result = self.run_script("uninstall.sh", *CODEX)
+
+        self.assert_ok(result)
+        self.assertEqual(self.links(), self.expected_links(MANAGED))
+        self.assertEqual((self.home / SETTINGS_JSON).read_text(), settings)
+        self.assertEqual(self.state(), "claude\n")
+
+    def test_uninstalling_codex_without_state_removes_only_the_codex_items(self) -> None:
+        self.install("--target", "all")
+        (self.home / TARGETS_STATE).unlink()
+
+        result = self.run_script("uninstall.sh", *CODEX)
+
+        self.assert_ok(result)
+        self.assertEqual(self.links(), self.expected_links(MANAGED))
+        self.assertIn(f"kept (shared with a target that stays installed): ~/{SHARED_ADAPTER}", result.stdout)
+        self.assertIn(f"done: {len(CODEX_MANAGED) - 1} removed", result.stdout)
         self.assertEqual(self.state(), "claude\n")
 
     def test_bare_uninstall_without_state_removes_every_targets_links(self) -> None:

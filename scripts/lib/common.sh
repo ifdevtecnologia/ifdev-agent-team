@@ -132,6 +132,8 @@ RETIRED_REMOVED=0
 AVAILABLE_TARGETS="claude codex"
 REQUESTED_TARGETS=""
 RECORDED_TARGETS=""
+# What ~/.ifdev-ai-tools/targets holds; differs from RECORDED_TARGETS only on a legacy install.
+STORED_TARGETS=""
 SELECTED_TARGETS=""
 
 STATE_DIR_REL=".ifdev-ai-tools"
@@ -216,23 +218,30 @@ is_moved_link() {
   [[ -n "$old" ]] && is_managed_link "$HOME/$1" "$REPO_ROOT/$old"
 }
 
-# Reads ~/.ifdev-ai-tools/targets into RECORDED_TARGETS (empty when the file is absent).
-# Refuses an unsafe state directory or file and any name this checkout does not support.
+# Reads ~/.ifdev-ai-tools/targets into STORED_TARGETS (empty when the file is absent) and
+# RECORDED_TARGETS: the stored targets or, with none stored, claude on a machine installed before
+# targets were recorded (decision record 0004). Refuses an unsafe state directory or file and any
+# name this checkout does not support.
 read_recorded_targets() {
   local file="$HOME/$TARGETS_FILE_REL" problem name
-  RECORDED_TARGETS=""
+  STORED_TARGETS=""
   problem=$(parent_problem "$STATE_DIR_REL")
   [[ -z "$problem" ]] || die "$problem"
-  [[ -e "$file" || -L "$file" ]] || return 0
-  [[ -f "$file" && ! -L "$file" ]] || die "targets state is not a regular file: $file"
-  while IFS= read -r name || [[ -n "$name" ]]; do
-    # Tolerates hand edits: surrounding whitespace, CRLF line endings and blank lines.
-    name=${name#"${name%%[![:space:]]*}"}
-    name=${name%"${name##*[![:space:]]}"}
-    [[ -n "$name" ]] || continue
-    list_contains "$AVAILABLE_TARGETS" "$name" || die "unsupported target '$name' recorded in $file"
-    RECORDED_TARGETS=$(canonical_targets "$RECORDED_TARGETS $name")
-  done <"$file"
+  if [[ -e "$file" || -L "$file" ]]; then
+    [[ -f "$file" && ! -L "$file" ]] || die "targets state is not a regular file: $file"
+    while IFS= read -r name || [[ -n "$name" ]]; do
+      # Tolerates hand edits: surrounding whitespace, CRLF line endings and blank lines.
+      name=${name#"${name%%[![:space:]]*}"}
+      name=${name%"${name##*[![:space:]]}"}
+      [[ -n "$name" ]] || continue
+      list_contains "$AVAILABLE_TARGETS" "$name" || die "unsupported target '$name' recorded in $file"
+      STORED_TARGETS=$(canonical_targets "$STORED_TARGETS $name")
+    done <"$file"
+  fi
+  RECORDED_TARGETS=$STORED_TARGETS
+  if [[ -z "$RECORDED_TARGETS" ]] && has_legacy_install; then
+    RECORDED_TARGETS="claude"
+  fi
 }
 
 # True when any destination owned only by claude is an exact link to this checkout, at its current

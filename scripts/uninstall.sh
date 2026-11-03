@@ -57,14 +57,14 @@ parse_args() {
   done
 }
 
-# Sets SELECTED_TARGETS from --target, else the recorded targets, else every target (a machine
-# installed before targets were recorded, or with nothing installed).
+# Sets SELECTED_TARGETS from --target, else the targets in the state file, else every target (a
+# machine installed before targets were recorded, or with nothing installed).
 select_targets() {
   read_recorded_targets
   if [[ -n "$REQUESTED_TARGETS" ]]; then
     SELECTED_TARGETS=$REQUESTED_TARGETS
-  elif [[ -n "$RECORDED_TARGETS" ]]; then
-    SELECTED_TARGETS=$RECORDED_TARGETS
+  elif [[ -n "$STORED_TARGETS" ]]; then
+    SELECTED_TARGETS=$STORED_TARGETS
   else
     SELECTED_TARGETS=$AVAILABLE_TARGETS
   fi
@@ -210,7 +210,7 @@ main() {
   # removal, a pending hooks change or a targets state update), never for a pure no-op: keeps
   # the lock, and the ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
   if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || retired_has_removals || [[ "$hooks_change" -eq 1 ]] ||
-    [[ "$(remaining_targets)" != "$RECORDED_TARGETS" ]]; }; then
+    [[ "$(remaining_targets)" != "$STORED_TARGETS" ]]; }; then
     acquire_lock
     select_targets
     plan_uninstall || die "no changes were made"
@@ -226,7 +226,7 @@ main() {
   [[ "$claude" -eq 0 ]] || manage_claude_hooks
   local remaining
   remaining=$(remaining_targets)
-  if [[ "$remaining" != "$RECORDED_TARGETS" ]]; then
+  if [[ "$remaining" != "$STORED_TARGETS" ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
       log "would record targets: ${remaining:-none}"
     else

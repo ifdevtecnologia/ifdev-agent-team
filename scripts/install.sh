@@ -61,16 +61,14 @@ parse_args() {
   done
 }
 
-# Sets SELECTED_TARGETS from --target, else the recorded targets, else claude on a machine
-# installed before targets were recorded. Read-only; exits 2 when no target can be chosen.
+# Sets SELECTED_TARGETS from --target, else the recorded targets (claude on a machine installed
+# before targets were recorded). Read-only; exits 2 when no target can be chosen.
 select_targets() {
   read_recorded_targets
   if [[ -n "$REQUESTED_TARGETS" ]]; then
     SELECTED_TARGETS=$REQUESTED_TARGETS
   elif [[ -n "$RECORDED_TARGETS" ]]; then
     SELECTED_TARGETS=$RECORDED_TARGETS
-  elif has_legacy_install; then
-    SELECTED_TARGETS="claude"
   else
     error "nothing is installed from this checkout yet: choose --target ($AVAILABLE_TARGETS or all); no changes were made"
     usage >&2
@@ -251,7 +249,7 @@ main() {
     if list_contains "$SELECTED_TARGETS" claude; then
       manage_claude_hooks
     fi
-    [[ "$(targets_to_record)" == "$RECORDED_TARGETS" ]] || log "would record targets: $(targets_to_record)"
+    [[ "$(targets_to_record)" == "$STORED_TARGETS" ]] || log "would record targets: $(targets_to_record)"
     log "dry run: no changes were made"
     return 0
   fi
@@ -263,7 +261,7 @@ main() {
   if list_contains "$SELECTED_TARGETS" claude; then
     manage_claude_hooks
   fi
-  if [[ "$(targets_to_record)" != "$RECORDED_TARGETS" ]]; then
+  if [[ "$(targets_to_record)" != "$STORED_TARGETS" ]]; then
     write_recorded_targets "$(targets_to_record)"
     log "recorded targets: $(targets_to_record)"
   fi
