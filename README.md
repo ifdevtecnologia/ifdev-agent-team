@@ -6,6 +6,8 @@ Versioned, reproducible source of truth for **global** Claude Code instructions:
 
 This toolkit only provides defaults that apply to every repository. Each project keeps its own `CLAUDE.md` (and `AGENTS.md` when used) plus `.claude/rules/`, `.claude/skills/` and `.claude/agents/` for local behavior: stack, commands, domain rules and specialized reviewers. Project instructions take precedence when they are more specific or explicitly conflict with the global defaults.
 
+To set up a project, follow the per-project customization guide in `docs/customization.md` and its templates in `docs/templates/project/`.
+
 Two different `CLAUDE.md` files live here:
 
 - [`claude/CLAUDE.md`](claude/CLAUDE.md) is the **installed** global instruction file (linked to `~/.claude/CLAUDE.md`).
