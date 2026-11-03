@@ -26,10 +26,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 YAML_SITE = str(Path(yaml.__file__).resolve().parent.parent)
 FIXTURE_ITEMS = (
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "CONTRIBUTING.md",
     "AGENTS.md",
     "CLAUDE.md",
+    "docs",
     ".editorconfig",
     ".gitattributes",
     ".gitignore",

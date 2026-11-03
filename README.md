@@ -1,417 +1,163 @@
 # ifdev-agent-team
 
-Versioned, reproducible source of truth for **global** Claude Code instructions: engineering principles, testing and Git rules, the product owner, metrics analyst, Analyst, Architect, UX designer, visual designer, debugger, Dev, DevOps, technical writer, Reviewer, QA and the specialized UX, security, API, privacy, database and performance reviewer agents, a few general-purpose skills, stack skills for Flutter, web front ends, Supabase and Java/Spring Boot, and skills for safe refactoring and end-to-end testing, plus cross-agent notifications for Claude Code and Codex. The installer links these files into `$HOME` so every machine uses the same reviewed content.
+An agent team (process, rules, roles and skills) for coding agents: Claude Code and OpenAI Codex.
 
-## Global versus project instructions
+One reviewed, versioned set of **global** defaults: a delivery process (Analyze → Plan → Implement → Test → Review → Document), engineering, testing and Git rules, eighteen senior roles from product owner to QA, and general-purpose and stack skills. The installer links them into your home directory, so every machine and every tool uses the same content. Each project keeps its own instructions on top.
 
-This toolkit only provides defaults that apply to every repository. Each project keeps its own `CLAUDE.md` (and `AGENTS.md` when used) plus `.claude/rules/`, `.claude/skills/` and `.claude/agents/` for local behavior: stack, commands, domain rules and specialized reviewers. Project instructions take precedence when they are more specific or explicitly conflict with the global defaults.
+🧩 process · 📏 rules · 👥 roles · 🧰 skills · 🔔 notifications · 🔒 safe, idempotent install
 
-To set up a project, follow the per-project customization guide in `docs/customization.md` and its templates in `docs/templates/project/`.
+## ✨ What you get
 
-Two different `CLAUDE.md` files live here:
+- 🧭 **A team process**: who runs when, from requirements to a pull request a human merges ([`core/instructions.md`](core/instructions.md)).
+- 📏 **Three rules**, defined once: [engineering principles](core/rules/engineering-principles.md), [testing](core/rules/testing.md) and the [Git workflow](core/rules/git-workflow.md).
+- 👥 **Eighteen roles**, each started in a fresh context, read-only where it should be ([`core/agents/`](core/agents/)).
+- 🧰 **Eight skills**: local verification, work sessions, safe refactoring, end-to-end tests and stack guidance.
+- 🔔 **Notifications** when an agent finishes, is blocked or needs you.
+- 🔒 **A safe installer**: symlinks instead of copies, backups instead of deletion, a dry run, no elevated privileges.
 
-- [`core/instructions.md`](core/instructions.md) is the source of the **installed** global instruction file; the generated [`dist/claude/CLAUDE.md`](dist/claude/CLAUDE.md) is linked to `~/.claude/CLAUDE.md`.
-- [`CLAUDE.md`](CLAUDE.md) at the repository root (with [`AGENTS.md`](AGENTS.md)) contains instructions for **developing this toolkit** and is never installed.
+## 🧭 How the team works
 
-## Layout
+The main agent orchestrates: it takes blocking questions to you, fixes findings and delivers. Dashed arrows lead to roles that run only when their criterion applies.
 
-Sources are tool-neutral and live in `core/`; files that only one tool needs live in `targets/<tool>/`; `dist/<tool>/` is generated from both by `scripts/build_targets.py` and committed (never edit it by hand; see [CONTRIBUTING.md](CONTRIBUTING.md)). The text in `core/` refers to rules, skills and roles by name ("the `testing` rule", "the `web-dev` skill", "the `reviewer` role"); each target's adapter and agent footer say where that tool finds them (for Claude Code, `~/.claude/rules/<name>.md` and `~/.claude/skills/<name>/SKILL.md`). Installed paths for the `claude` target:
+```mermaid
+flowchart TD
+    request([Request])
+    po["po / metrics-analyst"]
+    analyst[analyst]
+    design["architect / ux / designer"]
+    debugger[debugger]
+    dev["dev (or devops)"]
+    writer[tech-writer]
+    reviewer[reviewer]
+    specialized["ux-reviewer, security-reviewer, api-reviewer, privacy-reviewer, db-reviewer, performance-reviewer"]
+    qa[qa]
+    pr["Pull request"]
+    merge(["Human review and merge"])
 
-```
-core/
-  instructions.md                    team process; generated into dist/claude/CLAUDE.md
-  rules/engineering-principles.md    -> ~/.claude/rules/engineering-principles.md
-  rules/testing.md                   -> ~/.claude/rules/testing.md
-  rules/git-workflow.md              -> ~/.claude/rules/git-workflow.md
-  agents/<role>.md                   neutral role definitions (name, description, read_only); generated into dist/claude/agents/
-  skills/work-session/               -> ~/.claude/skills/work-session (with references/)
-  skills/verify-changes/             -> ~/.claude/skills/verify-changes (with references/)
-  skills/flutter-dev/                -> ~/.claude/skills/flutter-dev (Flutter stack guidance)
-  skills/web-dev/                    -> ~/.claude/skills/web-dev (web front-end stack guidance)
-  skills/supabase-dev/               -> ~/.claude/skills/supabase-dev (Supabase stack guidance)
-  skills/java-spring-dev/            -> ~/.claude/skills/java-spring-dev (Java and Spring Boot stack guidance)
-  skills/safe-refactor/              -> ~/.claude/skills/safe-refactor (refactoring without behavior change)
-  skills/e2e-testing/                -> ~/.claude/skills/e2e-testing (acceptance and end-to-end tests)
-targets/
-  claude/adapter.md                  Claude-specific note placed first in dist/claude/CLAUDE.md
-  claude/agent-footer.md             Claude-specific note appended to every generated agent
-  claude/hooks/agent-notify-hook.sh  -> ~/.claude/hooks/agent-notify-hook.sh (Stop/StopFailure/Notification adapter)
-  codex/notify/agent-notify-codex.sh -> ~/.codex/notify/agent-notify-codex.sh (opt-in native `notify` adapter)
-dist/                                generated by scripts/build_targets.py, committed, never edited
-  claude/CLAUDE.md                   -> ~/.claude/CLAUDE.md
-  claude/agents/po.md                -> ~/.claude/agents/po.md (product owner)
-  claude/agents/analyst.md           -> ~/.claude/agents/analyst.md (Analyst)
-  claude/agents/architect.md         -> ~/.claude/agents/architect.md (Architect)
-  claude/agents/ux.md                -> ~/.claude/agents/ux.md (UX designer)
-  claude/agents/designer.md          -> ~/.claude/agents/designer.md (visual designer)
-  claude/agents/devops.md            -> ~/.claude/agents/devops.md (DevOps)
-  claude/agents/tech-writer.md       -> ~/.claude/agents/tech-writer.md (technical writer)
-  claude/agents/debugger.md          -> ~/.claude/agents/debugger.md (debugger)
-  claude/agents/metrics-analyst.md   -> ~/.claude/agents/metrics-analyst.md (metrics analyst)
-  claude/agents/api-reviewer.md      -> ~/.claude/agents/api-reviewer.md (specialized API review)
-  claude/agents/reviewer.md          -> ~/.claude/agents/reviewer.md (Reviewer)
-  claude/agents/ux-reviewer.md       -> ~/.claude/agents/ux-reviewer.md (specialized UX review)
-  claude/agents/security-reviewer.md -> ~/.claude/agents/security-reviewer.md (specialized security review)
-  claude/agents/privacy-reviewer.md  -> ~/.claude/agents/privacy-reviewer.md (specialized privacy review)
-  claude/agents/db-reviewer.md       -> ~/.claude/agents/db-reviewer.md (specialized database review)
-  claude/agents/performance-reviewer.md -> ~/.claude/agents/performance-reviewer.md (specialized performance review)
-  claude/agents/dev.md               -> ~/.claude/agents/dev.md (Dev)
-  claude/agents/qa.md                -> ~/.claude/agents/qa.md (QA)
-claude/, codex/                      compatibility links to the paths above, kept for one release (see CHANGELOG)
-scripts/
-  install.sh, uninstall.sh           link / unlink each target's items and merge/remove Claude hooks
-  build_targets.py                   generates dist/ from core/ and targets/ (--check reports stale files)
-  lib/common.sh                      managed, moved and retired item lists and shared safety helpers
-  lib/claude_hooks.py                safe structured merge of the notification hooks into ~/.claude/settings.json
-  agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
-  validate.sh, validate.py           static repository validation
-  context_budget.py                  estimate of the context loaded in every session (needs the dev dependency)
-tests/                               isolated automated tests (Python unittest)
-requirements-dev.txt                 pinned development dependency (PyYAML) for validation/tests
-.github/workflows/validate.yml       CI: syntax, validator and tests
+    request -.->|"stories, backlog, metrics"| po
+    po -.-> analyst
+    request -.->|"needs requirements"| analyst
+    analyst -.->|"needs a decision or screens"| design
+    request -.->|"unknown cause"| debugger
+    request --> dev
+    analyst -.-> dev
+    design -.-> dev
+    debugger -.-> dev
+    dev -.->|"more than a changelog entry"| writer
+    dev --> reviewer
+    writer -.-> reviewer
+    reviewer -.->|"diff meets their criterion"| specialized
+    reviewer --> qa
+    specialized -.-> qa
+    qa --> pr
+    pr --> merge
 ```
 
-Installed paths for the `codex` target (twenty-nine links; the notify adapter is shared with `claude`):
+Documentation-only or trivial changes stop at the Reviewer. The full criteria are in [`core/instructions.md`](core/instructions.md#team-analyst--dev--reviewer--qa); [docs/team.md](docs/team.md) explains every role.
 
+## 👥 Roles
+
+✍️ writes files · 👁️ read-only
+
+| | Role | What it does | Access |
+|---|---|---|---|
+| 🎯 | [`po`](core/agents/po.md) | Epics, user stories, prioritized backlog, release cut | ✍️ product files only |
+| 📊 | [`metrics-analyst`](core/agents/metrics-analyst.md) | Success metrics, tracking plans, experiments | ✍️ analytics documents only |
+| 🔍 | [`analyst`](core/agents/analyst.md) | Requirements with numbered, testable acceptance criteria | 👁️ |
+| 🏛️ | [`architect`](core/agents/architect.md) | Options, decision record draft, contracts, slicing | 👁️ |
+| 🧭 | [`ux`](core/agents/ux.md) | Flows, screen states, copy, prototypes | ✍️ design files only |
+| 🎨 | [`designer`](core/agents/designer.md) | Logos, visual identity, brand assets | ✍️ design files only |
+| 🐞 | [`debugger`](core/agents/debugger.md) | Reproduces a bug and finds the root cause | 👁️ |
+| 💻 | [`dev`](core/agents/dev.md) | Implements the change with its tests | ✍️ |
+| ⚙️ | [`devops`](core/agents/devops.md) | CI/CD, infrastructure, observability; verifies locally only | ✍️ |
+| 📝 | [`tech-writer`](core/agents/tech-writer.md) | Guides, references, runbooks, release notes | ✍️ documentation only |
+| ✅ | [`reviewer`](core/agents/reviewer.md) | Independent review of every diff | 👁️ |
+| 🖥️ | [`ux-reviewer`](core/agents/ux-reviewer.md) | Interface states, accessibility, copy | 👁️ |
+| 🛡️ | [`security-reviewer`](core/agents/security-reviewer.md) | Auth, data access, secrets, dependencies | 👁️ |
+| 🔌 | [`api-reviewer`](core/agents/api-reviewer.md) | Published contracts and external integrations | 👁️ |
+| 🔐 | [`privacy-reviewer`](core/agents/privacy-reviewer.md) | Personal data, consent, retention | 👁️ |
+| 🗄️ | [`db-reviewer`](core/agents/db-reviewer.md) | Schema, migrations, queries, access policies | 👁️ |
+| ⚡ | [`performance-reviewer`](core/agents/performance-reviewer.md) | Hot paths, payloads, caching, cost | 👁️ |
+| 🧪 | [`qa`](core/agents/qa.md) | Verifies against the criteria, writes acceptance tests | ✍️ test files only |
+
+No role commits, pushes or deploys; delivery belongs to the main agent and follows the [Git workflow](core/rules/git-workflow.md).
+
+## 🧰 Skills
+
+| Skill | Use |
+|---|---|
+| [`verify-changes`](core/skills/verify-changes/SKILL.md) | Pick and run the local checks for the current change |
+| [`work-session`](core/skills/work-session/SKILL.md) | A bounded work session with a plan and a resume report |
+| [`safe-refactor`](core/skills/safe-refactor/SKILL.md) | Refactor without changing behavior |
+| [`e2e-testing`](core/skills/e2e-testing/SKILL.md) | Acceptance and end-to-end tests from acceptance criteria |
+| [`web-dev`](core/skills/web-dev/SKILL.md), [`flutter-dev`](core/skills/flutter-dev/SKILL.md), [`supabase-dev`](core/skills/supabase-dev/SKILL.md), [`java-spring-dev`](core/skills/java-spring-dev/SKILL.md) | Stack guidance, read only when a change touches that stack |
+
+## 🔌 Supported tools
+
+| | Claude Code (`--target claude`) | OpenAI Codex (`--target codex`) |
+|---|---|---|
+| Roles run as | ✅ subagents of the same name | ✅ custom agents started with `spawn_agent` and `fork_turns: "none"` |
+| Read-only roles | ✅ enforced (edit tools blocked) | ⚠️ by instruction only; any edit is reported |
+| Skills | ✅ `~/.claude/skills/` | ✅ `~/.agents/skills/` |
+| Notifications | ✅ `Stop`, `StopFailure` and `Notification` hooks | ⚠️ opt-in `notify` adapter, turn completion only; you add one line to `config.toml`, the installer never edits it |
+| Status | ✅ supported | ⚠️ supported; custom agent registration still needs a manual check in a Codex session |
+
+Details: [docs/installation.md](docs/installation.md#targets) and [docs/notifications.md](docs/notifications.md).
+
+## 🏗️ How it's built
+
+Content is written once, tool-neutral, in `core/`. A generator combines it with each tool's adapter in `targets/<tool>/` into `dist/<tool>/`, which is committed and never edited by hand. The installer links the result into your home directory.
+
+```mermaid
+flowchart LR
+    core["core/ (instructions, rules, agents, skills)"]
+    targets["targets/claude, targets/codex (adapters, hooks)"]
+    build["scripts/build_targets.py"]
+    dist["dist/claude, dist/codex (generated)"]
+    install["scripts/install.sh --target"]
+    claude["~/.claude"]
+    codex["~/.codex and ~/.agents/skills"]
+
+    core --> build
+    targets --> build
+    build --> dist
+    dist --> install
+    core -->|"rules and skills"| install
+    install -->|"claude"| claude
+    install -->|"codex"| codex
 ```
-dist/codex/AGENTS.md                 -> ~/.codex/AGENTS.md (Codex adapter + core/instructions.md + the three rules)
-dist/codex/agents/<role>.toml        -> ~/.codex/agents/<role>.toml (one custom agent per role, eighteen)
-core/skills/<name>/                  -> ~/.agents/skills/<name> (the eight skills; work-session has agents/openai.yaml)
-scripts/agent-notify.sh              -> ~/.codex/notify/agent-notify.sh (shared notifier)
-targets/codex/notify/agent-notify-codex.sh -> ~/.codex/notify/agent-notify-codex.sh (shared with claude)
-targets/codex/adapter.md, agent-footer.md  Codex-specific notes placed first in AGENTS.md and appended to every agent
-```
 
-## Prerequisites
+Layout, generator, validator and tests: [docs/development.md](docs/development.md).
 
-- Bash (3.2 or newer), `git`, standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`) and `python3` (standard library only). `scripts/install.sh`/`scripts/uninstall.sh` use `python3` to safely merge or remove this toolkit's notification hooks in `~/.claude/settings.json` (a user-owned, mutable file that cannot be symlinked like everything else); no pinned Python dependency is needed for this.
-- For validation and tests only: Python 3.9+ and PyYAML 6.0.3, pinned in [`requirements-dev.txt`](requirements-dev.txt). Install it with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
-- Optional, for [agent notifications](#agent-notifications): `notify-send` (`libnotify-bin` on Debian/Ubuntu) for desktop notifications and `paplay` (`pulseaudio-utils` on Debian/Ubuntu) or `pw-play` (`pipewire-bin`) for a sound cue. Neither is required: a missing or disabled backend falls back to a terminal bell (BEL).
-- Claude Code and/or Codex installed separately; this toolkit does not install them and, apart from the opt-in Codex notify adapter below, does not configure them.
+## 🚀 Quick start
 
-## Install on a new machine
+Needs Bash, `git` and `python3` (standard library only). The coding tools themselves are installed separately.
 
 ```bash
 git clone https://github.com/ifdevtecnologia/ifdev-agent-team.git
 cd ifdev-agent-team
 ./scripts/install.sh --target claude --dry-run   # review the plan; changes nothing
-./scripts/install.sh --target claude             # or --target codex, or --target all for both
-./scripts/validate.sh                            # optional: validate the checkout (needs the dev dependency)
+./scripts/install.sh --target claude             # or --target codex, or --target all
 ```
 
-The entry-point scripts are versioned with the executable bit (the validator enforces it). If your checkout lost it, `bash scripts/install.sh` works the same way.
-
-The clone location is free: links point to wherever the repository lives, so keep the checkout in place after installing. Updating is a normal `git pull`; the links already point to the updated files. If you move the checkout, run `./scripts/install.sh --target claude` again from the new location (the old, now dangling links are backed up and replaced); a bare run may refuse there, because nothing links to the new location yet and a checkout installed before targets were recorded has no recorded target.
-
-`--target` chooses what to install: `claude`, `codex` or `all` (both); repeat it to choose several. The installed targets are recorded in `~/.ifdev-ai-tools/targets`, so a later bare `./scripts/install.sh` reinstalls them. A machine installed before targets were recorded (any link to this checkout) is treated as `claude`; on a machine with nothing installed, a bare `./scripts/install.sh` refuses and changes nothing until you choose a target.
-
-| Target | Roles run as | Read-only roles | Notifications | Status |
-| --- | --- | --- | --- | --- |
-| `claude` (Claude Code) | subagents of the same name | enforced (edit tools blocked) | Stop, StopFailure and Notification hooks | supported |
-| `codex` (OpenAI Codex CLI) | custom agents started with `spawn_agent` and `fork_turns: "none"` | by instruction only | opt-in `notify` adapter (turn completion only) | supported; custom agent registration still needs a manual check in a Codex session |
-
-### What the installer does
-
-- Uses only `$HOME`, without elevated privileges, and resolves the repository root from the script's own location.
-- Creates symlinks for exactly the destinations above of the chosen targets (thirty-three for `claude`, twenty-nine for `codex`) and the missing parent directories. It never links or replaces `~/.claude`, `~/.codex`, `~/.claude/skills`, `~/.claude/agents`, `~/.codex/agents`, `~/.codex/skills`, `~/.agents` or `~/.agents/skills` as a whole, and never touches the base `~/.codex/config.toml`, so unknown siblings (your settings, other skills and agents) are preserved.
-- Checks prerequisites, every source, every destination and every parent directory before changing anything. It refuses symlinked parent directories (for example `~/.claude/rules` pointing elsewhere) to avoid writing outside `$HOME` or into third-party trees, and a managed source below a symlinked directory of the checkout, so every link loads content from the checkout itself.
-- A destination that already links to this repository is left as is. A link to an item's old path in this checkout (listed in `MOVED_ITEMS` in `scripts/lib/common.sh`) is relinked to the new path without a backup. A real file, a directory, a foreign symlink or a dangling symlink is **moved** (not deleted) to a unique backup directory before linking.
-- Also merges this toolkit's three notification hooks (`Stop`, `StopFailure`, `Notification`) into `~/.claude/settings.json`, keeping every other key, hook and event semantically unchanged (the file is rewritten in full through a same-directory temporary file and an atomic rename, so its exact original bytes/whitespace are not preserved, only its meaning and permissions); a preflight (invalid JSON, a non-object top level, a malformed managed-hooks shape, an unsafe symlinked path or a symlinked `~/.claude`) refuses before any symlink is touched, and an existing file is backed up first into its own `~/.ifdev-ai-tools/backups/<timestamp>-hooks/` directory. See [Agent notifications](#agent-notifications).
-- Removes links left by retired (renamed or removed) items, listed in `RETIRED_ITEMS` in `scripts/lib/common.sh`, only when the link still points exactly to this checkout's old source; a file, a directory or a link to anywhere else at that path is kept and reported. For example, the old `senior-reviewer.md` link in `~/.claude/agents/` is removed after its rename to `reviewer.md`, and so are the removed Codex supervision's `supervise-claude` skill directory link (in the Codex skills directory) and its `~/.codex/ifdev-autonomous.config.toml` profile link. A directory link is removed as a link only: nothing inside the old source directory is followed or deleted.
-- For `codex`: an existing `~/.codex/AGENTS.md` is backed up and replaced like any other destination, and an existing `~/.codex/AGENTS.override.md` (which Codex reads instead) is left untouched with a warning. The custom agents are read-only by instruction only: Codex does not enforce read-only roles.
-- Is idempotent: a second run reports every managed item as unchanged, creates no backup and reports the hooks as already configured.
-- Uses a lock directory (`~/.ifdev-ai-tools/lock`) so concurrent runs cannot collide, held only while an actual change (a link or a hooks update) is being applied. If a run is interrupted hard, the message explains how to remove the stale lock after confirming no run is active.
-- `--dry-run` prints the plan, including the hooks that would be added or removed, and makes no changes at all (no directories, backups or locks).
-
-### Backups and manual restoration
-
-The state directory keeps the project's former name, `~/.ifdev-ai-tools`, so machines installed before the rename keep their lock and backups. Backups go to `~/.ifdev-ai-tools/backups/YYYYMMDD-HHMMSS-<unique>/`, preserving the relative path, for example `.../.claude/CLAUDE.md` or `.../.claude/skills/work-session/`. Each backup directory has a `MANIFEST` listing the moved paths. The toolkit never restores backups automatically; restoration is manual and deliberate, one `MANIFEST` entry at a time:
-
-```bash
-./scripts/uninstall.sh                          # remove this toolkit's links first
-backup="$HOME/.ifdev-ai-tools/backups/<chosen-backup>"
-cat "$backup/MANIFEST"                          # review what was moved
-item=".claude/CLAUDE.md"                        # one entry from MANIFEST
-# The destination must be completely absent: no file, directory or (even dangling) symlink.
-if [ -e "$HOME/$item" ] || [ -L "$HOME/$item" ]; then
-  echo "conflict: $HOME/$item exists; resolve it manually, nothing was moved" >&2
-else
-  mv -n -- "$backup/$item" "$HOME/$item"
-fi
-```
-
-Repeat the check for every item; never move a backup over an existing destination. On a conflict, compare both versions and decide yourself what to keep (for example rename the current one first); the backup stays where it is until you do. Backups are never removed automatically; delete them yourself once you no longer need them.
-
-## Uninstall
-
-```bash
-./scripts/uninstall.sh --dry-run
-./scripts/uninstall.sh
-```
-
-Without `--target`, removes the recorded targets (every target when none is recorded) and updates `~/.ifdev-ai-tools/targets`; `--target claude` or `--target codex` removes one. The shared Codex notify adapter is kept while the other target stays recorded, and the settings hooks are removed only with `claude`. Removes only symlinks that point exactly to this checkout's managed items (and to moved and retired items' old sources), and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
-
-## Agent notifications
-
-[`scripts/agent-notify.sh`](scripts/agent-notify.sh) is a standalone, safe cross-agent notifier: `scripts/agent-notify.sh <codex|claude> <attention|complete|blocked> <message>`. It tries a desktop notification (`notify-send`) and a sound cue (`paplay`, or `pw-play` when `paplay` is missing) when available and enabled, and falls back to a terminal bell (BEL) **only when neither one actually succeeded** (both missing, disabled or failing). The message always reaches every backend as one literal argument; it is never evaluated or interpreted as a command.
-
-- `--no-desktop`, `--no-sound`, `--no-bell` disable one channel for a single call; `--no-bell` also disables the fallback itself.
-- `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` do the same as `--no-desktop`/`--no-sound` for every call in that environment (for example a headless CI shell); a flag always overrides its variable, never the other way around.
-- Ubuntu/Debian: install the `libnotify-bin` and `pulseaudio-utils` packages for the desktop/sound backends through your usual OS package manager; neither is required, the BEL fallback always works in a terminal.
-
-### Claude Code hooks
-
-The installer registers three hooks in `~/.claude/settings.json` (see [What the installer does](#what-the-installer-does)), all routed through `~/.claude/hooks/agent-notify-hook.sh`:
-
-| Claude Code hook | Notifier event | Behavior |
-| --- | --- | --- |
-| `Stop` (successful turn end) | `complete` | Always fires. |
-| `StopFailure` | `blocked` | Always fires. |
-| `Notification` | `attention` | Filtered by the payload's structural `notification_type` field only (Claude Code's documented field name; not `type`), **never by reading the free-text message**: a known non-attention system confirmation (currently `auth_success`) is silently skipped; a documented attention-required value (`permission_prompt`, `idle_prompt`, `elicitation_dialog`, `elicitation_url_dialog`, `agent_needs_input`) notifies, and so does anything else, including a payload with no recognizable `notification_type` at all (older or unknown Claude Code versions) — the documented conservative default, so a real request is never silently dropped. |
-
-The installed `Notification` hook also carries a `matcher` narrowed to that same attention-required set, as defense-in-depth alongside the script-side filtering above (see `HOOK_MATCHERS` in [`scripts/lib/claude_hooks.py`](scripts/lib/claude_hooks.py)); the script-side filtering is what actually decides whether to notify and keeps working even against a Claude Code version that ignores the matcher.
-
-The hook script itself keeps the regular, non-executable tracked file mode; the managed command Claude Code runs is `bash ~/.claude/hooks/agent-notify-hook.sh <kind>`, so it never needs its own execute bit.
-
-### Codex
-
-Codex's own built-in `notify` hook is opt-in only; this toolkit never edits the base `~/.codex/config.toml`. Add one line yourself to use [`targets/codex/notify/agent-notify-codex.sh`](targets/codex/notify/agent-notify-codex.sh):
-
-```toml
-notify = ["bash", "-c", '"$HOME/.codex/notify/agent-notify-codex.sh" "$1"', "_"]
-```
-
-The adapter forwards to the shared notifier at `~/.codex/notify/agent-notify.sh` when it is installed there, and otherwise to `~/.claude/hooks/agent-notify.sh`.
-
-Codex execs this array directly (no shell), so a literal `~` in a config-array argument is never expanded and would make Codex fail to even launch the adapter; a plain two-element `["bash", "~/.codex/notify/agent-notify-codex.sh"]` array does not work. The `bash -c` wrapper above is a real shell, so `$HOME` there does expand, and Codex's appended JSON payload reaches the adapter as `$1`, a single literal positional argument, never interpreted as a command. **Honest limitation:** Codex's `notify` hook only fires on turn/task completion, unlike Claude Code's separate Stop/StopFailure/Notification hooks. A Codex session using this adapter can therefore only ever report `complete`, never `attention` or `blocked`, even for a malformed or unrecognized turn-complete payload (it falls back to a generic "finished its turn" `complete` message, never to `blocked`).
-
-### Troubleshooting
-
-- No popup appears: confirm `notify-send` is installed and a desktop/D-Bus session is available (headless shells and most CI runners have neither); the terminal bell fallback still fires unless `--no-bell`/the terminal has bells disabled.
-- No sound: confirm `paplay` or `pw-play` is installed and a PulseAudio/PipeWire sink is available; a missing sound theme file is not an error, it just skips silently to the next candidate or the bell fallback.
-- Too many pings in an automated/CI shell: set `IFDEV_AGENT_NOTIFY=0` and `IFDEV_AGENT_SOUND=0` (or `--no-bell` for a single call) in that environment.
-- None of this changes permissions, sandboxing or command authority for Claude or Codex; it only sends best-effort local notifications.
-
-## Validation and tests
-
-```bash
-python3 -m pip install -r requirements-dev.txt   # once; pinned PyYAML
-for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
-./scripts/validate.sh
-python3 -m unittest discover -s tests -v
-```
-
-`validate.sh` is a bounded static lint. It checks:
-
-- the required file tree and the executable bit of `scripts/install.sh`, `scripts/uninstall.sh` and `scripts/validate.sh` (in the working tree and in the Git index);
-- skill and agent frontmatter, parsed as real YAML with PyYAML's safe loader (no arbitrary object construction): it must be a mapping without duplicate keys, with non-empty string `name` (matching the directory/file) and `description`, and no duplicate names. Definitions are taken from the full file inventory, so a missing, unreadable or unsafe (for example symlinked) `SKILL.md` or agent file fails;
-- broken local Markdown links and references to installed files, resolved through the destinations in `MANAGED_ITEMS` (`~/.claude/rules/testing.md` is mapped to `core/rules/testing.md`, `~/.claude/CLAUDE.md` to `dist/claude/CLAUDE.md`, `~/.agents/skills/web-dev/` to `core/skills/web-dev/`);
-- that `dist/` matches what `scripts/build_targets.py` generates now (no stale, missing or extra file), that each neutral agent in `core/agents/` declares a boolean `read_only` and no tool-specific keys, that the read-only roles stay read-only in `core/` and in the generated Claude agents, that each generated Codex agent starts with its generated-file comment and (with Python 3.11+ `tomllib`) holds exactly `name`, `description` and `developer_instructions` matching its source, with the read-only notice for read-only roles, that a skill with `disable-model-invocation: true` has `agents/openai.yaml` with `policy.allow_implicit_invocation: false` (and only then), and that the only symlinks in the repository are the listed compatibility links in `claude/` and `codex/`, each with its exact target;
-- hardcoded machine-specific home paths and accidental product/domain terms;
-- tool-specific text in `core/`: tool home paths (`~/.claude/`, `~/.codex/`, `~/.cursor/`), the `$ARGUMENTS` placeholder, "Skill tool" or "Agent tool" and old toolkit source paths such as `claude/rules/` (tool details go in `targets/<tool>/`);
-- sensitive paths in the Git index (reported by path only, even when ignored or deleted from the working tree), credential-like patterns in safe files (reported without the value), symlinks escaping the repository and files below a symlinked parent directory (reported, never read);
-- unsafe prescriptions (permission or hook bypasses, destructive commands, privileged execution, protected-branch bypasses) that appear without a prohibition in the same sentence;
-- obsolete delivery instructions in the installed `core/`, `targets/` and `dist/` content that contradict `core/rules/git-workflow.md`: requiring approval for every commit, or forbidding pushes even when delivery is authorized. Narrower restrictions are not reported: conditional wording (such as "without authorization" or "unless"), explicit user restrictions and prohibitions limited to force pushes or default/protected branches;
-- consistency of the commit emoji/type convention;
-- `MANAGED_ITEMS` in `scripts/lib/common.sh`: every source exists, destinations are unique, owning targets are listed in `AVAILABLE_TARGETS` and none replaces `~/.codex/config.toml`; `MOVED_ITEMS` map a managed destination from an old source that survives only through a compatibility link; `RETIRED_ITEMS` sources have no tracked or untracked, non-ignored content left (Git-ignored leftovers such as `__pycache__/` do not count) and their destinations do not collide with a managed one;
-- Bash syntax of every `*.sh` file.
-
-The file inventory comes from `git ls-files --cached --others --exclude-standard`, so it works on a fresh clone and on an uncommitted working tree. Paths that look like secrets are classified by name before anything is opened, checking every path component (so a matching directory covers everything below it): `.env*`, `credential*`, `secret*` and `token*` (also dot-prefixed, such as `.credentials.json`), `auth` and `auth.*` (such as `auth.json`, `auth.yaml`), private keys and key stores (`id_rsa*`, `id_ed25519*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.ppk`, `*.jks`, `*.keystore`), credential files (`.netrc`, `.git-credentials`, `.pypirc`, `.npmrc`) and cloud/tool credential directories (`.aws`, `.azure`, `.gcloud`, `.kube`, `.docker`, `.oci`, `.ssh`, `.gnupg`, `.config/gcloud`, `.config/gh`). They are never read, hashed or copied, and their index content is never inspected; untracked ones are left untouched.
-
-**Limitations:** the checks are heuristics. The unsafe-prescription and obsolete-delivery checks are sentence-based pattern matches, not semantic analysis: they can miss cleverly phrased instructions or accept a qualifier word used out of context. The credential scan covers common token formats only, and the sensitive-name list can flag harmless names. Passing validation is not a substitute for human semantic and security review.
-
-The tests run the real scripts in subprocesses with a temporary `HOME` and temporary repositories; they never touch your actual home directory.
-
-## Adding content
-
-- **Rule:** add `core/rules/<name>.md`, reference it from `core/instructions.md` when it should always apply, add it to `MANAGED_ITEMS` in `scripts/lib/common.sh` and to `REQUIRED_FILES` in `scripts/validate.py`, and extend the tests that enumerate managed links.
-- **Skill:** add `core/skills/<name>/SKILL.md` with `name: <name>` and a `description` in the frontmatter; register the directory as above. Link the skill directory, never the whole `skills/` directory. Phase-specific procedures may go in `references/*.md` inside the skill directory (plain Markdown, no frontmatter), linked from `SKILL.md`; add mandatory ones to `REQUIRED_FILES`. They are installed with the directory link and checked like any other content.
-- **Agent:** add `core/agents/<name>.md` with `name`, `description` and `read_only: true` or `false`, run `python3 scripts/build_targets.py` and register the generated `dist/claude/agents/<name>.md` and `dist/codex/agents/<name>.toml` as above.
-- Keep content general: no product names, business domains, stack-specific business rules or machine paths. Those belong in each project's own `.claude/`.
-
-## Team agents
-
-Seventeen global agents, all senior, form the team described in [`core/instructions.md`](core/instructions.md#team-analyst--dev--reviewer--qa). Dashed boxes run only when their criterion applies:
-
-```mermaid
-flowchart TD
-    classDef optional stroke-dasharray: 5 5
-    classDef human fill:#f5f5f5,stroke:#888
-
-    request([Request])
-
-    subgraph product["Product"]
-        po["po<br/>stories, backlog, priority"]:::optional
-        metrics["metrics-analyst<br/>metrics, tracking, experiments"]:::optional
-    end
-
-    subgraph define["Define"]
-        analyst["analyst<br/>acceptance criteria"]:::optional
-        architect["architect<br/>technical decision, ADR draft"]:::optional
-        ux["ux<br/>flows, screens, prototype"]:::optional
-        designer["designer<br/>logo, visual identity, assets"]:::optional
-    end
-
-    subgraph build["Build"]
-        debugger["debugger<br/>root cause of unknown bugs"]:::optional
-        dev["dev<br/>code and tests"]
-        devops["devops<br/>CI/CD, infra, observability"]:::optional
-        writer["tech-writer<br/>documentation"]:::optional
-    end
-
-    subgraph review["Review"]
-        reviewer["reviewer<br/>every diff"]
-        specialized["ux-reviewer · security-reviewer · api-reviewer<br/>privacy-reviewer · db-reviewer · performance-reviewer"]:::optional
-    end
-
-    qa["qa<br/>acceptance tests and verification"]
-    delivery["Main agent<br/>commits, push, pull request"]
-    merge(["Human review and merge"]):::human
-
-    request --> po
-    request -.-> metrics
-    request --> analyst
-    request --> debugger
-    request --> dev
-    po --> analyst
-    metrics -.-> po
-    metrics -.-> analyst
-    analyst --> architect
-    analyst --> ux
-    request --> designer
-    designer --> ux
-    designer --> dev
-    architect --> ux
-    architect --> dev
-    ux --> dev
-    analyst --> dev
-    debugger --> architect
-    debugger --> dev
-    dev <-->|"or holds the Dev role"| devops
-    dev --> writer
-    devops --> writer
-    dev --> reviewer
-    devops --> reviewer
-    writer --> reviewer
-    reviewer --- specialized
-    reviewer --> qa
-    specialized --> qa
-    qa --> delivery
-    delivery --> merge
-```
-
-The main agent orchestrates every step, takes blocking questions to the user and fixes findings before moving on. A request that needs no optional role goes straight to the Dev; documentation-only or trivial changes stop at the Reviewer.
-
-| Role | Agent | Does | Never does |
-|---|---|---|---|
-| Product owner | [`po`](core/agents/po.md) | Turns a product goal or idea into epics and user stories with acceptance criteria, a prioritized backlog with reasons and a release or MVP cut, writing only product files where the main agent says | Edit code, tests or configuration, create items in external trackers, invent business rules or targets, commit, push |
-| Metrics analyst | [`metrics-analyst`](core/agents/metrics-analyst.md) | Success, input and guardrail metrics with exact definitions, tracking plans, dashboards and experiment designs, and analysis of aggregated or synthetic data, writing only analytics documents where the main agent says | Edit code, query production or analytics platforms, analyze identifiable data, commit, push |
-| Analyst | [`analyst`](core/agents/analyst.md) | Read-only requirements for new features, rule changes or ambiguous requests: scope, numbered testable acceptance criteria, blocking questions, recorded assumptions, risks and slicing | Implement, design detailed architecture, invent business rules, remote operations |
-| Architect | [`architect`](core/agents/architect.md) | Read-only technical decisions when a change needs one: drivers and constraints, options compared, recommendation, boundaries and contracts, data model, security boundaries, risks, implementation slicing and a draft decision record | Implement, write files, invent business rules or budgets, remote operations |
-| UX designer | [`ux`](core/agents/ux.md) | Flows, screen inventory with every state, interaction and accessibility notes, copy and, when asked, a low/mid-fidelity prototype for new or redesigned screens, writing only design files where the main agent says | Edit production code, tests or configuration, invent business rules or brand, publish, remote operations |
-| Visual designer | [`designer`](core/agents/designer.md) | Logos and monograms, visual identity (palette, typography, icon and favicon, lockups, usage rules) and graphic assets: several distinct options with rationale, an SVG master and raster previews checked at small sizes and on light and dark grounds, and font and asset licensing, writing only design files where the main agent says | Edit production code, tests or configuration, copy third-party marks, invent names or claims, publish, remote operations |
-| Debugger | [`debugger`](core/agents/debugger.md) | Read-only investigation of a bug, failing check or regression with unknown cause: local reproduction, evidence, root cause, proposed fix and the regression test | Edit, apply fixes, touch the user's working tree, remote access |
-| Dev | [`dev`](core/agents/dev.md) | Implements the planned change with tests and runs the affected checks | Commit, push, deploy, remote changes |
-| DevOps | [`devops`](core/agents/devops.md) | Holds the Dev role for CI/CD, build and container configuration, infrastructure as code, environments, observability (logs, metrics, traces, alerts, SLOs) and release automation; verifies only locally (lint, build, dry run or plan against local or mocked state) and lists the remote steps that need authorization | Deploy, apply, release or act on any remote environment, read credentials, commit, push |
-| Technical writer | [`tech-writer`](core/agents/tech-writer.md) | User guides, README and setup, API references, runbooks and release notes for a change, verified against code and tests, editing only documentation files | Edit code, tests or configuration, publish documentation sites, commit, push |
-| Reviewer | [`reviewer`](core/agents/reviewer.md) | Independent read-only review of the diff | Edit or run application scripts |
-| UX reviewer | [`ux-reviewer`](core/agents/ux-reviewer.md) | Read-only review of interface changes: loading/empty/error states, action feedback, accessibility, i18n, consistency across clients, small screens, copy, and conformance to the confirmed design when the UX designer ran | Edit, run builds, remote operations |
-| Security reviewer | [`security-reviewer`](core/agents/security-reviewer.md) | Read-only review of auth, authorization and data isolation, secrets in clients, untrusted input, personal data and logs, dependencies, platform permissions, with concrete attack scenarios | Edit, run exploits, remote operations, read credentials |
-| API reviewer | [`api-reviewer`](core/agents/api-reviewer.md) | Read-only review of contracts and integrations: compatibility and versioning, errors, idempotency and webhook delivery, pagination and limits, contract tests | Edit, call external APIs or sandboxes, remote operations |
-| Privacy reviewer | [`privacy-reviewer`](core/agents/privacy-reviewer.md) | Read-only review of personal and sensitive data: purpose and legal basis, consent, minimization, retention and deletion, data subject rights, sharing and transfers, analytics | Edit, give legal opinions, read real personal data, remote operations |
-| Database reviewer | [`db-reviewer`](core/agents/db-reviewer.md) | Read-only review of schema and migrations (data loss, locking, rollback), constraints, indexes and queries, transactions, functions and access policies | Edit, run migrations, connect to databases, remote operations |
-| Performance reviewer | [`performance-reviewer`](core/agents/performance-reviewer.md) | Read-only review of hot paths, round trips, payload and bundle size, client rendering and memory, caching, concurrency and cost, against realistic volumes | Edit, run benchmarks or builds, remote operations |
-| QA | [`qa`](core/agents/qa.md) | Derives scenarios from the acceptance criteria, writes the missing acceptance tests (integration, component or end-to-end), reruns the local verification and reports gaps and a verdict | Production code, configuration or dependencies, destructive or remote operations |
-
-The product owner runs before the team when the user asks for stories, a backlog, a roadmap or prioritization; each confirmed story then enters the team, and the metrics analyst defines how it will be measured when needed. The debugger runs before the Dev when the cause of a bug is unknown. The Analyst runs before the Dev only when the request needs requirements; the main agent takes its blocking questions to the user, and its acceptance criteria guide the Dev and QA. The Architect runs after the Analyst only when the change needs a technical decision; its confirmed decision guides the Dev and the Reviewer. The UX designer runs after the Analyst only when the request creates or substantially changes screens or navigation; its confirmed design guides the Dev, the UX reviewer and QA. The visual designer runs when a request creates or changes a logo, visual identity or brand assets, before the UX designer when both apply. The DevOps agent takes the Dev role (or works with the Dev on separate slices) when the change is mainly infrastructure, delivery automation or observability. The technical writer handles documentation that needs more than a changelog entry, before the Reviewer. The UX, security, API, privacy, database and performance reviewers run alongside the Reviewer only when the diff meets the criteria in `core/instructions.md` (interface changes; authentication, data access, secrets, permissions, backup or transfer configuration, or dependencies; contracts and external integrations; personal data flows; schema, migrations or access policies; hot paths, large data or performance targets). The main agent orchestrates the team, fixes material findings and delivers through the Git workflow. Project-specific reviewers (for example access-policy reviewers) complement the global ones and do not replace them. Projects can add specialized reviewers in their own `.claude/agents/`, but must not name them `po`, `metrics-analyst`, `analyst`, `architect`, `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer` or `qa`: a project agent takes precedence over a global one with the same name and would hide it.
-
-The stack skills [`flutter-dev`](core/skills/flutter-dev/SKILL.md), [`web-dev`](core/skills/web-dev/SKILL.md), [`supabase-dev`](core/skills/supabase-dev/SKILL.md) and [`java-spring-dev`](core/skills/java-spring-dev/SKILL.md) give the agents whose work touches a stack (Dev, Reviewer, QA, the UX designer and UX reviewer, and the database and security reviewers) stack-specific guidance (structure, state, accessibility, platform and security pitfalls, test levels and local verification). They name technologies, not products, and are read only when a change touches that stack; a project's own rules and skills win when they are more specific. Two procedure skills complement them: [`safe-refactor`](core/skills/safe-refactor/SKILL.md) (characterization tests first, small verified steps, refactor separate from behavior changes) for the Dev, and [`e2e-testing`](core/skills/e2e-testing/SKILL.md) (acceptance and end-to-end tests from acceptance criteria) for QA.
-
-Updating with `git pull` refreshes existing links, but a release that adds managed items (such as these agents) needs `./scripts/install.sh` again to create the new links; it is idempotent. Until then the global instructions tell the main agent to report the missing agent and run its role in a separate context.
-
-Earlier versions also shipped an optional Codex supervisor (the `supervise-claude` skill and the opt-in `ifdev-autonomous` profile). It was removed because this team now covers complete deliveries on its own; running `./scripts/install.sh` again removes its old links (see the Upgrade notes in `CHANGELOG.md`).
-
-## Context efficiency
-
-Principle: **load the minimum context required to safely complete the current task.** Safety, testing and Git obligations are never traded for fewer tokens; what changes is when and how much content is read.
-
-### What loads when
-
-According to the official Claude Code documentation ([How Claude remembers your project](https://code.claude.com/docs/en/memory), including [path-specific rules](https://code.claude.com/docs/en/memory#path-specific-rules)):
-
-- `~/.claude/CLAUDE.md` and the `CLAUDE.md` files in the working directory and its ancestor directories load in full at session start, and `@path` imports inside them are expanded eagerly.
-- `CLAUDE.md` files in subdirectories below the working directory load on demand, when Claude reads files in those subdirectories.
-- Rules in `.claude/rules/` and `~/.claude/rules/` without a `paths` frontmatter field load every session.
-- Rules with a `paths` field (a YAML list of glob patterns) load when Claude reads matching files.
-- An ordinary Markdown link is not an import; the linked file is read only when opened.
-
-So `core/instructions.md` and the three global rules are **always loaded**; they stay concise and canonical, and installing them does not make them lazy. Skills keep purpose, boundaries, the core workflow and stop/report requirements in `SKILL.md` and move phase-specific procedures to `references/` files reached through ordinary links:
-
-| Entrypoint | Read only when needed |
-| --- | --- |
-| `core/skills/verify-changes/SKILL.md` | `references/commit-messages.md` (when commit messages are proposed) |
-| `core/skills/work-session/SKILL.md` | `references/commit-proposal.md` (when delivery is not authorized) |
-
-A reference is binding once its phase starts. Reference directories ride on the existing skill directory links, so adding references does not change the managed paths.
-
-Moving skill procedures to `references/` shortened the skill entrypoints; no byte or token saving is claimed for it. For the always-loaded files, use the measured baseline below.
-
-### Always-loaded context baseline
-
-`python3 scripts/context_budget.py` (needs the pinned dev dependency) lists, per target, the files loaded in every session: for `claude`, the generated `dist/claude/CLAUDE.md` and each Markdown file under `core/rules/` (searched recursively) without a non-empty `paths` frontmatter key (rules with `paths` patterns are listed as on demand and not counted); for `codex`, the whole generated `dist/codex/AGENTS.md`, which already holds the rules. Tokens are **estimated** as `ceil(bytes / 4)`, a rough average for English Markdown, not a tokenizer count; the real number depends on the model's tokenizer.
-
-Baseline at commit `2f555cc` (estimate):
-
-`claude` target:
-
-| File | Bytes | ~Tokens |
-| --- | ---: | ---: |
-| `dist/claude/CLAUDE.md` | 15100 | 3775 |
-| `core/rules/engineering-principles.md` | 6717 | 1680 |
-| `core/rules/git-workflow.md` | 7500 | 1875 |
-| `core/rules/testing.md` | 7495 | 1874 |
-| **Total** | **36812** | **9203** |
-
-`codex` target:
-
-| File | Bytes | ~Tokens |
-| --- | ---: | ---: |
-| `dist/codex/AGENTS.md` | 37049 | 9263 |
-| **Total** | **37049** | **9263** |
-
-No rule is on demand yet. Compare against this baseline before claiming a context saving.
-
-### Scoped project rules
-
-Path scoping belongs in each **project's** `.claude/rules/`, since global files cannot know a project's layout. Keep each area's rules in a separate file whose frontmatter lists its paths, for example `.claude/rules/database.md`:
-
-```yaml
----
-paths:
-  - "supabase/**"
----
-```
-
-and likewise `paths: ["apps/web/**"]` in `web.md`, `paths: ["apps/mobile/**"]` in `mobile.md` and `paths: ["packages/contracts/**"]` in `contracts.md`. Do not `@`-import these files from the root `CLAUDE.md`: an import loads them every session and defeats the scoping.
-
-### Tests, sessions and output
-
-- [`core/rules/testing.md`](core/rules/testing.md) classifies impact (documentation, web, database, mobile, contracts and consumers, cross-stack) and gives each check an applicability status (APPLICABLE, NOT APPLICABLE, SKIPPED WITH JUSTIFICATION, BLOCKED) separate from its result. Clearly irrelevant checks do not reduce COMPLETE to PARTIAL; relevant uncertainty does. Mandatory checks and behavior coverage stay mandatory.
-- Start a fresh session for each meaningful task; durable knowledge belongs in the repository (instructions, rules, docs), not in long conversation history.
-- Allocate checks by phase as in `testing.md`: the implementer runs impacted checks each cycle, the independent reviewer runs targeted checks on intermediate reviews and the complete final gate once ready. Reuse a passed result only within the same run on unchanged inputs.
-- Inspect Git metadata (`status`, `--stat`, `--name-status`, staged and unstaged) before reading selected diffs; read every relevant safe new file, and lockfiles, generated files and snapshots only as far as needed.
-- Keep durable full logs on disk in a safe directory outside the repository, never containing secrets; the context gets command, working directory, exit status, a short summary and optionally the duration, with failure excerpts expanded as needed.
-- Within one run, CLI help/versions, discovered instructions, the repository root, the base branch and project commands may be reused; invalidate them when their source changes. Never keep a persistent cache of permissions, credentials or safety decisions.
-
-## Commits and delivery
-
-Commits follow the emoji Conventional Commits convention and the branch/PR flow in [core/rules/git-workflow.md](core/rules/git-workflow.md). Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-GitHub CLI authentication is a one-time human step outside the agent: run `gh auth login` in your own terminal and confirm with `gh auth status`. Agents use the existing authentication and never run the login themselves or read its token.
-
-## Scope and ownership
-
-The repository owns only the linked items of the installed targets (thirty-three for `claude`, including the opt-in Codex notify adapter, and twenty-nine for `codex`), plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude/Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+- **Update:** `git pull && ./scripts/install.sh` (a bare run reinstalls the recorded targets and is idempotent).
+- **Uninstall:** `./scripts/uninstall.sh --dry-run`, then `./scripts/uninstall.sh` (or `--target codex` for one target).
+- **Backups:** anything the installer replaces is moved to `~/.ifdev-ai-tools/backups/`, never deleted; see [manual restoration](docs/installation.md#backups-and-manual-restoration).
+
+Keep the checkout where it is: the links point into it. Everything the installer guarantees, upgrade notes and troubleshooting are in [docs/installation.md](docs/installation.md).
+
+## 📚 More
+
+| Document | For |
+|---|---|
+| [docs/installation.md](docs/installation.md) | Install, upgrade, uninstall, backups, what the toolkit owns |
+| [docs/team.md](docs/team.md) | Every role, when it runs and what it never does |
+| [docs/notifications.md](docs/notifications.md) | Desktop, sound and bell notifications for Claude Code and Codex |
+| [docs/customization.md](docs/customization.md) | Adapting a project: `AGENTS.md`, overrides, project reviewers |
+| [docs/development.md](docs/development.md) | Working on this repository: layout, validator, context budget |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution rules |
+| [CHANGELOG.md](CHANGELOG.md) | Changes and upgrade notes |
+| [docs/decisions/](docs/decisions/) | Decision records |
 
 ## License
 

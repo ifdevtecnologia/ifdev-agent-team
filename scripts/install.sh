@@ -25,7 +25,7 @@ moved to ~/.ifdev-ai-tools/backups/<timestamp>-<unique>/ before linking; a link 
 an item's old path in this checkout is relinked without a backup. Links left by
 retired items are removed only when they still point to this checkout. The claude
 target also merges this toolkit's notification hooks into ~/.claude/settings.json,
-preserving every other setting (requires python3; see README). The codex target
+preserving every other setting (requires python3; see docs/installation.md). The codex target
 never edits ~/.codex/config.toml and warns when ~/.codex/AGENTS.override.md exists.
 
   --target    target to install (repeatable); available: claude, codex, or all
@@ -194,7 +194,7 @@ apply_install() {
     i=$((i + 1))
   done
   log "done: $linked linked, $backed_up backed up, $unchanged unchanged, $RETIRED_REMOVED retired removed"
-  [[ -z "$backup_dir" ]] || log "backups: $backup_dir (see README for manual restoration)"
+  [[ -z "$backup_dir" ]] || log "backups: $backup_dir (see docs/installation.md for manual restoration)"
 }
 
 manage_claude_hooks() {

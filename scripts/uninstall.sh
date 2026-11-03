@@ -21,8 +21,8 @@ recorded (the Codex notify adapter) is kept. Without --target, removes the recor
 targets, or every target when none is recorded. Real files, directories, foreign symlinks,
 sibling configuration and backups are left untouched. The claude target also removes
 this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
-other setting untouched (requires python3; see README). Backups are not restored
-automatically; see README for manual restoration.
+other setting untouched (requires python3; see docs/installation.md). Backups are not restored
+automatically; see docs/installation.md for manual restoration.
 
   --target    target to remove (repeatable); available: claude, codex, or all
   --dry-run   print the planned actions without changing anything
@@ -174,7 +174,7 @@ report_backups() {
   for entry in "$backups"/*; do
     [[ -d "$entry" && ! -L "$entry" ]] || continue
     if [[ "$found" -eq 0 ]]; then
-      log "backups kept (restore manually if needed, see README):"
+      log "backups kept (restore manually if needed, see docs/installation.md):"
       found=1
     fi
     log "  $entry"
