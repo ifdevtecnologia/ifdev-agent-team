@@ -37,7 +37,7 @@ before this file existed and has no Git tag.
   assets, before the `ux` agent when both apply.
 - `scripts/context_budget.py`: lists the files loaded in every session (`claude/CLAUDE.md` and the
   rules without `paths`) with bytes and estimated tokens (`ceil(bytes / 4)`, not a tokenizer
-  count). The README records the current baseline as an estimate.
+  count). `docs/development.md` records the current baseline as an estimate.
 - Per-project customization guide (`docs/customization.md`) for teams adopting the toolkit: what
   stays global and what goes in each project, the precedence rule, how project `CLAUDE.md`,
   `AGENTS.md`, path-scoped rules, agents and skills load, which global defaults a project may
@@ -125,6 +125,14 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- Shorter, tool-agnostic README: what the team is, a flow diagram of the roles, compact role,
+  skill and supported-tool tables, a build-and-install diagram and a quick start for Claude Code
+  and Codex. The details moved to new guides: `docs/installation.md` (prerequisites, targets,
+  installer guarantees, backups and manual restoration, upgrade, uninstall, what the toolkit owns,
+  troubleshooting), `docs/team.md` (every role, when it runs and what it never does),
+  `docs/notifications.md` and `docs/development.md` (layout, validator, context budget baseline).
+  `docs/customization.md` and the project templates now start from `AGENTS.md`, which every tool
+  reads and a short `CLAUDE.md` imports.
 - `install.sh` also refuses, before changing anything, a managed source below a symlinked
   directory of the checkout, so every installed link loads content from the checkout itself.
 - New source layout: the tool-neutral instructions, rules, agents and skills live in `core/`,
