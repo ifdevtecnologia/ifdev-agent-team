@@ -4,8 +4,9 @@ The README baseline is pinned to a commit, so its numbers are compared exactly a
 run on that commit's tree (exported to a temporary directory), not against the working tree: edits
 to the content of `core/instructions.md` or the rules must not break the suite, but the recorded
 baseline must stay true. Against the working tree only the stable invariants are checked: the same
-set of files and an internally consistent table. Adding a rule, or giving one `paths`, changes the
-set of always-loaded files and requires updating the README baseline.
+targets and files and internally consistent tables. Adding a rule, giving one `paths` or adding a
+target changes the always-loaded files and requires updating the README baseline, which has one
+table per target.
 """
 
 from __future__ import annotations
@@ -29,6 +30,8 @@ SECTION_HEADING = "### Always-loaded context baseline"
 ROW = re.compile(r"^\| `(?P<file>[^`]+)` \| (?P<bytes>\d+) \| (?P<tokens>\d+) \|$")
 TOTAL_ROW = re.compile(r"^\| \*\*Total\*\* \| \*\*(?P<bytes>\d+)\*\* \| \*\*(?P<tokens>\d+)\*\* \|$")
 COMMIT = re.compile(r"Baseline at commit `(?P<commit>[0-9a-f]{7,40})` \(estimate\):")
+TARGET_LINE = re.compile(r"^`(?P<target>[a-z]+)` target:$")
+SCRIPT_TARGET = re.compile(r"^Target: (\S+)$", re.MULTILINE)
 
 
 def baseline_section() -> str:
@@ -38,45 +41,60 @@ def baseline_section() -> str:
     return readme[start : end if end != -1 else len(readme)]
 
 
-def baseline_table(section: str) -> tuple[list[tuple[str, int, int]], tuple[int, int]]:
-    rows, total = [], None
+def baseline_tables(section: str) -> dict[str, tuple[list[tuple[str, int, int]], tuple[int, int]]]:
+    """{target: (rows, total)} for each "`<target>` target:" table of the baseline section."""
+    tables: dict[str, tuple[list[tuple[str, int, int]], tuple[int, int] | None]] = {}
+    target = None
     for line in section.splitlines():
-        if match := ROW.match(line):
-            rows.append((match["file"], int(match["bytes"]), int(match["tokens"])))
+        if match := TARGET_LINE.match(line):
+            target = match["target"]
+            tables[target] = ([], None)
+        elif target is None:
+            continue
+        elif match := ROW.match(line):
+            tables[target][0].append((match["file"], int(match["bytes"]), int(match["tokens"])))
         elif match := TOTAL_ROW.match(line):
-            total = (int(match["bytes"]), int(match["tokens"]))
-    if total is None:
-        raise AssertionError("README baseline table has no Total row")
-    return rows, total
+            tables[target] = (tables[target][0], (int(match["bytes"]), int(match["tokens"])))
+    if not tables or any(total is None for _, total in tables.values()):
+        raise AssertionError("README baseline needs a table with a Total row for each target")
+    return tables
 
 
-def script_report(root: Path | None = None) -> list[tuple[str, int, int]]:
-    """Runs the CLI (default root unless given) and parses its always-loaded rows, total included."""
+def script_report(root: Path | None = None) -> dict[str, list[tuple[str, int, int]]]:
+    """Runs the CLI (default root unless given) and parses each target's always-loaded rows, total
+    included, as {target: rows}."""
     args = [sys.executable, str(REPO_ROOT / "scripts/context_budget.py")]
     if root is not None:
         args += ["--root", str(root)]
     stdout = subprocess.run(args, capture_output=True, text=True, check=True).stdout
-    always = stdout.split("On demand", 1)[0]
-    return [
-        (m[3], int(m[1]), int(m[2]))
-        for m in re.finditer(r"^\s+(\d+)\s+(\d+)\s+(\S+)$", always, re.MULTILINE)
-    ]
+    parts = SCRIPT_TARGET.split(stdout)[1:]
+    report = {}
+    for target, text in zip(parts[::2], parts[1::2]):
+        always = text.split("On demand", 1)[0]
+        report[target] = [
+            (m[3], int(m[1]), int(m[2])) for m in re.finditer(r"^\s+(\d+)\s+(\d+)\s+(\S+)$", always, re.MULTILINE)
+        ]
+    return report
 
 
 class ContextBaselineAcceptanceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.section = baseline_section()
-        self.rows, self.total = baseline_table(self.section)
+        self.tables = baseline_tables(self.section)
 
     def test_ac1_script_on_repository_lists_always_loaded_files_with_bytes_tokens_and_total(self) -> None:
-        report = script_report()
+        reports = script_report()
 
-        files = [name for name, _, _ in report]
-        self.assertEqual(files[0], "dist/claude/CLAUDE.md")
-        self.assertEqual(files[-1], "total")
-        for name, size, tokens in report:
-            self.assertEqual(tokens, -(-size // 4), name)
-        self.assertEqual(report[-1][1], sum(size for _, size, _ in report[:-1]))
+        self.assertEqual(list(reports), ["claude", "codex"])
+        for target, entry_point in (("claude", "dist/claude/CLAUDE.md"), ("codex", "dist/codex/AGENTS.md")):
+            with self.subTest(target=target):
+                report = reports[target]
+                files = [name for name, _, _ in report]
+                self.assertEqual(files[0], entry_point)
+                self.assertEqual(files[-1], "total")
+                for name, size, tokens in report:
+                    self.assertEqual(tokens, -(-size // 4), name)
+                self.assertEqual(report[-1][1], sum(size for _, size, _ in report[:-1]))
 
     def test_ac1_ac2_readme_documents_estimate_method_and_marks_baseline_as_estimate(self) -> None:
         self.assertIn("python3 scripts/context_budget.py", self.section)
@@ -88,38 +106,42 @@ class ContextBaselineAcceptanceTest(unittest.TestCase):
         self.assertLess(readme.index("## Context efficiency"), readme.index(SECTION_HEADING))
 
     def test_ac2_baseline_table_is_internally_consistent(self) -> None:
-        for name, size, tokens in self.rows:
-            self.assertEqual(tokens, context_budget.estimate_tokens(size), name)
-        total_bytes, total_tokens = self.total
-        self.assertEqual(total_bytes, sum(size for _, size, _ in self.rows))
-        self.assertEqual(total_tokens, context_budget.estimate_tokens(total_bytes))
+        for target, (rows, (total_bytes, total_tokens)) in self.tables.items():
+            with self.subTest(target=target):
+                for name, size, tokens in rows:
+                    self.assertEqual(tokens, context_budget.estimate_tokens(size), name)
+                self.assertEqual(total_bytes, sum(size for _, size, _ in rows))
+                self.assertEqual(total_tokens, context_budget.estimate_tokens(total_bytes))
 
-    def test_ac2_baseline_lists_the_files_the_script_reports_as_always_loaded(self) -> None:
-        current = [name for name, _, _ in script_report()[:-1]]
+    def test_ac2_baseline_lists_the_targets_and_files_the_script_reports_as_always_loaded(self) -> None:
+        current = {target: [name for name, _, _ in rows[:-1]] for target, rows in script_report().items()}
 
-        self.assertEqual([name for name, _, _ in self.rows], current)
+        self.assertEqual({target: [name for name, _, _ in rows] for target, (rows, _) in self.tables.items()}, current)
 
     def test_ac2_baseline_numbers_match_the_script_at_the_recorded_commit(self) -> None:
         if not hasattr(tarfile, "data_filter"):
             self.skipTest("tarfile extraction filters need Python 3.12+ or a security backport")
         commit = COMMIT.search(self.section)["commit"]
         archive = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", commit, "core/rules", "dist/claude"],
+            ["git", "-C", str(REPO_ROOT), "archive", "--format=tar", commit, "core/rules", "dist/claude", "dist/codex"],
             capture_output=True,
         )
         if archive.returncode != 0:
             # Shallow clones (the CI checkout) do not contain older commits, and a commit before
-            # the core/ and dist/ layout (decision record 0004) has none of these paths.
-            self.skipTest(f"baseline commit {commit} is not available in this clone or predates core/ and dist/")
+            # the Codex target (decision record 0004) lacks some of these paths.
+            self.skipTest(f"baseline commit {commit} is not available in this clone or predates dist/codex/")
         root = Path(tempfile.mkdtemp(prefix="ifdev-ai-tools-baseline-"))
         self.addCleanup(shutil.rmtree, root)
         with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
             tar.extractall(root, filter="data")
 
-        report = script_report(root)
+        reports = script_report(root)
 
-        self.assertEqual(report[:-1], self.rows)
-        self.assertEqual(report[-1][1:], self.total)
+        self.assertEqual(list(reports), list(self.tables))
+        for target, (rows, total) in self.tables.items():
+            with self.subTest(target=target):
+                self.assertEqual(reports[target][:-1], rows)
+                self.assertEqual(reports[target][-1][1:], total)
 
 
 if __name__ == "__main__":

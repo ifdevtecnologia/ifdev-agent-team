@@ -8,6 +8,16 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- OpenAI Codex target: `install.sh --target codex` (or `--target all` for Claude Code and Codex)
+  links `~/.codex/AGENTS.md` (the team process with the three rules inside, generated into
+  `dist/codex/`), one custom agent per role in `~/.codex/agents/<role>.toml`, the skills in
+  `~/.agents/skills/` and the shared notifier in `~/.codex/notify/`. Roles start with
+  `spawn_agent` and `fork_turns: "none"`; Codex does not enforce read-only roles, so they are
+  read-only by instruction and report any edit. An existing `~/.codex/AGENTS.md` is backed up and
+  replaced, `~/.codex/AGENTS.override.md` only triggers a warning, and `~/.codex/config.toml` is
+  never edited. The Codex `notify` adapter is shared by both targets: uninstalling one keeps it
+  while the other stays installed. `work-session` stays out of Codex's implicit skill use.
+  `context_budget.py` reports the always-loaded context per target.
 - `install.sh --target claude` and `uninstall.sh --target claude` (repeatable; `all` means every
   available target) choose what to install or remove; `claude` is the only target so far. The
   installed targets are recorded in `~/.ifdev-ai-tools/targets`: a bare `install.sh` reinstalls
@@ -185,6 +195,10 @@ before this file existed and has no Git tag.
   the exception that let the supervisor skill forbid Claude from delivering.
 
 ### Upgrade
+- To use the toolkit with Codex, run `./scripts/install.sh --target codex` (once; the target is then
+  recorded and a bare `./scripts/install.sh` reinstalls it). A Claude-only install needs no action.
+  Review `./scripts/install.sh --target codex --dry-run` first if you keep your own
+  `~/.codex/AGENTS.md`: it is moved to the backups, not merged.
 - `git pull` keeps existing installations working: the old paths in `claude/` and `codex/` are now
   compatibility links to the new locations, kept for one release. Run `./scripts/install.sh` once
   after pulling to move your links to the new sources; links to the old paths are relinked without
