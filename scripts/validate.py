@@ -16,7 +16,6 @@ is redacted, so no output line echoes a recognized credential value.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import re
 import stat
@@ -25,6 +24,8 @@ import sys
 from pathlib import Path, PurePosixPath
 
 import yaml
+
+import build_targets
 
 # Every team role: a neutral source in core/agents/ and its generated Claude agent in dist/claude/agents/.
 ROLES = (
@@ -727,14 +728,19 @@ def reached_through_compat_link(rel: str) -> bool:
 
 def check_moved_items(root: Path, texts: dict[str, str], managed: dict[str, str], report: Report) -> None:
     """A moved item's destination must still be managed, from a different source, and its old
-    source may survive only through a compatibility link (otherwise it is still a real source)."""
+    source may survive only through a compatibility link (otherwise it is still a real source)
+    that resolves to the new source, so a machine that only pulls keeps loading the same file."""
     for source, destination in parse_item_array(texts, "MOVED_ITEMS", report):
         if destination not in managed:
             report.add(MANAGED_ITEMS_FILE, f"moved destination '{destination}' is not a managed destination")
         elif managed[destination] == source:
             report.add(MANAGED_ITEMS_FILE, f"moved source '{source}' is still the managed source of '{destination}'")
-        if os.path.lexists(root / source) and not reached_through_compat_link(source):
+        if not os.path.lexists(root / source):
+            continue
+        if not reached_through_compat_link(source):
             report.add(MANAGED_ITEMS_FILE, f"moved source '{source}' still exists outside the compatibility links")
+        elif destination in managed and os.path.realpath(root / source) != os.path.realpath(root / managed[destination]):
+            report.add(MANAGED_ITEMS_FILE, f"moved source '{source}' does not resolve to the managed source of '{destination}'")
 
 
 def check_compat_links(root: Path, candidates: list[str], report: Report) -> None:
@@ -781,17 +787,10 @@ def check_managed_agents(managed: dict[str, str], report: Report) -> None:
 
 
 def check_generated(root: Path, report: Report) -> None:
-    """dist/ must match what scripts/build_targets.py (next to this validator) generates now."""
-    path = Path(__file__).with_name("build_targets.py")
-    if not path.is_file():
-        report.add("scripts/build_targets.py", "generator is missing; dist/ freshness not checked")
-        return
-    spec = importlib.util.spec_from_file_location("build_targets", path)
-    generator = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(generator)
+    """dist/ must match what scripts/build_targets.py generates now."""
     try:
-        found = generator.problems(root)
-    except generator.BuildError as exc:
+        found = build_targets.problems(root)
+    except build_targets.BuildError as exc:
         report.add("dist", f"cannot generate the target files: {exc}")
         return
     except (OSError, ValueError) as exc:

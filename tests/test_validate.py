@@ -13,6 +13,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -127,7 +128,10 @@ class ValidatorTestCase(unittest.TestCase):
     def load_validator(self):
         spec = importlib.util.spec_from_file_location("fixture_validate", self.root / "scripts/validate.py")
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # As when run as a script, the validator imports its sibling generator from the fixture.
+        with mock.patch.dict(sys.modules), mock.patch.object(sys, "path", [str(self.root / "scripts"), *sys.path]):
+            sys.modules.pop("build_targets", None)
+            spec.loader.exec_module(module)
         return module
 
     def validate_in_process(self, validator):
@@ -846,9 +850,9 @@ class GeneratedTargetTests(ValidatorTestCase):
         self.assert_passes()
         self.assertIn("Senior engineer", (self.root / "dist/claude/agents/dev.md").read_text(encoding="utf-8"))
 
-    def test_missing_generator_is_reported(self) -> None:
+    def test_missing_generator_stops_validation(self) -> None:
         (self.root / "scripts/build_targets.py").unlink()
-        self.assert_fails_with("scripts/build_targets.py: generator is missing; dist/ freshness not checked")
+        self.assert_fails_with("No module named 'build_targets'")
 
 
 class CompatLinkTests(ValidatorTestCase):
@@ -891,6 +895,7 @@ class MovedAndTargetItemsTests(ValidatorTestCase):
             + '\n  "claude/rules/old.md|.claude/rules/not-managed.md"'
             + '\n  "core/rules/testing.md|.claude/rules/testing.md"'
             + '\n  "docs/old-instructions.md|.claude/rules/git-workflow.md"'
+            + '\n  "claude/rules/testing.md|.claude/rules/engineering-principles.md"'
             + "\n  malformed|moved",
         )
         output = self.assert_fails_with()
@@ -901,7 +906,14 @@ class MovedAndTargetItemsTests(ValidatorTestCase):
         self.assert_reported(
             output, self.COMMON, "moved source 'docs/old-instructions.md' still exists outside the compatibility links"
         )
+        self.assert_reported(
+            output,
+            self.COMMON,
+            "moved source 'claude/rules/testing.md' does not resolve to the managed source of"
+            " '.claude/rules/engineering-principles.md'",
+        )
         self.assert_reported(output, self.COMMON, "malformed MOVED_ITEMS entry")
+        self.assertNotIn("moved source 'claude/CLAUDE.md'", output)
 
     def test_missing_moved_items_array_fails_and_an_empty_one_passes(self) -> None:
         content = (self.root / self.COMMON).read_text(encoding="utf-8")
