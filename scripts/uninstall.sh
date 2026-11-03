@@ -206,6 +206,9 @@ main() {
     acquire_lock
     select_targets
     plan_uninstall || die "no changes were made"
+    # The recorded targets may have changed before the lock was taken.
+    claude=0
+    list_contains "$SELECTED_TARGETS" claude && claude=1
     # Re-preflight under the lock, immediately before any link removal: another
     # process may have changed ~/.claude/settings.json since the first check above
     # (mirrors install.sh's re-plan/preflight under its own lock).

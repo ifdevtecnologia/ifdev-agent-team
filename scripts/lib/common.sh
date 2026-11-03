@@ -194,6 +194,9 @@ read_recorded_targets() {
   [[ -e "$file" || -L "$file" ]] || return 0
   [[ -f "$file" && ! -L "$file" ]] || die "targets state is not a regular file: $file"
   while IFS= read -r name || [[ -n "$name" ]]; do
+    # Tolerates hand edits: surrounding whitespace, CRLF line endings and blank lines.
+    name=${name#"${name%%[![:space:]]*}"}
+    name=${name%"${name##*[![:space:]]}"}
     [[ -n "$name" ]] || continue
     list_contains "$AVAILABLE_TARGETS" "$name" || die "unsupported target '$name' recorded in $file"
     RECORDED_TARGETS=$(canonical_targets "$RECORDED_TARGETS $name")

@@ -1069,6 +1069,8 @@ class TargetTests(InstallerTestCase):
             "directory": lambda path: path.mkdir(parents=True),
             "symlink": lambda path: (path.parent.mkdir(parents=True), os.symlink(self.outside / "targets", path)),
             "unsupported name": lambda path: (path.parent.mkdir(parents=True), path.write_text("claude\nother\n")),
+            "padded unsupported name": lambda path: (path.parent.mkdir(parents=True), path.write_text(" other \r\n")),
+            "two names on a line": lambda path: (path.parent.mkdir(parents=True), path.write_text("claude claude\n")),
         }
         for label, create in cases.items():
             with self.subTest(label):
@@ -1081,6 +1083,61 @@ class TargetTests(InstallerTestCase):
 
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                     self.assertEqual(snapshot(self.home), before)
+
+    def test_hand_edited_state_with_whitespace_and_blank_lines_is_accepted(self) -> None:
+        self.install()
+        (self.home / TARGETS_STATE).write_text("\n  claude \t\r\n\r\n\n")
+        (self.home / ".claude/rules/testing.md").unlink()
+
+        result = self.run_script("install.sh")
+
+        self.assert_ok(result)
+        self.assert_all_links()
+        self.assertIn(f"1 linked, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
+
+        uninstall = self.run_script("uninstall.sh")
+
+        self.assert_ok(uninstall)
+        self.assertIn(f"done: {MANAGED_COUNT} removed", uninstall.stdout)
+        self.assert_absent(self.home / TARGETS_STATE)
+
+    def test_uninstall_follows_targets_recorded_while_it_waited_for_the_lock(self) -> None:
+        # A second synthetic target makes the selection able to change: the first read sees only
+        # "extra", and a concurrent run records "claude" just before the lock is taken.
+        common = self.repo / "scripts/lib/common.sh"
+        common.write_text(common.read_text().replace('AVAILABLE_TARGETS="claude"', 'AVAILABLE_TARGETS="claude extra"', 1))
+        self.install()
+        state = self.home / TARGETS_STATE
+        state.write_text("extra\n")
+        real_mkdir = shutil.which("mkdir")
+        self.assertIsNotNone(real_mkdir)
+        fake_bin = self.tmp / "fake-bin"
+        fake_bin.mkdir()
+        wrapper = fake_bin / "mkdir"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            'if [[ "${*: -1}" == */lock ]]; then\n'
+            f'  printf \'claude\\n\' > "{state}"\n'
+            "fi\n"
+            f'exec "{real_mkdir}" "$@"\n'
+        )
+        wrapper.chmod(0o700)
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+
+        result = subprocess.run(
+            ["bash", str(self.repo / "scripts/uninstall.sh")],
+            env=env,
+            cwd=self.tmp,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+
+        self.assert_ok(result)
+        for destination in MANAGED:
+            self.assert_absent(self.home / destination)
+        self.assertNotIn("agent-notify-hook.sh", (self.home / SETTINGS_JSON).read_text())
 
     def test_uninstall_target_removes_its_links_and_its_record(self) -> None:
         self.install()
