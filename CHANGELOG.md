@@ -8,6 +8,12 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- `install.sh --target claude` and `uninstall.sh --target claude` (repeatable; `all` means every
+  available target) choose what to install or remove; `claude` is the only target so far. The
+  installed targets are recorded in `~/.ifdev-ai-tools/targets`: a bare `install.sh` reinstalls
+  them and a bare `uninstall.sh` removes them. A machine installed before targets were recorded is
+  detected as `claude`; on a machine with nothing installed, a bare `install.sh` refuses and
+  changes nothing until a target is chosen.
 - Mobile-first rule for websites and web applications in the `web-dev` skill. The phone layout comes
   first: base CSS for the phone, wider screens added with `min-width` queries, touch-sized targets,
   and checks at phone width first. The global instructions, the Dev, the UX designer, the UX
@@ -169,7 +175,8 @@ before this file existed and has no Git tag.
 - `git pull` keeps existing installations working: the old paths in `claude/` and `codex/` are now
   compatibility links to the new locations, kept for one release. Run `./scripts/install.sh` once
   after pulling to move your links to the new sources; links to the old paths are relinked without
-  backups.
+  backups and the `claude` target is recorded. On a new machine, install with
+  `./scripts/install.sh --target claude`.
 - Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
   `analyst`, `architect`, `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
   `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,

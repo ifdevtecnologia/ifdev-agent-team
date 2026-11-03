@@ -95,12 +95,17 @@ RETIRED_ITEMS=(
 RETIRED_PLAN=()
 RETIRED_REMOVED=0
 
-# Install targets that may own managed items. codex is planned and cursor is deferred
-# (decision record 0004).
+# Install targets that --target accepts, in their canonical order. codex is planned and cursor
+# is deferred (decision record 0004); both are refused until their items exist.
 AVAILABLE_TARGETS="claude"
+REQUESTED_TARGETS=""
+RECORDED_TARGETS=""
+SELECTED_TARGETS=""
 
 STATE_DIR_REL=".ifdev-ai-tools"
 BACKUPS_DIR_REL="$STATE_DIR_REL/backups"
+# The installed targets, one name per line. Written only under the lock.
+TARGETS_FILE_REL="$STATE_DIR_REL/targets"
 LOCK_DIR=""
 
 log() { printf '%s\n' "$*"; }
@@ -114,6 +119,50 @@ item_source() { printf '%s' "${1%%|*}"; }
 item_destination() {
   local rest=${1#*|}
   printf '%s' "${rest%%|*}"
+}
+# Only for MANAGED_ITEMS, the one table with a third field.
+item_targets() { printf '%s' "${1##*|}"; }
+
+# True when the space-separated <list> contains <name>.
+list_contains() {
+  local name
+  for name in $1; do
+    [[ "$name" == "$2" ]] && return 0
+  done
+  return 1
+}
+
+# True when the managed <item> is owned by a target in the space-separated <targets>.
+item_in_targets() {
+  local name owners
+  owners=$(item_targets "$1")
+  for name in $2; do
+    list_contains "${owners//,/ }" "$name" && return 0
+  done
+  return 1
+}
+
+# Prints the names of the space-separated <list> in canonical order, without duplicates.
+canonical_targets() {
+  local name result=""
+  for name in $AVAILABLE_TARGETS; do
+    list_contains "$1" "$name" && result="${result:+$result }$name"
+  done
+  printf '%s' "$result"
+}
+
+# Validates a --target value (exit 2 on an unsupported one) and adds it to REQUESTED_TARGETS.
+add_requested_target() {
+  local name=$1
+  if [[ "$name" == "all" ]]; then
+    REQUESTED_TARGETS=$AVAILABLE_TARGETS
+    return 0
+  fi
+  if ! list_contains "$AVAILABLE_TARGETS" "$name"; then
+    error "target '$name' is not supported yet; available targets: $AVAILABLE_TARGETS"
+    exit 2
+  fi
+  REQUESTED_TARGETS=$(canonical_targets "$REQUESTED_TARGETS $name")
 }
 
 # Prints the old source of a moved <destination>, or nothing when it did not move.
@@ -133,6 +182,50 @@ is_moved_link() {
   local old
   old=$(moved_source "$1")
   [[ -n "$old" ]] && is_managed_link "$HOME/$1" "$REPO_ROOT/$old"
+}
+
+# Reads ~/.ifdev-ai-tools/targets into RECORDED_TARGETS (empty when the file is absent).
+# Refuses an unsafe state directory or file and any name this checkout does not support.
+read_recorded_targets() {
+  local file="$HOME/$TARGETS_FILE_REL" problem name
+  RECORDED_TARGETS=""
+  problem=$(parent_problem "$STATE_DIR_REL")
+  [[ -z "$problem" ]] || die "$problem"
+  [[ -e "$file" || -L "$file" ]] || return 0
+  [[ -f "$file" && ! -L "$file" ]] || die "targets state is not a regular file: $file"
+  while IFS= read -r name || [[ -n "$name" ]]; do
+    [[ -n "$name" ]] || continue
+    list_contains "$AVAILABLE_TARGETS" "$name" || die "unsupported target '$name' recorded in $file"
+    RECORDED_TARGETS=$(canonical_targets "$RECORDED_TARGETS $name")
+  done <"$file"
+}
+
+# True when any managed destination is an exact link to this checkout, at its current or its
+# old (moved) source: a machine installed before targets were recorded.
+has_legacy_install() {
+  local item destination_rel
+  for item in "${MANAGED_ITEMS[@]}"; do
+    destination_rel=$(item_destination "$item")
+    if is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Writes the space-separated <targets> atomically (temporary file, then rename); an empty list
+# removes the file. Call only while holding the lock, after read_recorded_targets.
+write_recorded_targets() {
+  local file="$HOME/$TARGETS_FILE_REL" tmp name
+  if [[ -z "$1" ]]; then
+    rm -f -- "$file"
+    return 0
+  fi
+  tmp=$(mktemp "$HOME/$STATE_DIR_REL/targets.XXXXXX")
+  for name in $1; do
+    printf '%s\n' "$name"
+  done >"$tmp"
+  mv -f -- "$tmp" "$file"
 }
 
 require_commands() {

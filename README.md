@@ -83,14 +83,16 @@ requirements-dev.txt                 pinned development dependency (PyYAML) for 
 ```bash
 git clone https://github.com/ifdevtecnologia/ifdev-agent-team.git
 cd ifdev-agent-team
-./scripts/install.sh --dry-run   # review the plan; changes nothing
-./scripts/install.sh
-./scripts/validate.sh            # optional: validate the checkout (needs the dev dependency)
+./scripts/install.sh --target claude --dry-run   # review the plan; changes nothing
+./scripts/install.sh --target claude
+./scripts/validate.sh                            # optional: validate the checkout (needs the dev dependency)
 ```
 
 The entry-point scripts are versioned with the executable bit (the validator enforces it). If your checkout lost it, `bash scripts/install.sh` works the same way.
 
 The clone location is free: links point to wherever the repository lives, so keep the checkout in place after installing. Updating is a normal `git pull`; the links already point to the updated files. If you move the checkout, run `./scripts/install.sh` again from the new location (the old, now dangling links are backed up and replaced).
+
+`--target` chooses what to install; `claude` is the only target so far (`all` means every available target). The installed targets are recorded in `~/.ifdev-ai-tools/targets`, so a later bare `./scripts/install.sh` reinstalls them. A machine installed before targets were recorded (any link to this checkout) is treated as `claude`; on a machine with nothing installed, a bare `./scripts/install.sh` refuses and changes nothing until you choose a target.
 
 ### What the installer does
 
@@ -130,7 +132,7 @@ Repeat the check for every item; never move a backup over an existing destinatio
 ./scripts/uninstall.sh
 ```
 
-Removes only symlinks that point exactly to this checkout's managed items (and to moved and retired items' old sources), and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
+Without `--target`, removes the recorded targets (every target when none is recorded) and updates `~/.ifdev-ai-tools/targets`. Removes only symlinks that point exactly to this checkout's managed items (and to moved and retired items' old sources), and only this toolkit's three hook entries from `~/.claude/settings.json` (backed up first, every other key/hook/event left untouched; the file itself is never deleted, only emptied of this toolkit's entries). Real files, directories, symlinks to other locations, sibling configuration, parent directories and backups are kept. It refuses to operate through symlinked parent directories (including `~/.ifdev-ai-tools` and its `backups/` directory, checked before anything else) and through an unsafe `~/.claude/settings.json` (invalid JSON, non-object top level or a symlink), and lists existing backups at the end.
 
 ## Agent notifications
 

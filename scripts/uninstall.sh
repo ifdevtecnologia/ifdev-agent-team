@@ -12,15 +12,18 @@ PLAN=()
 
 usage() {
   cat <<'EOF'
-Usage: scripts/uninstall.sh [--dry-run]
+Usage: scripts/uninstall.sh [--target claude|all]... [--dry-run]
 
-Removes the managed symlinks that point to this repository (also at an item's old
-path in this checkout), including links left by retired items. Real files, directories, foreign symlinks, sibling configuration and
-backups are left untouched. Also removes
+Removes the managed symlinks of the chosen targets that point to this repository
+(also at an item's old path in this checkout), including links left by retired items,
+and updates ~/.ifdev-ai-tools/targets. Without --target, removes the recorded targets,
+or every target when none is recorded. Real files, directories, foreign symlinks,
+sibling configuration and backups are left untouched. The claude target also removes
 this toolkit's notification hook entries from ~/.claude/settings.json, leaving every
 other setting untouched (requires python3; see README). Backups are not restored
 automatically; see README for manual restoration.
 
+  --target    target to remove (repeatable); available: claude, or all
   --dry-run   print the planned actions without changing anything
   -h, --help  show this help
 EOF
@@ -30,6 +33,15 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dry-run) DRY_RUN=1 ;;
+      --target)
+        [[ $# -ge 2 ]] || {
+          error "--target needs a value"
+          usage >&2
+          exit 2
+        }
+        add_requested_target "$2"
+        shift
+        ;;
       -h | --help)
         usage
         exit 0
@@ -44,6 +56,28 @@ parse_args() {
   done
 }
 
+# Sets SELECTED_TARGETS from --target, else the recorded targets, else every target (a machine
+# installed before targets were recorded, or with nothing installed).
+select_targets() {
+  read_recorded_targets
+  if [[ -n "$REQUESTED_TARGETS" ]]; then
+    SELECTED_TARGETS=$REQUESTED_TARGETS
+  elif [[ -n "$RECORDED_TARGETS" ]]; then
+    SELECTED_TARGETS=$RECORDED_TARGETS
+  else
+    SELECTED_TARGETS=$AVAILABLE_TARGETS
+  fi
+}
+
+# The recorded targets that stay installed after this run.
+remaining_targets() {
+  local name result=""
+  for name in $RECORDED_TARGETS; do
+    list_contains "$SELECTED_TARGETS" "$name" || result="${result:+$result }$name"
+  done
+  printf '%s' "$result"
+}
+
 # True when <destination> is an exact link to this checkout, at the item's current or old source.
 is_own_link() {
   local item=$1 destination_rel
@@ -51,12 +85,16 @@ is_own_link() {
   is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"
 }
 
-# Classifies every item into PLAN (remove, foreign, absent); fails on unsafe parents,
+# Classifies every item into PLAN (skip, remove, foreign, absent); fails on unsafe parents,
 # including the state/backup directories.
 plan_uninstall() {
   local item destination_rel destination problem failed=0
   PLAN=()
   for item in "${MANAGED_ITEMS[@]}"; do
+    if ! item_in_targets "$item" "$SELECTED_TARGETS"; then
+      PLAN+=("skip")
+      continue
+    fi
     destination_rel=$(item_destination "$item")
     destination="$HOME/$destination_rel"
     problem=$(parent_problem "$(dirname -- "$destination_rel")")
@@ -146,30 +184,45 @@ manage_claude_hooks() {
 
 main() {
   parse_args "$@"
-  require_commands rm mkdir rmdir readlink dirname python3
+  require_commands rm mv mkdir mktemp rmdir readlink dirname python3
   require_home
+  select_targets
   plan_uninstall || die "no changes were made"
 
   # Always preflighted (never short-circuited by plan_has_removals): invalid JSON or
   # an unsafe settings path must abort before apply_uninstall touches any symlink.
-  local hooks_change=0
-  if hooks_pending; then
+  # Only the claude target owns the settings hooks.
+  local hooks_change=0 claude=0
+  list_contains "$SELECTED_TARGETS" claude && claude=1
+  if [[ "$claude" -eq 1 ]] && hooks_pending; then
     hooks_change=1
   fi
 
   # Locked whenever applying would actually change something (a managed or retired link
-  # removal or a pending hooks change), never for a pure no-op: keeps the lock, and the
-  # ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
-  if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || retired_has_removals || [[ "$hooks_change" -eq 1 ]]; }; then
+  # removal, a pending hooks change or a targets state update), never for a pure no-op: keeps
+  # the lock, and the ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
+  if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || retired_has_removals || [[ "$hooks_change" -eq 1 ]] ||
+    [[ "$(remaining_targets)" != "$RECORDED_TARGETS" ]]; }; then
     acquire_lock
+    select_targets
     plan_uninstall || die "no changes were made"
     # Re-preflight under the lock, immediately before any link removal: another
     # process may have changed ~/.claude/settings.json since the first check above
     # (mirrors install.sh's re-plan/preflight under its own lock).
-    hooks_pending || true
+    [[ "$claude" -eq 0 ]] || hooks_pending || true
   fi
   apply_uninstall
-  manage_claude_hooks
+  [[ "$claude" -eq 0 ]] || manage_claude_hooks
+  local remaining
+  remaining=$(remaining_targets)
+  if [[ "$remaining" != "$RECORDED_TARGETS" ]]; then
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "would record targets: ${remaining:-none}"
+    else
+      write_recorded_targets "$remaining"
+      log "recorded targets: ${remaining:-none}"
+    fi
+  fi
   report_backups
   [[ "$DRY_RUN" -eq 0 ]] || log "dry run: no changes were made"
 }
