@@ -2,7 +2,7 @@
 
 <One or two sentences: what this repository is and who uses it.>
 
-These instructions complement the global defaults in `~/.claude/CLAUDE.md` and take precedence where they are more specific or explicitly conflict. Area-specific rules are in `.claude/rules/` and load only for their paths.
+These instructions are shared by every coding agent (Claude Code imports them from `CLAUDE.md`). They complement the global defaults of the agent team and take precedence where they are more specific or explicitly conflict. Area-specific rules for Claude Code are in `.claude/rules/` and load only for their paths.
 
 ## Stack
 
