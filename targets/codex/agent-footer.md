@@ -1,0 +1,1 @@
+In Codex, the named rules (`engineering-principles`, `testing`, `git-workflow`) are sections of the global instructions, `~/.codex/AGENTS.md` (read them there when they are not in your context), the project's instructions are its `AGENTS.md` plus its `.codex/` directory, and a named skill is used by reading `~/.agents/skills/<name>/SKILL.md`.

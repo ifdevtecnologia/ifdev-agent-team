@@ -670,6 +670,7 @@ class ContentTests(ValidatorTestCase):
             "\nDo not push without authorization.\n"
             "\nNever force push.\n",
         )
+        self.build()  # the rules are also generated into dist/codex/AGENTS.md
         self.assert_passes()
 
     def test_unsafe_prescriptions_fail(self) -> None:

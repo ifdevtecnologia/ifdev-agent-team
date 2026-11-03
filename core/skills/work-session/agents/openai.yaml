@@ -1,0 +1,4 @@
+# Codex reads this file; it pairs with `disable-model-invocation: true` in SKILL.md, so the skill
+# runs only when the user asks for it.
+policy:
+  allow_implicit_invocation: false
