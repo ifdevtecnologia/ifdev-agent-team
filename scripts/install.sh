@@ -167,6 +167,7 @@ apply_install() {
         log "unchanged: ~/$destination_rel"
         ;;
       relink)
+        # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
         is_moved_link "$destination_rel" || die "~/$destination_rel changed during installation; stopping"
         rm -- "$destination"
         ln -s -- "$target" "$destination"
@@ -184,6 +185,7 @@ apply_install() {
           log "backed up: ~/$destination_rel -> $backup_dir/$destination_rel"
         fi
         if [[ -e "$destination" || -L "$destination" ]]; then
+          # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
           die "~/$destination_rel reappeared during installation; stopping"
         fi
         ln -s -- "$target" "$destination"
@@ -234,6 +236,7 @@ warn_codex_override() {
   local override="$HOME/.codex/AGENTS.override.md"
   list_contains "$SELECTED_TARGETS" codex || return 0
   [[ -e "$override" || -L "$override" ]] || return 0
+  # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
   printf 'warning: %s\n' "~/.codex/AGENTS.override.md exists: Codex reads it instead of ~/.codex/AGENTS.md, so the installed global instructions do not load until you merge it into them or remove it (left untouched)" >&2
 }
 
