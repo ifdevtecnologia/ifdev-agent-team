@@ -1,0 +1,5 @@
+# ShellCheck configuration for `shellcheck` runs from the repository root (CI and local).
+# Follow `source` directives (`# shellcheck source=lib/common.sh`) relative to the sourcing script,
+# so scripts/lib/common.sh is checked in the context of install.sh and uninstall.sh (SC1091).
+external-sources=true
+source-path=SCRIPTDIR

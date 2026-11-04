@@ -1,0 +1,14 @@
+# Ruff lint configuration (`ruff check`). Formatting is not enforced: `ruff format` would rewrap
+# most files, so the existing style stays as it is.
+# The scripts support Python 3.9+, so pyupgrade fixes must not use newer syntax.
+target-version = "py39"
+line-length = 120
+# scripts/ and tests/ are flat module directories (no packages): treat their modules as first-party.
+src = ["scripts", "scripts/lib", "tests"]
+
+[lint]
+# pycodestyle errors, Pyflakes, import order, bugbear and pyupgrade.
+select = ["E", "F", "I", "B", "UP"]
+# Line length is left to review: many lines are long messages, regexes and test data that would
+# only get harder to read if wrapped.
+ignore = ["E501"]
