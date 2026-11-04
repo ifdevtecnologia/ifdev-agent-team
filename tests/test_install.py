@@ -15,6 +15,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from subprocess_coverage import coverage_env
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 MANAGED = {
@@ -153,9 +155,11 @@ class InstallerTestCase(unittest.TestCase):
         self.home.mkdir()
         self.outside = self.tmp / "outside"
         self.outside.mkdir()
+        # Empty unless the tests run under coverage; then the scripts' Python helpers are measured too.
+        self.coverage_env = coverage_env(self.repo / "scripts")
 
     def run_script(self, name: str, *args: str) -> subprocess.CompletedProcess:
-        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(self.home)}
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(self.home), **self.coverage_env}
         return subprocess.run(
             ["bash", str(self.repo / "scripts" / name), *args],
             env=env,
@@ -233,7 +237,7 @@ class InstallerTestCase(unittest.TestCase):
             f'exec "{real_readlink}" "$@"\n'
         )
         wrapper.chmod(0o700)
-        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home), **self.coverage_env}
         result = subprocess.run(
             ["bash", str(self.repo / "scripts" / script), *args],
             env=env,
@@ -948,7 +952,7 @@ class UninstallTests(InstallerTestCase):
             f'exec "{real_python3}" "$@"\n'
         )
         fake_python3.chmod(0o700)
-        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home), **self.coverage_env}
 
         result = subprocess.run(
             ["bash", str(self.repo / "scripts" / "uninstall.sh")],
@@ -1120,7 +1124,7 @@ class TargetTests(InstallerTestCase):
             f'exec "{real_mkdir}" "$@"\n'
         )
         wrapper.chmod(0o700)
-        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home)}
+        env = {"PATH": f"{fake_bin}:{os.environ.get('PATH', '/usr/bin:/bin')}", "HOME": str(self.home), **self.coverage_env}
 
         result = subprocess.run(
             ["bash", str(self.repo / "scripts/uninstall.sh")],
