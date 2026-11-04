@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -34,20 +34,15 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      # Only whether the secret exists, never its value: forks, Dependabot and the period before
-      # the owner adds the secret skip the SonarQube Cloud step and stay green.
-      SONAR_ENABLED: ${{ secrets.SONAR_TOKEN != '' }}
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # Full history: the golden and upgrade tests compare with a pre-0004 commit, and
-          # SonarQube Cloud uses it for new-code detection and blame.
+          # Full history: the golden and upgrade tests compare with a pre-0004 commit.
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
           cache: pip
@@ -71,6 +66,38 @@ jobs:
           coverage combine
           coverage report
           coverage xml -o coverage.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 1
+
+  # Separate job so the token never shares a runner with the repository's tests and scripts:
+  # it only checks out the sources, downloads the coverage report and runs the scanner.
+  sonar:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # Only whether the secret exists, never its value (a job-level `if` cannot read secrets):
+      # fork pull requests and repositories without the secret skip the analysis and stay green.
+      SONAR_ENABLED: ${{ secrets.SONAR_TOKEN != '' }}
+    steps:
+      - if: env.SONAR_ENABLED == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history for new-code detection and blame.
+          fetch-depth: 0
+
+      - name: Download coverage report
+        if: env.SONAR_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-xml
 
       - name: SonarQube Cloud analysis
         if: env.SONAR_ENABLED == 'true'
