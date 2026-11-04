@@ -5,7 +5,7 @@ For anyone installing the agent team on a machine. The short version is in the [
 ## Prerequisites
 
 - Bash (3.2 or newer), `git`, standard POSIX utilities (`ln`, `mv`, `mkdir`, `readlink`, `mktemp`) and `python3` (standard library only). `scripts/install.sh` and `scripts/uninstall.sh` use `python3` to safely merge or remove this toolkit's notification hooks in `~/.claude/settings.json` (a user-owned, mutable file that cannot be symlinked like everything else); no pinned Python dependency is needed for this.
-- For validation and tests only: Python 3.9+ and the pinned PyYAML, see [development.md](development.md#prerequisites).
+- For validation, lint and tests only: Python 3.9+ and the pinned development tools, see [development.md](development.md#prerequisites).
 - Optional, for [notifications](notifications.md): `notify-send` (`libnotify-bin` on Debian/Ubuntu) for desktop notifications and `paplay` (`pulseaudio-utils` on Debian/Ubuntu) or `pw-play` (`pipewire-bin`) for a sound cue. Neither is required: a missing or disabled backend falls back to a terminal bell (BEL).
 - To let agents open pull requests: the GitHub CLI, authenticated once by you in your own terminal (`gh auth login`, then `gh auth status`); agents never run the login or read its token.
 - Claude Code and/or Codex, installed separately. This toolkit does not install them and, apart from the opt-in Codex notify adapter, does not configure them.
