@@ -18,9 +18,11 @@ These instructions are for working **on** this repository. They are not installe
 
 ## Validation
 
-Run before proposing changes (requires the pinned dev dependency from `requirements-dev.txt`):
+Run before proposing changes (requires the pinned development tools from `requirements-dev.txt`):
 
 ```bash
+git ls-files -z '*.sh' | xargs -0 shellcheck   # keep fixes Bash 3.2 compatible
+ruff check scripts tests
 for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
 python3 scripts/build_targets.py --check   # after editing core/ or targets/, run it without --check
 bash scripts/validate.sh

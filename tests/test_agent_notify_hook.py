@@ -58,8 +58,7 @@ class HookAdapterTestCase(unittest.TestCase):
             [BASH, str(self.hook_script), kind],
             input=stdin_text,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=15,
         )
@@ -190,8 +189,7 @@ class CodexNotifyAdapterTests(unittest.TestCase):
         return subprocess.run(
             [BASH, str(CODEX_ADAPTER), payload],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=15,
         )

@@ -1,0 +1,22 @@
+# Coverage of the tests (`coverage run -m unittest discover -s tests -v`), reported to SonarQube Cloud.
+[run]
+source = scripts
+branch = true
+# Paths relative to the repository root, so coverage.xml matches the paths Sonar analyzes.
+relative_files = true
+# Also measure Python scripts the tests start as subprocesses: those that inherit the environment
+# (for example `sys.executable scripts/context_budget.py`) and those started with a minimal
+# environment that adds coverage_env() from tests/subprocess_coverage.py. Each process writes its
+# own data file: run `coverage combine` before `coverage report` or `coverage xml`.
+patch = subprocess
+
+[report]
+precision = 1
+
+[paths]
+# The validator and installer tests run copies of the working tree's scripts/ in temporary
+# fixtures (tests/subprocess_coverage.py); `coverage combine` maps them back to scripts/.
+scripts =
+    scripts/
+    */fixture repo/scripts/
+    */repo with spaces/scripts/

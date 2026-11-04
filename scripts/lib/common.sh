@@ -134,9 +134,11 @@ REQUESTED_TARGETS=""
 RECORDED_TARGETS=""
 # What ~/.ifdev-ai-tools/targets holds; differs from RECORDED_TARGETS only on a legacy install.
 STORED_TARGETS=""
+# shellcheck disable=SC2034 # used by the scripts that source this library
 SELECTED_TARGETS=""
 
 STATE_DIR_REL=".ifdev-ai-tools"
+# shellcheck disable=SC2034 # used by the scripts that source this library
 BACKUPS_DIR_REL="$STATE_DIR_REL/backups"
 # The installed targets, one name per line. Written only under the lock.
 TARGETS_FILE_REL="$STATE_DIR_REL/targets"
@@ -365,6 +367,7 @@ apply_retired() {
         if [[ "$dry_run" -eq 1 ]]; then
           log "would remove retired link: ~/$destination_rel"
         else
+          # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
           is_managed_link "$destination" "$REPO_ROOT/$(item_source "$item")" ||
             die "~/$destination_rel changed while removing retired links; stopping"
           rm -- "$destination"

@@ -1,2 +1,7 @@
-# Development-only dependencies for scripts/validate.py and tests/. Installation does not need them.
+# Development-only dependencies for validation, lint, tests and coverage. Installation does not need them.
 PyYAML==6.0.3
+ruff==0.17.3
+# The last coverage release that supports Python 3.9.
+coverage==7.10.7
+# Packages the ShellCheck binary, so CI and contributors run the same version.
+shellcheck-py==0.11.0.1

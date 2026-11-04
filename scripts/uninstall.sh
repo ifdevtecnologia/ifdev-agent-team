@@ -152,6 +152,7 @@ apply_uninstall() {
     case "${PLAN[$i]}" in
       remove)
         if [[ "$DRY_RUN" -eq 0 ]]; then
+          # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
           is_own_link "$item" || die "~/$destination_rel changed during uninstallation; stopping"
           rm -- "$destination"
           removed=$((removed + 1))

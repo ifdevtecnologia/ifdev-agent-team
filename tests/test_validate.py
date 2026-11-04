@@ -21,6 +21,8 @@ from unittest import mock
 
 import yaml
 
+from subprocess_coverage import coverage_env
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # The subprocess runs with a temporary HOME, which hides a user-site PyYAML installation.
 YAML_SITE = str(Path(yaml.__file__).resolve().parent.parent)
@@ -68,6 +70,8 @@ class ValidatorTestCase(unittest.TestCase):
             "GIT_CONFIG_NOSYSTEM": "1",
             "PYTHONIOENCODING": "utf-8",
             "PYTHONPATH": YAML_SITE,
+            # Empty unless the tests run under coverage; then the fixture's validator is measured too.
+            **coverage_env(self.root / "scripts"),
         }
         self.git("init", "-q")
 

@@ -9,7 +9,7 @@ Two kinds of instruction files live here:
 
 ## Prerequisites
 
-Everything the [installer needs](installation.md#prerequisites), plus Python 3.9+ and PyYAML 6.0.3, pinned in [`requirements-dev.txt`](../requirements-dev.txt), for validation and tests. Install it with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
+Everything the [installer needs](installation.md#prerequisites), plus Python 3.9+ and the development tools pinned in [`requirements-dev.txt`](../requirements-dev.txt): PyYAML (validation and tests), Ruff (Python lint), coverage.py (test coverage) and `shellcheck-py` (the ShellCheck binary, so local runs and CI use the same version). Install them with `python3 -m pip install -r requirements-dev.txt`, inside a virtual environment if your system Python is externally managed.
 
 ## Layout
 
@@ -56,8 +56,10 @@ scripts/
   context_budget.py                  estimate of the context loaded in every session (needs the dev dependency)
 docs/                                guides, decision records and project templates
 tests/                               isolated automated tests (Python unittest)
-requirements-dev.txt                 pinned development dependency (PyYAML) for validation/tests
-.github/workflows/validate.yml       CI: syntax, generator check, validator and tests
+requirements-dev.txt                 pinned development tools: PyYAML, Ruff, coverage.py, shellcheck-py
+.shellcheckrc, ruff.toml, .coveragerc  ShellCheck, Ruff and coverage configuration
+sonar-project.properties             SonarQube Cloud analysis settings
+.github/workflows/validate.yml       CI: lint, syntax, validator, tests with coverage and SonarQube Cloud
 ```
 
 Installed paths for the `codex` target (twenty-nine links; the notify adapter is shared with `claude`):
@@ -84,12 +86,38 @@ The authoritative list is `MANAGED_ITEMS` in `scripts/lib/common.sh` (source, de
 ## Validation and tests
 
 ```bash
-python3 -m pip install -r requirements-dev.txt   # once; pinned PyYAML
+python3 -m pip install -r requirements-dev.txt   # once; pinned development tools
+git ls-files -z '*.sh' | xargs -0 shellcheck    # shell lint (.shellcheckrc)
+ruff check scripts tests                        # Python lint (ruff.toml)
 for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
 python3 scripts/build_targets.py --check
 ./scripts/validate.sh
 python3 -m unittest discover -s tests -v
 ```
+
+CI (`.github/workflows/validate.yml`) runs the same commands in three jobs: `lint` (ShellCheck and Ruff), `validate` (Bash syntax, the validator and the tests with coverage, uploading `coverage.xml` as a one-day artifact) and, after it, `sonar` (the SonarQube Cloud analysis of the sources with that report). Run the tests with coverage, as CI does, with:
+
+```bash
+coverage erase                                  # drop the data of earlier runs
+coverage run -m unittest discover -s tests -v   # same tests and skips as the plain run
+coverage combine                                # merge the data of measured subprocesses
+coverage report                                 # coverage xml -o coverage.xml for Sonar's format
+```
+
+Lint and coverage notes:
+
+- **ShellCheck** checks every tracked `*.sh` file. `.shellcheckrc` only lets it follow `source` directives relative to the sourcing script. Intentional exceptions are inline `# shellcheck disable=SCxxxx` comments with their reason (for example `~/` in messages is display text, not a path to expand). Fixes must keep the scripts Bash 3.2 compatible.
+- **Ruff** runs `ruff check` with the rules in `ruff.toml` (pycodestyle errors, Pyflakes, import order, bugbear and pyupgrade for Python 3.9). Line length (E501) and `ruff format` are not enforced: the formatter would rewrap most files.
+- **Coverage** (`.coveragerc`) measures `scripts/` with branch coverage and repository-relative paths. It also measures the Python scripts that the tests start as subprocesses (`patch = subprocess`): those inheriting the environment directly, and those started with a minimal environment (`PATH` and `HOME`), which receive only coverage's own `COVERAGE_PROCESS_CONFIG` through `coverage_env()` in `tests/subprocess_coverage.py`, and only under `coverage run`, so a plain test run is unchanged. The validator and installer tests run copies of `scripts/` in temporary fixtures; `[paths]` maps those copies back to `scripts/` when the data is combined. The upgrade tests' clones of other commits and the shell scripts are not measured. No minimum percentage is enforced yet.
+
+### SonarQube Cloud
+
+The `sonar` job runs its steps only when the `SONAR_TOKEN` secret exists, so pull requests from forks (which do not receive the repository's secrets) and repositories without the secret skip the analysis and stay green. It runs in its own job, after `validate`, so the token never shares a runner with the repository's tests and scripts: it only checks out the sources, downloads the coverage report and runs the scanner. `sonar-project.properties` holds the organization and project keys, the analyzed directories (`scripts`, `targets`, tests in `tests`) and the coverage report path. One-time setup by the repository owner:
+
+1. Sign in at [sonarcloud.io](https://sonarcloud.io) with GitHub, import the repository into the `ifdevtecnologia` organization and check that the organization and project keys it shows match `sonar-project.properties` (fix the file if they differ).
+2. In the project's **Administration → Analysis Method**, turn off **Automatic Analysis** before adding the secret: CI analysis and automatic analysis cannot both run, and the CI step fails while automatic analysis is on.
+3. Create the lowest-privilege token available: an organization- or project-scoped analysis token when your plan offers one, otherwise a token of a dedicated account that has only the **Execute Analysis** permission on this project (not a personal token of an administrator). Give it an expiry date, add it as the repository secret `SONAR_TOKEN` (**Settings → Secrets and variables → Actions**) and rotate it before it expires or whenever it may have leaked. Never commit it or paste it into files or logs.
+4. On the next pull request, and after it merges, check that the analysis and coverage appear in SonarQube Cloud.
 
 `validate.sh` is a bounded static lint. It checks:
 

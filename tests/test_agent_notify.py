@@ -69,8 +69,7 @@ class AgentNotifyTestCase(unittest.TestCase):
         return subprocess.run(
             [BASH, str(NOTIFY), *args],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=15,
         )
@@ -97,8 +96,7 @@ class AgentNotifyTestCase(unittest.TestCase):
         return subprocess.run(
             [BASH, str(script), *args],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=15,
         )
