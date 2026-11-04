@@ -95,9 +95,10 @@ python3 scripts/build_targets.py --check
 python3 -m unittest discover -s tests -v
 ```
 
-CI (`.github/workflows/validate.yml`) runs the same commands in two jobs: `lint` (ShellCheck and Ruff) and `validate` (Bash syntax, the validator and the tests with coverage, then the SonarQube Cloud analysis). Run the tests with coverage, as CI does, with:
+CI (`.github/workflows/validate.yml`) runs the same commands in three jobs: `lint` (ShellCheck and Ruff), `validate` (Bash syntax, the validator and the tests with coverage, uploading `coverage.xml` as a one-day artifact) and, after it, `sonar` (the SonarQube Cloud analysis of the sources with that report). Run the tests with coverage, as CI does, with:
 
 ```bash
+coverage erase                                  # drop the data of earlier runs
 coverage run -m unittest discover -s tests -v   # same tests and skips as the plain run
 coverage combine                                # merge the data of measured subprocesses
 coverage report                                 # coverage xml -o coverage.xml for Sonar's format
@@ -111,11 +112,11 @@ Lint and coverage notes:
 
 ### SonarQube Cloud
 
-The `SonarQube Cloud analysis` step runs only when the `SONAR_TOKEN` secret exists, so forks, Dependabot pull requests and clones without the secret stay green. `sonar-project.properties` holds the organization and project keys, the analyzed directories (`scripts`, `targets`, tests in `tests`) and the coverage report path. One-time setup by the repository owner:
+The `sonar` job runs its steps only when the `SONAR_TOKEN` secret exists, so pull requests from forks (which do not receive the repository's secrets) and repositories without the secret skip the analysis and stay green. It runs in its own job, after `validate`, so the token never shares a runner with the repository's tests and scripts: it only checks out the sources, downloads the coverage report and runs the scanner. `sonar-project.properties` holds the organization and project keys, the analyzed directories (`scripts`, `targets`, tests in `tests`) and the coverage report path. One-time setup by the repository owner:
 
 1. Sign in at [sonarcloud.io](https://sonarcloud.io) with GitHub, import the repository into the `ifdevtecnologia` organization and check that the organization and project keys it shows match `sonar-project.properties` (fix the file if they differ).
-2. In the project's **Administration → Analysis Method**, turn off **Automatic Analysis**: CI analysis with coverage and automatic analysis cannot both run.
-3. Create a token in SonarQube Cloud and add it as the repository secret `SONAR_TOKEN` (**Settings → Secrets and variables → Actions**). Never commit it or paste it into files or logs.
+2. In the project's **Administration → Analysis Method**, turn off **Automatic Analysis** before adding the secret: CI analysis and automatic analysis cannot both run, and the CI step fails while automatic analysis is on.
+3. Create the lowest-privilege token available: an organization- or project-scoped analysis token when your plan offers one, otherwise a token of a dedicated account that has only the **Execute Analysis** permission on this project (not a personal token of an administrator). Give it an expiry date, add it as the repository secret `SONAR_TOKEN` (**Settings → Secrets and variables → Actions**) and rotate it before it expires or whenever it may have leaked. Never commit it or paste it into files or logs.
 4. On the next pull request, and after it merges, check that the analysis and coverage appear in SonarQube Cloud.
 
 `validate.sh` is a bounded static lint. It checks:
