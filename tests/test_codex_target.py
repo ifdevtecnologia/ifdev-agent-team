@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 from test_by_name_references_acceptance import references
-from test_install import MANAGED, SETTINGS_JSON, SIBLINGS, TARGETS_STATE, InstallerTestCase, snapshot
+from test_install import MANAGED, SETTINGS_JSON, TARGETS_STATE, InstallerTestCase, snapshot
 
 ROLES = sorted(path.stem for path in (Path(__file__).resolve().parent.parent / "core/agents").glob("*.md"))
 SKILLS = (

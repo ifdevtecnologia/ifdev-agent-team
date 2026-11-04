@@ -160,8 +160,7 @@ class InstallerTestCase(unittest.TestCase):
             ["bash", str(self.repo / "scripts" / name), *args],
             env=env,
             cwd=self.tmp,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=60,
         )
@@ -239,8 +238,7 @@ class InstallerTestCase(unittest.TestCase):
             ["bash", str(self.repo / "scripts" / script), *args],
             env=env,
             cwd=self.tmp,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=60,
         )
@@ -956,8 +954,7 @@ class UninstallTests(InstallerTestCase):
             ["bash", str(self.repo / "scripts" / "uninstall.sh")],
             env=env,
             cwd=self.tmp,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=60,
         )
@@ -991,8 +988,7 @@ class InstalledHookExecutionTests(InstallerTestCase):
         result = subprocess.run(
             ["bash", "-c", command],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=15,
         )
@@ -1130,8 +1126,7 @@ class TargetTests(InstallerTestCase):
             ["bash", str(self.repo / "scripts/uninstall.sh")],
             env=env,
             cwd=self.tmp,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=60,
         )

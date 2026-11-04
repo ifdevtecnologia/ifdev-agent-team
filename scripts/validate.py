@@ -296,7 +296,8 @@ MAX_YAML_PROBLEM = 120
 def redact(text: str) -> str:
     """Replaces recognized credential values so that no diagnostic can echo them."""
     for label, pattern in CREDENTIAL_PATTERNS.items():
-        text = pattern.sub(lambda _: f"[redacted {label}]", text)
+        # The lambda runs inside pattern.sub in this same iteration, so it always sees the current label.
+        text = pattern.sub(lambda _: f"[redacted {label}]", text)  # noqa: B023
     return text
 
 
@@ -379,8 +380,7 @@ def git_paths(root: Path, *args: str) -> list[str]:
     result = subprocess.run(
         ["git", "-C", str(root), "ls-files", "-z", *args],
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     return [p for p in result.stdout.decode("utf-8", "surrogateescape").split("\0") if p]
 
@@ -913,7 +913,7 @@ def check_bash_syntax(root: Path, texts: dict[str, str], report: Report) -> None
     for rel in sorted(texts):
         if not rel.endswith(".sh"):
             continue
-        result = subprocess.run(["bash", "-n", str(root / rel)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(["bash", "-n", str(root / rel)], capture_output=True)
         if result.returncode != 0:
             detail = result.stderr.decode("utf-8", "replace").strip().splitlines()
             report.add(rel, f"bash syntax error: {detail[0] if detail else 'unknown'}")
@@ -923,8 +923,7 @@ def check_executable_scripts(root: Path, report: Report) -> None:
     result = subprocess.run(
         ["git", "-C", str(root), "ls-files", "-s", "-z", "--", *EXECUTABLE_SCRIPTS],
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
     # Entries are "<mode> <object> <stage>\t<path>".
     index_modes = {}
