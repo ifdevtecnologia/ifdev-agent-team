@@ -139,7 +139,7 @@ class GitPullUpgradeTests(unittest.TestCase):
         result = self.run_script("install.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"{MOVED_COUNT} linked, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
+        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
         self.assertEqual(self.backups(self.home), backups_before)
         fresh_home = self.make_home("fresh home")
         self.assert_ok(self.run_script("install.sh", "--target", "claude", home=fresh_home))
@@ -149,7 +149,7 @@ class GitPullUpgradeTests(unittest.TestCase):
 
         rerun = self.run_script("install.sh")
         self.assert_ok(rerun)
-        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
 
     def test_uninstall_after_upgrade_leaves_nothing_managed(self) -> None:
         self.install_pre_0004_and_pull()

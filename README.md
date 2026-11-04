@@ -13,7 +13,7 @@ One reviewed, versioned set of **global** defaults: a delivery process (Analyze 
 - 👥 **Eighteen roles**, each started in a fresh context, read-only where it should be ([`core/agents/`](core/agents/)).
 - 🧰 **Eight skills**: local verification, work sessions, safe refactoring, end-to-end tests and stack guidance.
 - 🔔 **Notifications** when an agent finishes, is blocked or needs you.
-- 🔒 **A safe installer**: symlinks instead of copies, backups instead of deletion, a dry run, no elevated privileges.
+- 🔒 **A safe installer**: symlinks instead of copies (except the Codex custom agents, which Codex only loads as regular files), backups instead of deletion, a dry run, no elevated privileges.
 
 ## 🧭 How the team works
 
@@ -144,7 +144,7 @@ cd ifdev-agent-team
 - **Uninstall:** `./scripts/uninstall.sh --dry-run`, then `./scripts/uninstall.sh` (or `--target codex` for one target).
 - **Backups:** anything the installer replaces is moved to `~/.ifdev-ai-tools/backups/`, never deleted; see [manual restoration](docs/installation.md#backups-and-manual-restoration).
 
-Keep the checkout where it is: the links point into it. Everything the installer guarantees, upgrade notes and troubleshooting are in [docs/installation.md](docs/installation.md).
+Keep the checkout where it is: the links point into it. The Codex custom agents in `~/.codex/agents/` are copies, so after a `git pull` only rerunning `./scripts/install.sh` brings agent changes to Codex. Everything the installer guarantees, upgrade notes and troubleshooting are in [docs/installation.md](docs/installation.md).
 
 ## 📚 More
 

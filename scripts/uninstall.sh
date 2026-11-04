@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Removes only the symlinks in $HOME that point to this repository's managed items.
+# Removes only the symlinks in $HOME that point to this repository's managed items, and the copies
+# the installer made that are still unmodified.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -9,6 +10,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 
 DRY_RUN=0
 PLAN=()
+FORGET_COPIES=0
 
 usage() {
   cat <<'EOF'
@@ -16,7 +18,8 @@ Usage: scripts/uninstall.sh [--target claude|codex|all]... [--dry-run]
 
 Removes the managed symlinks of the chosen targets that point to this repository
 (also at an item's old path in this checkout), including links left by retired items,
-and updates ~/.ifdev-ai-tools/targets. An item shared with a target that stays
+and updates ~/.ifdev-ai-tools/targets. A Codex custom agent copy is removed only while it
+still matches the checksum recorded in ~/.ifdev-ai-tools/copies; a modified copy is kept. An item shared with a target that stays
 recorded (the Codex notify adapter) is kept. Without --target, removes the recorded
 targets, or every target when none is recorded. Real files, directories, foreign symlinks,
 sibling configuration and backups are left untouched. The claude target also removes
@@ -86,13 +89,23 @@ is_own_link() {
   is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"
 }
 
-# Classifies every item into PLAN (skip, shared, remove, foreign, absent); fails on unsafe parents,
-# including the state/backup directories. A shared item still owned by a target that stays
-# recorded is kept.
+# True when <destination> is a regular file that still matches the checksum recorded when the
+# installer copied it there.
+is_own_copy() {
+  local destination_rel=$1 recorded
+  recorded=$(recorded_checksum "$destination_rel")
+  [[ -n "$recorded" && -f "$HOME/$destination_rel" && ! -L "$HOME/$destination_rel" &&
+    "$(file_checksum "$HOME/$destination_rel")" == "$recorded" ]]
+}
+
+# Classifies every item into PLAN (skip, shared, remove, modified, foreign, absent); fails on unsafe
+# parents, including the state/backup directories. A shared item still owned by a target that stays
+# recorded is kept. Sets FORGET_COPIES when a copy record of a removed item has to be dropped.
 plan_uninstall() {
   local item destination_rel destination problem failed=0 remaining
   remaining=$(remaining_targets)
   PLAN=()
+  FORGET_COPIES=0
   for item in "${MANAGED_ITEMS[@]}"; do
     if ! item_in_targets "$item" "$SELECTED_TARGETS"; then
       PLAN+=("skip")
@@ -111,10 +124,18 @@ plan_uninstall() {
       PLAN+=("error")
     elif is_own_link "$item"; then
       PLAN+=("remove")
+    elif is_copied_destination "$destination_rel" && is_own_copy "$destination_rel"; then
+      PLAN+=("remove")
+    elif is_copied_destination "$destination_rel" && [[ -n "$(recorded_checksum "$destination_rel")" ]] &&
+      [[ -f "$destination" && ! -L "$destination" ]]; then
+      PLAN+=("modified")
     elif [[ -e "$destination" || -L "$destination" ]]; then
       PLAN+=("foreign")
     else
       PLAN+=("absent")
+    fi
+    if is_copied_destination "$destination_rel" && [[ -n "$(recorded_checksum "$destination_rel")" ]]; then
+      FORGET_COPIES=1
     fi
   done
 
@@ -153,15 +174,26 @@ apply_uninstall() {
       remove)
         if [[ "$DRY_RUN" -eq 0 ]]; then
           # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
-          is_own_link "$item" || die "~/$destination_rel changed during uninstallation; stopping"
+          is_own_link "$item" || { is_copied_destination "$destination_rel" && is_own_copy "$destination_rel"; } ||
+            die "~/$destination_rel changed during uninstallation; stopping"
           rm -- "$destination"
           removed=$((removed + 1))
         fi
         log "${prefix}remove: ~/$destination_rel"
         ;;
       shared) log "kept (shared with a target that stays installed): ~/$destination_rel" ;;
+      modified) log "kept (copy modified since it was installed): ~/$destination_rel" ;;
       foreign) log "kept (not a link to this repository): ~/$destination_rel" ;;
       absent) log "absent: ~/$destination_rel" ;;
+    esac
+    # Once removed or kept, a copy is no longer the toolkit's: a later install backs it up.
+    case "${PLAN[$i]}" in
+      remove | modified | foreign | absent)
+        if [[ "$DRY_RUN" -eq 0 ]] && is_copied_destination "$destination_rel" &&
+          [[ -n "$(recorded_checksum "$destination_rel")" ]]; then
+          write_copy_record "$destination_rel" ""
+        fi
+        ;;
     esac
     i=$((i + 1))
   done
@@ -194,6 +226,7 @@ manage_claude_hooks() {
 main() {
   parse_args "$@"
   require_commands rm mv mkdir mktemp rmdir readlink dirname python3
+  require_checksum_command
   require_home
   select_targets
   plan_uninstall || die "no changes were made"
@@ -207,10 +240,11 @@ main() {
     hooks_change=1
   fi
 
-  # Locked whenever applying would actually change something (a managed or retired link
-  # removal, a pending hooks change or a targets state update), never for a pure no-op: keeps
+  # Locked whenever applying would actually change something (a managed or retired link or copy
+  # removal, a pending hooks change, a copy record or targets state update), never for a pure no-op: keeps
   # the lock, and the ~/.ifdev-ai-tools state directory it creates, scoped to actual changes.
   if [[ "$DRY_RUN" -eq 0 ]] && { plan_has_removals || retired_has_removals || [[ "$hooks_change" -eq 1 ]] ||
+    [[ "$FORGET_COPIES" -eq 1 ]] ||
     [[ "$(remaining_targets)" != "$STORED_TARGETS" ]]; }; then
     acquire_lock
     select_targets

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Links the managed global files of the chosen targets from this repository into $HOME.
+# Links (or, for the Codex custom agents, copies) the managed global files of the chosen targets
+# from this repository into $HOME.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -17,7 +18,11 @@ Usage: scripts/install.sh [--target claude|codex|all]... [--dry-run]
 Creates symlinks in $HOME for the items of the chosen targets (claude: thirty-three
 items below ~/.claude and ~/.codex/notify; codex: twenty-nine items below ~/.codex
 and ~/.agents/skills, one of them the notify adapter both targets share) and
-records the installed targets in ~/.ifdev-ai-tools/targets. Without --target,
+records the installed targets in ~/.ifdev-ai-tools/targets. The eighteen Codex
+custom agents (~/.codex/agents/<role>.toml) are regular-file copies instead,
+because Codex does not load a symlinked one: their checksums are recorded in
+~/.ifdev-ai-tools/copies, an unmodified copy (or an old link) is updated in place
+and a modified one is backed up first; rerun after `git pull` to update them. Without --target,
 reinstalls the recorded targets; a machine installed before targets were recorded
 is detected as claude, and a machine with nothing installed must choose a target.
 Existing files, directories or foreign/dangling symlinks at those exact paths are
@@ -76,8 +81,36 @@ select_targets() {
   fi
 }
 
-# Classifies every item into PLAN (skip, ok, relink, create, backup) without touching the
-# filesystem. Returns non-zero after reporting every problem, so nothing is changed on partial safety.
+# Classifies a copied item without touching the filesystem: ok (already a current copy), update
+# (the toolkit's unmodified copy of an older version), migrate (a link to <source>, the old
+# install), create or backup (anything else: a user file, a modified copy, another link).
+plan_copy() {
+  local destination=$1 destination_rel=$2 source=$3 checksum recorded
+  if [[ -L "$destination" ]]; then
+    if is_managed_link "$destination" "$source"; then
+      printf 'migrate'
+    else
+      printf 'backup'
+    fi
+  elif [[ ! -e "$destination" ]]; then
+    printf 'create'
+  elif [[ -f "$destination" ]]; then
+    checksum=$(file_checksum "$destination")
+    recorded=$(recorded_checksum "$destination_rel")
+    if [[ "$checksum" == "$(file_checksum "$source")" ]]; then
+      printf 'ok'
+    elif [[ -n "$recorded" && "$checksum" == "$recorded" ]]; then
+      printf 'update'
+    else
+      printf 'backup'
+    fi
+  else
+    printf 'backup'
+  fi
+}
+
+# Classifies every item into PLAN (skip, ok, relink, create, backup, and for copies update and
+# migrate) without touching the filesystem. Returns non-zero after reporting every problem, so nothing is changed on partial safety.
 plan_install() {
   local item source_rel destination_rel target destination problem failed=0
   PLAN=()
@@ -108,7 +141,9 @@ plan_install() {
       continue
     fi
 
-    if is_managed_link "$destination" "$target"; then
+    if is_copied_destination "$destination_rel"; then
+      PLAN+=("$(plan_copy "$destination" "$destination_rel" "$target")")
+    elif is_managed_link "$destination" "$target"; then
       PLAN+=("ok")
     elif is_moved_link "$destination_rel"; then
       PLAN+=("relink")
@@ -130,10 +165,22 @@ plan_install() {
 
 # Same order as apply_install: retired links first, then the managed items.
 print_plan() {
-  local item destination_rel i=0
+  local item destination_rel source i=0
   apply_retired 1
   for item in "${MANAGED_ITEMS[@]}"; do
     destination_rel=$(item_destination "$item")
+    source="$REPO_ROOT/$(item_source "$item")"
+    if is_copied_destination "$destination_rel"; then
+      case "${PLAN[$i]}" in
+        ok) log "unchanged: ~/$destination_rel is already a current copy from this repository" ;;
+        create) log "would copy: ~/$destination_rel from $source" ;;
+        update) log "would update the copy: ~/$destination_rel from $source" ;;
+        migrate) log "would replace the link ~/$destination_rel with a copy of $source" ;;
+        backup) log "would back up ~/$destination_rel to ~/$BACKUPS_DIR_REL/<timestamp>-<unique>/ and copy it" ;;
+      esac
+      i=$((i + 1))
+      continue
+    fi
     case "${PLAN[$i]}" in
       ok) log "unchanged: ~/$destination_rel already links to this repository" ;;
       create) log "would link: ~/$destination_rel -> $REPO_ROOT/$(item_source "$item")" ;;
@@ -151,20 +198,55 @@ create_backup_dir() {
   mktemp -d "$backups/$(date +%Y%m%d-%H%M%S)-XXXXXX"
 }
 
+# Writes <source> to <destination> as a regular file through a temporary file in the same directory
+# and an atomic rename (replacing a link to <source> in place), then records its checksum.
+install_copy() {
+  local source=$1 destination=$2 destination_rel=$3 tmp
+  tmp=$(mktemp "$(dirname -- "$destination")/.$(basename -- "$destination").XXXXXX")
+  cp -- "$source" "$tmp"
+  chmod 644 "$tmp"
+  mv -f -- "$tmp" "$destination"
+  write_copy_record "$destination_rel" "$(file_checksum "$destination")"
+}
+
+# Stops unless the planned <action> still describes the copy at <destination>.
+recheck_copy() {
+  local action=$1 destination=$2 destination_rel=$3 source=$4
+  # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
+  [[ "$(plan_copy "$destination" "$destination_rel" "$source")" == "$action" ]] ||
+    die "~/$destination_rel changed during installation; stopping"
+}
+
 apply_install() {
-  local item source_rel destination_rel target destination backup_dir="" i=0
-  local linked=0 backed_up=0 unchanged=0
+  local item source_rel destination_rel target destination backup_dir="" i=0 copy
+  local linked=0 copied=0 backed_up=0 unchanged=0
   apply_retired 0
   for item in "${MANAGED_ITEMS[@]}"; do
     source_rel=$(item_source "$item")
     destination_rel=$(item_destination "$item")
     target="$REPO_ROOT/$source_rel"
     destination="$HOME/$destination_rel"
+    copy=0
+    is_copied_destination "$destination_rel" && copy=1
 
     case "${PLAN[$i]}" in
       ok)
         unchanged=$((unchanged + 1))
+        # A current copy without its record (an interrupted run) is adopted: replacing it loses nothing.
+        if [[ "$copy" -eq 1 && "$(recorded_checksum "$destination_rel")" != "$(file_checksum "$destination")" ]]; then
+          write_copy_record "$destination_rel" "$(file_checksum "$destination")"
+        fi
         log "unchanged: ~/$destination_rel"
+        ;;
+      update | migrate)
+        recheck_copy "${PLAN[$i]}" "$destination" "$destination_rel" "$target"
+        install_copy "$target" "$destination" "$destination_rel"
+        copied=$((copied + 1))
+        if [[ "${PLAN[$i]}" == "update" ]]; then
+          log "updated: ~/$destination_rel from $target"
+        else
+          log "copied: ~/$destination_rel from $target (replaced the link)"
+        fi
         ;;
       relink)
         # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
@@ -188,14 +270,20 @@ apply_install() {
           # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
           die "~/$destination_rel reappeared during installation; stopping"
         fi
-        ln -s -- "$target" "$destination"
-        linked=$((linked + 1))
-        log "linked: ~/$destination_rel -> $target"
+        if [[ "$copy" -eq 1 ]]; then
+          install_copy "$target" "$destination" "$destination_rel"
+          copied=$((copied + 1))
+          log "copied: ~/$destination_rel from $target"
+        else
+          ln -s -- "$target" "$destination"
+          linked=$((linked + 1))
+          log "linked: ~/$destination_rel -> $target"
+        fi
         ;;
     esac
     i=$((i + 1))
   done
-  log "done: $linked linked, $backed_up backed up, $unchanged unchanged, $RETIRED_REMOVED retired removed"
+  log "done: $linked linked, $copied copied, $backed_up backed up, $unchanged unchanged, $RETIRED_REMOVED retired removed"
   [[ -z "$backup_dir" ]] || log "backups: $backup_dir (see docs/installation.md for manual restoration)"
 }
 
@@ -242,7 +330,8 @@ warn_codex_override() {
 
 main() {
   parse_args "$@"
-  require_commands ln mv rm mkdir rmdir readlink mktemp date dirname python3
+  require_commands ln mv rm mkdir rmdir readlink mktemp date dirname basename cp chmod python3
+  require_checksum_command
   require_home
   plan_all
   warn_codex_override

@@ -11,7 +11,7 @@ These instructions are for working **on** this repository. They are not installe
 
 ## Scripts
 
-- Installation and uninstallation must stay safe and idempotent: validate before mutating, move replaced content to backups, never replace whole parent directories, never remove anything that is not an exact managed link to this checkout, and refuse symlinked parents.
+- Installation and uninstallation must stay safe and idempotent: validate before mutating, move replaced content to backups, never replace whole parent directories, never remove anything that is not an exact managed link to this checkout or a copy that still matches the checksum the installer recorded for it (the Codex custom agents), and refuse symlinked parents.
 - Never run `scripts/install.sh` or `scripts/uninstall.sh` against your real home directory while developing; tests use a temporary `HOME` passed only to subprocesses.
 - Every behavior change needs automated tests in `tests/`, following `core/rules/testing.md`.
 - Every user-visible change adds an entry under **Unreleased** in `CHANGELOG.md`; adding, moving or retiring a managed item also adds an **Upgrade** note (rerun the installer).

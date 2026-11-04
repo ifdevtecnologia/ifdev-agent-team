@@ -142,6 +142,9 @@ STATE_DIR_REL=".ifdev-ai-tools"
 BACKUPS_DIR_REL="$STATE_DIR_REL/backups"
 # The installed targets, one name per line. Written only under the lock.
 TARGETS_FILE_REL="$STATE_DIR_REL/targets"
+# The checksum of every copy the installer wrote, as "<checksum> <destination>" lines. A copy is
+# the toolkit's own only while its content still matches this record. Written only under the lock.
+COPIES_FILE_REL="$STATE_DIR_REL/copies"
 LOCK_DIR=""
 
 log() { printf '%s\n' "$*"; }
@@ -240,6 +243,10 @@ read_recorded_targets() {
       STORED_TARGETS=$(canonical_targets "$STORED_TARGETS $name")
     done <"$file"
   fi
+  file="$HOME/$COPIES_FILE_REL"
+  if [[ -e "$file" || -L "$file" ]]; then
+    [[ -f "$file" && ! -L "$file" ]] || die "copies state is not a regular file: $file"
+  fi
   RECORDED_TARGETS=$STORED_TARGETS
   if [[ -z "$RECORDED_TARGETS" ]] && has_legacy_install; then
     RECORDED_TARGETS="claude"
@@ -274,6 +281,63 @@ write_recorded_targets() {
     printf '%s\n' "$name"
   done >"$tmp"
   mv -f -- "$tmp" "$file"
+}
+
+# True when the managed <destination> is installed as a regular-file copy instead of a symlink:
+# Codex opens custom agent role files without following symlinks, so a linked role fails to load
+# ("Symbolic link loop") even though Codex lists it.
+is_copied_destination() { [[ "$1" == .codex/agents/*.toml ]]; }
+
+require_checksum_command() {
+  command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1 ||
+    command -v cksum >/dev/null 2>&1 || die "required command not found: shasum, sha256sum or cksum"
+}
+
+# Prints a checksum of <file>, prefixed with its algorithm: SHA-256 when available (macOS ships
+# shasum, Linux sha256sum), else POSIX cksum. Records only ever compare on the same machine.
+file_checksum() {
+  local out crc size
+  if command -v shasum >/dev/null 2>&1; then
+    out=$(shasum -a 256 <"$1")
+    printf 'sha256:%s' "${out%% *}"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    out=$(sha256sum <"$1")
+    printf 'sha256:%s' "${out%% *}"
+  else
+    read -r crc size <<<"$(cksum <"$1")"
+    printf 'cksum:%s:%s' "$crc" "$size"
+  fi
+}
+
+# Prints the checksum recorded for the copy at <destination>, or nothing.
+recorded_checksum() {
+  local file="$HOME/$COPIES_FILE_REL" sum rel
+  [[ -f "$file" && ! -L "$file" ]] || return 0
+  while read -r sum rel || [[ -n "$sum" ]]; do
+    if [[ -n "$sum" && "$rel" == "$1" ]]; then
+      printf '%s' "$sum"
+      return 0
+    fi
+  done <"$file"
+}
+
+# Records <checksum> for the copy at <destination>, or forgets it when <checksum> is empty. Rewrites
+# the record atomically (temporary file, then rename) and removes it once empty. Call only while
+# holding the lock, after read_recorded_targets.
+write_copy_record() {
+  local file="$HOME/$COPIES_FILE_REL" tmp sum rel
+  tmp=$(mktemp "$HOME/$STATE_DIR_REL/copies.XXXXXX")
+  if [[ -f "$file" ]]; then
+    while read -r sum rel || [[ -n "$sum" ]]; do
+      [[ -z "$sum" || "$rel" == "$1" ]] || printf '%s %s\n' "$sum" "$rel"
+    done <"$file" >"$tmp"
+  fi
+  [[ -z "$2" ]] || printf '%s %s\n' "$2" "$1" >>"$tmp"
+  if [[ -s "$tmp" ]]; then
+    mv -f -- "$tmp" "$file"
+  else
+    rm -f -- "$tmp" "$file"
+  fi
 }
 
 require_commands() {

@@ -10,7 +10,7 @@ before this file existed and has no Git tag.
 ### Added
 - OpenAI Codex target: `install.sh --target codex` (or `--target all` for Claude Code and Codex)
   links `~/.codex/AGENTS.md` (the team process with the three rules inside, generated into
-  `dist/codex/`), one custom agent per role in `~/.codex/agents/<role>.toml`, the skills in
+  `dist/codex/`), one custom agent per role in `~/.codex/agents/<role>.toml` (a copy, see Fixed), the skills in
   `~/.agents/skills/` and the shared notifier in `~/.codex/notify/`. Roles start with
   `spawn_agent` and `fork_turns: "none"`; Codex does not enforce read-only roles, so they are
   read-only by instruction and report any edit. An existing `~/.codex/AGENTS.md` is backed up and
@@ -202,7 +202,20 @@ before this file existed and has no Git tag.
 - Validator checks that only applied to the supervision: the `codex/profiles/` settings checks and
   the exception that let the supervisor skill forbid Claude from delivering.
 
+### Fixed
+- Codex team agents could be listed but not started ("agent type is currently not available"):
+  Codex does not load a custom agent file that is a symlink. `install.sh --target codex` now
+  writes each `~/.codex/agents/<role>.toml` as a regular-file copy and records its checksum in
+  `~/.ifdev-ai-tools/copies`. Rerunning the installer updates an unmodified copy, replaces an
+  old link to this checkout with a copy, and backs up a copy you edited before replacing it.
+  `uninstall.sh` removes only unmodified copies and keeps (and reports) edited ones. Because they
+  are copies, agent changes reach Codex only after `./scripts/install.sh` runs again following
+  a `git pull`. The install summary now also counts `copied` items.
+
 ### Upgrade
+- If you installed the `codex` target before this fix, run `./scripts/install.sh` once: it
+  replaces the agent links in `~/.codex/agents/` with copies, without backups. After every
+  `git pull`, rerun it so the Codex agents get the updated content.
 - To use the toolkit with Codex, run `./scripts/install.sh --target codex` (once; the target is then
   recorded and a bare `./scripts/install.sh` reinstalls it). A Claude-only install needs no action;
   on one made before targets were recorded, adding Codex records `claude` too.
