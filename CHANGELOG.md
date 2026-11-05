@@ -125,6 +125,10 @@ before this file existed and has no Git tag.
 - Validator check that every required or read-only agent is also listed in `MANAGED_ITEMS`.
 
 ### Changed
+- A product's GitHub Project is now the complete record of its work: every executed or planned
+  task has an issue, including manual operations and external setup. A knowledge-base page named
+  by the project's instructions (for example a Notion page) holds the product's general view. The
+  project `AGENTS.md` template gains a **Work tracking** section for these links.
 - Shorter, tool-agnostic README: what the team is, a flow diagram of the roles, compact role,
   skill and supported-tool tables, a build-and-install diagram and a quick start for Claude Code
   and Codex. The details moved to new guides: `docs/installation.md` (prerequisites, targets,
