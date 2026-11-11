@@ -31,11 +31,19 @@ Run from the repository root, in this order. All commands are non-interactive an
 - <Rule about who may read or change which data.>
 - Glossary: <term> means <definition>.
 
+## Work tracking
+
+Delete the lines that do not apply.
+
+- Board: <GitHub Project URL>.
+- Issues for tasks without a pull request: <owner/repository>.
+- Product page: <knowledge-base page URL, for example a Notion page>.
+- <This project does not use a GitHub Project board; do not propose one | Issues live in <tracker>; reference them as <issue key format>>.
+
 ## Overrides of global defaults
 
 Delete the lines that do not apply.
 
-- Work tracking: <this project does not use a GitHub Project board; do not propose one | issues live in <tracker>>.
 - Release notes: <this project keeps no CHANGELOG.md | add an entry to <release notes file>>.
 - Git (stricter than the global workflow): <branch name format>; commit scopes are <scope list>.
 
