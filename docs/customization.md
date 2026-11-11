@@ -11,7 +11,7 @@ Put the project's shared instructions in one `AGENTS.md` at the repository root.
 | Codex | directly, after the global `~/.codex/AGENTS.md` | `.codex/`; nested `AGENTS.md` files for subdirectories |
 | Claude Code | through a short `CLAUDE.md` that imports it with `@AGENTS.md` (Claude Code reads `AGENTS.md` directly only when no `CLAUDE.md` exists) | `.claude/rules/`, `.claude/agents/`, `.claude/skills/` |
 
-1. Copy [`AGENTS.md`](templates/project/AGENTS.md) and fill in the stack, the **Validation** commands, the domain rules, your overrides and your project reviewers.
+1. Copy [`AGENTS.md`](templates/project/AGENTS.md) and fill in the stack, the **Validation** commands, the domain rules, the **Work tracking** links (board, repository for tasks without a pull request, product page), your overrides and your project reviewers.
 2. Copy [`CLAUDE.md`](templates/project/CLAUDE.md) unchanged: it only contains `@AGENTS.md`. This repository uses the same layout (its [`CLAUDE.md`](../CLAUDE.md) imports [`AGENTS.md`](../AGENTS.md)).
 3. Add path-scoped rules and project reviewers only when you need them (below).
 
@@ -80,7 +80,7 @@ Common overrides the global rules explicitly allow; other more specific project 
 
 | Situation | What the global rule says | What to write in the project |
 | --- | --- | --- |
-| No GitHub Project board | [git-workflow.md](../core/rules/git-workflow.md#project-board): without a GitHub Project, propose creating one once, *unless the project's instructions name another tracker or opt out*. | `Work tracking: this project does not use a GitHub Project board; do not propose one.` or `Work tracking: issues live in <tracker>; reference them as <issue key format>.` |
+| No GitHub Project board | [git-workflow.md](../core/rules/git-workflow.md#project-board): without a GitHub Project, propose creating one once, *unless the project's instructions name another tracker or opt out*. | In the template's **Work tracking** section: `This project does not use a GitHub Project board; do not propose one.` or `Issues live in <tracker>; reference them as <issue key format>.` |
 | Board without preview or staging | [git-workflow.md](../core/rules/git-workflow.md#project-board): statuses that do not apply to the product are skipped; without a preview or staging, an item goes from the merge to To Deploy, or to Done when nothing is deployed. | `Board: there is no preview or staging; after the merge, items go to To Deploy (Done when nothing is deployed).` |
 | No `CHANGELOG.md` | [core/instructions.md](../core/instructions.md#changelog): the changelog entry is required *when the project keeps a `CHANGELOG.md`*. | Nothing is needed. If you record changes elsewhere, say where: `Release notes: add an entry to <release notes file> instead of a CHANGELOG.md.` |
 | Stricter Git workflow | [git-workflow.md](../core/rules/git-workflow.md): it applies *unless the project documents a stricter workflow*; scopes follow the ones the project documents. | `Git: branch names include the issue number (<type>/<issue>-<topic>); commit scopes are <scope list>; pull requests need two human approvals.` |
