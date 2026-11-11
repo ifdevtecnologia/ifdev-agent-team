@@ -226,9 +226,9 @@ manage_claude_hooks() {
 main() {
   parse_args "$@"
   require_commands rm mv mkdir mktemp rmdir readlink dirname python3
-  require_checksum_command
   require_home
   select_targets
+  require_checksum_command
   plan_uninstall || die "no changes were made"
 
   # Always preflighted (never short-circuited by plan_has_removals): invalid JSON or
@@ -248,6 +248,7 @@ main() {
     [[ "$(remaining_targets)" != "$STORED_TARGETS" ]]; }; then
     acquire_lock
     select_targets
+    require_checksum_command
     plan_uninstall || die "no changes were made"
     # The recorded targets may have changed before the lock was taken.
     claude=0

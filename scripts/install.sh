@@ -199,14 +199,18 @@ create_backup_dir() {
 }
 
 # Writes <source> to <destination> as a regular file through a temporary file in the same directory
-# and an atomic rename (replacing a link to <source> in place), then records its checksum.
+# and an atomic rename (replacing a link to <source> in place), then records its checksum. A failed
+# copy removes its temporary file and leaves the destination as it was.
 install_copy() {
-  local source=$1 destination=$2 destination_rel=$3 tmp
+  local source=$1 destination=$2 destination_rel=$3 tmp checksum
   tmp=$(mktemp "$(dirname -- "$destination")/.$(basename -- "$destination").XXXXXX")
-  cp -- "$source" "$tmp"
-  chmod 644 "$tmp"
+  if ! { cp -- "$source" "$tmp" && chmod 644 "$tmp"; }; then
+    rm -f -- "$tmp"
+    die "could not copy $source to ~/$destination_rel; stopping"
+  fi
+  checksum=$(file_checksum "$tmp")
   mv -f -- "$tmp" "$destination"
-  write_copy_record "$destination_rel" "$(file_checksum "$destination")"
+  write_copy_record "$destination_rel" "$checksum"
 }
 
 # Stops unless the planned <action> still describes the copy at <destination>.
@@ -312,6 +316,7 @@ targets_to_record() {
 # Plans and preflights the selected targets; the Claude settings hooks only for claude.
 plan_all() {
   select_targets
+  require_checksum_command
   plan_install || die "no changes were made"
   if list_contains "$SELECTED_TARGETS" claude; then
     preflight_claude_hooks || die "no changes were made"
@@ -331,7 +336,6 @@ warn_codex_override() {
 main() {
   parse_args "$@"
   require_commands ln mv rm mkdir rmdir readlink mktemp date dirname basename cp chmod python3
-  require_checksum_command
   require_home
   plan_all
   warn_codex_override

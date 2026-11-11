@@ -288,25 +288,24 @@ write_recorded_targets() {
 # ("Symbolic link loop") even though Codex lists it.
 is_copied_destination() { [[ "$1" == .codex/agents/*.toml ]]; }
 
+# The copies are only checked when the codex target is selected, so a claude-only machine needs
+# no checksum tool.
 require_checksum_command() {
+  list_contains "$SELECTED_TARGETS" codex || return 0
   command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1 ||
-    command -v cksum >/dev/null 2>&1 || die "required command not found: shasum, sha256sum or cksum"
+    die "required command not found: shasum or sha256sum (needed for the Codex agent copies)"
 }
 
-# Prints a checksum of <file>, prefixed with its algorithm: SHA-256 when available (macOS ships
-# shasum, Linux sha256sum), else POSIX cksum. Records only ever compare on the same machine.
+# Prints the SHA-256 checksum of <file>, prefixed with its algorithm (macOS ships shasum, Linux
+# sha256sum). A record proves ownership only while the copy is byte-identical to what was written.
 file_checksum() {
-  local out crc size
+  local out
   if command -v shasum >/dev/null 2>&1; then
     out=$(shasum -a 256 <"$1")
-    printf 'sha256:%s' "${out%% *}"
-  elif command -v sha256sum >/dev/null 2>&1; then
-    out=$(sha256sum <"$1")
-    printf 'sha256:%s' "${out%% *}"
   else
-    read -r crc size <<<"$(cksum <"$1")"
-    printf 'cksum:%s:%s' "$crc" "$size"
+    out=$(sha256sum <"$1")
   fi
+  printf 'sha256:%s' "${out%% *}"
 }
 
 # Prints the checksum recorded for the copy at <destination>, or nothing.

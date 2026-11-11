@@ -502,6 +502,21 @@ class CodexAgentCopyTests(CodexTestCase):
         self.assert_ok(self.run_script("uninstall.sh"))
         self.assert_no_copies()
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads a file without read permission")
+    def test_failed_copy_leaves_no_temporary_file_and_no_record(self) -> None:
+        source = self.repo / CODEX_COPIED[self.DEV]
+        source.chmod(0)
+        self.addCleanup(source.chmod, 0o644)
+
+        result = self.run_script("install.sh", *CODEX)
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(f"could not copy {self.repo_real / CODEX_COPIED[self.DEV]} to ~/{self.DEV}", result.stderr)
+        self.assert_absent(self.home / self.DEV)
+        self.assertEqual([p.name for p in (self.home / ".codex/agents").iterdir() if p.name.startswith(".")], [])
+        self.assertNotIn(self.DEV, self.records())
+        self.assertFalse((self.home / ".ifdev-ai-tools/lock").exists())
+
     def test_shared_ownership_keeps_the_copies_and_records_with_the_codex_target(self) -> None:
         self.install("--target", "all")
         records = self.records()
@@ -536,29 +551,35 @@ class CodexAgentCopyTests(CodexTestCase):
                     self.assertIn("copies state is not a regular file", result.stderr)
                     self.assertEqual(snapshot(self.home), before)
 
-    def test_cksum_is_used_when_no_sha256_tool_is_available(self) -> None:
-        bin_dir = self.tmp / "bin without sha256"
-        bin_dir.mkdir()
-        commands = ("bash", "env", "ln", "mv", "rm", "mkdir", "rmdir", "readlink", "mktemp", "date", "dirname",
-                    "basename", "cp", "chmod", "cat", "python3", "cksum")
-        for command in commands:
-            found = shutil.which(command)
-            self.assertIsNotNone(found, command)
-            os.symlink(found, bin_dir / command)
+    def run_with_commands(self, name: str, *args: str, checksum_tools: tuple[str, ...]) -> subprocess.CompletedProcess:
+        """Runs a script with a PATH holding only the commands it needs plus <checksum_tools>."""
+        bin_dir = self.tmp / f"bin with {'+'.join(checksum_tools) or 'no checksum tool'}"
+        if not bin_dir.exists():
+            bin_dir.mkdir()
+            commands = ("bash", "env", "ln", "mv", "rm", "mkdir", "rmdir", "readlink", "mktemp", "date", "dirname",
+                        "basename", "cp", "chmod", "cat", "python3", *checksum_tools)
+            for command in commands:
+                found = shutil.which(command)
+                self.assertIsNotNone(found, command)
+                os.symlink(found, bin_dir / command)
         env = {"PATH": str(bin_dir), "HOME": str(self.home), **self.coverage_env}
+        return subprocess.run(
+            ["bash", str(self.repo / "scripts" / name), *args],
+            env=env, cwd=self.tmp, capture_output=True, text=True, timeout=60,
+        )
 
+    def test_sha256sum_is_used_when_shasum_is_missing(self) -> None:
         def run(name: str) -> subprocess.CompletedProcess:
-            return subprocess.run(
-                ["bash", str(self.repo / "scripts" / name), *CODEX],
-                env=env, cwd=self.tmp, capture_output=True, text=True, timeout=60,
-            )
+            return self.run_with_commands(name, *CODEX, checksum_tools=("sha256sum",))
 
         self.assert_ok(run("install.sh"))
         self.assert_copies()
-        self.assertTrue(all(value.startswith("cksum:") for value in self.records().values()), self.records())
+        for rel, source in CODEX_COPIED.items():
+            digest = hashlib.sha256((self.repo / source).read_bytes()).hexdigest()
+            self.assertEqual(self.records()[rel], f"sha256:{digest}", rel)
         rerun = run("install.sh")
         self.assert_ok(rerun)
-        self.assertIn(f"{len(CODEX_MANAGED)} unchanged", rerun.stdout)
+        self.assertIn(f"0 copied, 0 backed up, {len(CODEX_MANAGED)} unchanged", rerun.stdout)
         (self.home / self.DEV).write_text((self.home / self.DEV).read_text() + "# my own tweak\n")
 
         result = run("uninstall.sh")
@@ -566,6 +587,20 @@ class CodexAgentCopyTests(CodexTestCase):
         self.assert_ok(result)
         self.assertIn(f"kept (copy modified since it was installed): ~/{self.DEV}", result.stdout)
         self.assertEqual(sorted(p.name for p in (self.home / ".codex/agents").iterdir()), ["dev.toml"])
+
+    def test_codex_without_a_sha256_tool_refuses_without_changes_but_claude_still_installs(self) -> None:
+        before = snapshot(self.home)
+        for script, args in (("install.sh", CODEX), ("install.sh", (*CODEX, "--dry-run")), ("uninstall.sh", CODEX)):
+            with self.subTest(script=script, args=args):
+                result = self.run_with_commands(script, *args, checksum_tools=())
+
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("required command not found: shasum or sha256sum", result.stderr)
+                self.assertEqual(snapshot(self.home), before)
+
+        # The checksum tool is only needed for the Codex agent copies.
+        self.assert_ok(self.run_with_commands("install.sh", "--target", "claude", checksum_tools=()))
+        self.assert_ok(self.run_with_commands("uninstall.sh", "--target", "claude", checksum_tools=()))
 
 
 class CodexByNameReferenceTests(CodexTestCase):
