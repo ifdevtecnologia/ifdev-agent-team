@@ -89,15 +89,6 @@ is_own_link() {
   is_managed_link "$HOME/$destination_rel" "$REPO_ROOT/$(item_source "$item")" || is_moved_link "$destination_rel"
 }
 
-# True when <destination> is a regular file that still matches the checksum recorded when the
-# installer copied it there.
-is_own_copy() {
-  local destination_rel=$1 recorded
-  recorded=$(recorded_checksum "$destination_rel")
-  [[ -n "$recorded" && -f "$HOME/$destination_rel" && ! -L "$HOME/$destination_rel" &&
-    "$(file_checksum "$HOME/$destination_rel")" == "$recorded" ]]
-}
-
 # Classifies every item into PLAN (skip, shared, remove, modified, foreign, absent); fails on unsafe
 # parents, including the state/backup directories. A shared item still owned by a target that stays
 # recorded is kept. Sets FORGET_COPIES when a copy record of a removed item has to be dropped.
@@ -138,6 +129,10 @@ plan_uninstall() {
       FORGET_COPIES=1
     fi
   done
+  # Malformed record lines never prove ownership; uninstalling codex also drops them.
+  if list_contains "$SELECTED_TARGETS" codex && copy_records_need_pruning; then
+    FORGET_COPIES=1
+  fi
 
   # report_backups lists this tree even on a no-op; never traverse it through a symlink.
   problem=$(parent_problem "$BACKUPS_DIR_REL")
@@ -197,6 +192,10 @@ apply_uninstall() {
     esac
     i=$((i + 1))
   done
+  if [[ "$DRY_RUN" -eq 0 ]] && list_contains "$SELECTED_TARGETS" codex && copy_records_need_pruning; then
+    # Records nothing new: the rewrite alone drops the malformed lines.
+    write_copy_record "" ""
+  fi
   apply_retired "$DRY_RUN"
   [[ "$DRY_RUN" -eq 1 ]] || log "done: $removed removed, $RETIRED_REMOVED retired removed"
 }

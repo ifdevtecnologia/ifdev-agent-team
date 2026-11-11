@@ -81,11 +81,12 @@ select_targets() {
   fi
 }
 
-# Classifies a copied item without touching the filesystem: ok (already a current copy), update
-# (the toolkit's unmodified copy of an older version), migrate (a link to <source>, the old
-# install), create or backup (anything else: a user file, a modified copy, another link).
+# Classifies a copied item without touching the filesystem, given <source checksum>: ok (already a
+# current copy), update (the toolkit's unmodified copy of an older version), migrate (a link to
+# <source>, the old install), create or backup (anything else: a user file, a modified copy,
+# another link, or a file whose checksum fails, which is never taken for the toolkit's).
 plan_copy() {
-  local destination=$1 destination_rel=$2 source=$3 checksum recorded
+  local destination=$1 destination_rel=$2 source=$3 source_checksum=$4 checksum recorded
   if [[ -L "$destination" ]]; then
     if is_managed_link "$destination" "$source"; then
       printf 'migrate'
@@ -94,10 +95,9 @@ plan_copy() {
     fi
   elif [[ ! -e "$destination" ]]; then
     printf 'create'
-  elif [[ -f "$destination" ]]; then
-    checksum=$(file_checksum "$destination")
+  elif [[ -f "$destination" ]] && checksum=$(file_checksum "$destination"); then
     recorded=$(recorded_checksum "$destination_rel")
-    if [[ "$checksum" == "$(file_checksum "$source")" ]]; then
+    if [[ "$checksum" == "$source_checksum" ]]; then
       printf 'ok'
     elif [[ -n "$recorded" && "$checksum" == "$recorded" ]]; then
       printf 'update'
@@ -112,7 +112,7 @@ plan_copy() {
 # Classifies every item into PLAN (skip, ok, relink, create, backup, and for copies update and
 # migrate) without touching the filesystem. Returns non-zero after reporting every problem, so nothing is changed on partial safety.
 plan_install() {
-  local item source_rel destination_rel target destination problem failed=0
+  local item source_rel destination_rel target destination problem source_checksum failed=0
   PLAN=()
   for item in "${MANAGED_ITEMS[@]}"; do
     if ! item_in_targets "$item" "$SELECTED_TARGETS"; then
@@ -142,7 +142,13 @@ plan_install() {
     fi
 
     if is_copied_destination "$destination_rel"; then
-      PLAN+=("$(plan_copy "$destination" "$destination_rel" "$target")")
+      if ! source_checksum=$(file_checksum "$target"); then
+        error "could not compute the checksum of $target"
+        failed=1
+        PLAN+=("error")
+        continue
+      fi
+      PLAN+=("$(plan_copy "$destination" "$destination_rel" "$target" "$source_checksum")")
     elif is_managed_link "$destination" "$target"; then
       PLAN+=("ok")
     elif is_moved_link "$destination_rel"; then
@@ -172,7 +178,13 @@ print_plan() {
     source="$REPO_ROOT/$(item_source "$item")"
     if is_copied_destination "$destination_rel"; then
       case "${PLAN[$i]}" in
-        ok) log "unchanged: ~/$destination_rel is already a current copy from this repository" ;;
+        ok)
+          if [[ "$(recorded_checksum "$destination_rel")" == "$(file_checksum "$source" || true)" ]]; then
+            log "unchanged: ~/$destination_rel is already a current copy from this repository"
+          else
+            log "would adopt: ~/$destination_rel already equals this repository's copy; its checksum would be recorded"
+          fi
+          ;;
         create) log "would copy: ~/$destination_rel from $source" ;;
         update) log "would update the copy: ~/$destination_rel from $source" ;;
         migrate) log "would replace the link ~/$destination_rel with a copy of $source" ;;
@@ -208,21 +220,26 @@ install_copy() {
     rm -f -- "$tmp"
     die "could not copy $source to ~/$destination_rel; stopping"
   fi
-  checksum=$(file_checksum "$tmp")
-  mv -f -- "$tmp" "$destination"
+  if ! checksum=$(file_checksum "$tmp") || ! mv -f -- "$tmp" "$destination"; then
+    rm -f -- "$tmp"
+    die "could not copy $source to ~/$destination_rel; stopping"
+  fi
   write_copy_record "$destination_rel" "$checksum"
 }
 
-# Stops unless the planned <action> still describes the copy at <destination>.
+# Stops unless the planned <action> still describes the copy at <destination>. Prints the source
+# checksum it verified against.
 recheck_copy() {
-  local action=$1 destination=$2 destination_rel=$3 source=$4
+  local action=$1 destination=$2 destination_rel=$3 source=$4 source_checksum
+  source_checksum=$(file_checksum "$source") || die "could not compute the checksum of $source; stopping"
   # shellcheck disable=SC2088 # "~/" is display text for the user, not a path to expand
-  [[ "$(plan_copy "$destination" "$destination_rel" "$source")" == "$action" ]] ||
+  [[ "$(plan_copy "$destination" "$destination_rel" "$source" "$source_checksum")" == "$action" ]] ||
     die "~/$destination_rel changed during installation; stopping"
+  printf '%s' "$source_checksum"
 }
 
 apply_install() {
-  local item source_rel destination_rel target destination backup_dir="" i=0 copy
+  local item source_rel destination_rel target destination backup_dir="" i=0 copy checksum
   local linked=0 copied=0 backed_up=0 unchanged=0
   apply_retired 0
   for item in "${MANAGED_ITEMS[@]}"; do
@@ -236,14 +253,21 @@ apply_install() {
     case "${PLAN[$i]}" in
       ok)
         unchanged=$((unchanged + 1))
-        # A current copy without its record (an interrupted run) is adopted: replacing it loses nothing.
-        if [[ "$copy" -eq 1 && "$(recorded_checksum "$destination_rel")" != "$(file_checksum "$destination")" ]]; then
-          write_copy_record "$destination_rel" "$(file_checksum "$destination")"
+        # A current copy without its record (an interrupted run, or a file equal to the agent) is
+        # adopted: replacing it loses nothing. It is re-verified first, and the verified checksum recorded.
+        if [[ "$copy" -eq 1 ]]; then
+          checksum=$(recheck_copy ok "$destination" "$destination_rel" "$target") || exit 1
+          if [[ "$(recorded_checksum "$destination_rel")" != "$checksum" ]]; then
+            write_copy_record "$destination_rel" "$checksum"
+            log "adopted: ~/$destination_rel (equal to this repository's copy; checksum recorded)"
+            i=$((i + 1))
+            continue
+          fi
         fi
         log "unchanged: ~/$destination_rel"
         ;;
       update | migrate)
-        recheck_copy "${PLAN[$i]}" "$destination" "$destination_rel" "$target"
+        recheck_copy "${PLAN[$i]}" "$destination" "$destination_rel" "$target" >/dev/null || exit 1
         install_copy "$target" "$destination" "$destination_rel"
         copied=$((copied + 1))
         if [[ "${PLAN[$i]}" == "update" ]]; then
