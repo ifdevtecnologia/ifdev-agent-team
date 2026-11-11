@@ -214,7 +214,9 @@ before this file existed and has no Git tag.
   old link to this checkout with a copy, and backs up a copy you edited before replacing it.
   `uninstall.sh` removes only unmodified copies and keeps (and reports) edited ones. Because they
   are copies, agent changes reach Codex only after `./scripts/install.sh` runs again following
-  a `git pull`. The install summary now also counts `copied` items.
+  a `git pull`. The install summary now also counts `copied` items. The `codex` target needs a
+  working `shasum` or `sha256sum`: if neither passes a self-test, install and uninstall stop
+  without changing anything, and a file whose checksum cannot be computed is never removed.
 
 ### Upgrade
 - If you installed the `codex` target before this fix, run `./scripts/install.sh` once: it
