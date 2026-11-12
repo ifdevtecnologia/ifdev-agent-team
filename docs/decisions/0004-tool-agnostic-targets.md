@@ -136,3 +136,7 @@ Resolved: the owner answered every blocking question below on 2026-11-02 (see [O
 6. The Codex target backs up and replaces an existing `~/.codex/AGENTS.md` (default), or refuses and asks the user to merge.
 
 Recorded assumptions, each reversible by dropping the dependent step: Claude Code follows the chained compat links; Claude and Cursor ignore a skill's `agents/` folder and unknown skill keys; Codex loads symlinked custom agents and gives clean-context sub-agents the global `AGENTS.md`; Cursor follows symlinks, accepts about 37 KB of User Rules and resolves duplicate skills sensibly; the names `core/`, `targets/` and `dist/` are acceptable.
+
+## Amendment (2026-11-11, issue #65)
+
+The assumption that Codex loads symlinked custom agents was false: Codex CLI 0.160 (app-server 0.166) lists a symlinked `~/.codex/agents/<role>.toml` but fails to apply it (`failed to apply role to config: Symbolic link loop (os error 40)`), so `spawn_agent` reports "agent type is currently not available". The Codex custom agents are therefore installed as regular-file copies, written atomically, with a SHA-256 checksum per copy recorded in `~/.ifdev-ai-tools/copies`. Only a copy that still matches its record is the toolkit's: a rerun updates it, a link to this checkout is migrated to a copy, and anything else is backed up; uninstall removes only matching copies. Everything else stays a link, so agent changes reach Codex only when the installer reruns after `git pull`.

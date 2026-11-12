@@ -23,7 +23,7 @@ try:
 except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
 
-from test_codex_target import CODEX, CODEX_MANAGED, ROLES, SHARED_ADAPTER, CodexTestCase
+from test_codex_target import CODEX, CODEX_COPIED, CODEX_LINKED, CODEX_MANAGED, ROLES, SHARED_ADAPTER, CodexTestCase
 from test_install import MANAGED, PRE_0004_COMMIT, SETTINGS_JSON, TARGETS_STATE, snapshot
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -232,7 +232,7 @@ class PriorInstallUpgradeTests(unittest.TestCase):
         result = self.run_script("install.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"0 linked, 0 backed up, {len(MANAGED)} unchanged", result.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {len(MANAGED)} unchanged", result.stdout)
         self.assertEqual(
             {rel: value for rel, value in snapshot(self.home).items() if not rel.startswith(".ifdev-ai-tools/backups")},
             {rel: value for rel, value in before.items() if not rel.startswith(".ifdev-ai-tools/backups")},
@@ -250,8 +250,11 @@ class PriorInstallUpgradeTests(unittest.TestCase):
         self.assertEqual(self.state(), "claude\ncodex\n")
         self.assert_claude_installed()
         self.assertEqual((self.home / SETTINGS_JSON).read_text(), settings)
-        for destination, source in CODEX_MANAGED.items():
+        for destination, source in CODEX_LINKED.items():
             self.assertEqual(os.readlink(self.home / destination), str(self.repo_real / source), destination)
+        for destination, source in CODEX_COPIED.items():
+            self.assertFalse(os.path.islink(self.home / destination), destination)
+            self.assertEqual((self.home / destination).read_bytes(), (self.repo / source).read_bytes(), destination)
 
         # A bare rerun keeps both; removing codex later leaves claude working.
         self.assert_ok(self.run_script("install.sh"))

@@ -281,7 +281,7 @@ class InstallTests(InstallerTestCase):
         self.assert_all_links()
         self.assertEqual(self.backup_dirs(), [])
         self.assertFalse((self.home / ".ifdev-ai-tools" / "lock").exists())
-        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged", result.stdout)
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 copied, 0 backed up, 0 unchanged", result.stdout)
         # The link resolves to real content, not only to the right path string.
         self.assertTrue((self.home / ".claude/skills/verify-changes/SKILL.md").is_file())
         # Notification hooks are merged into a freshly created settings.json, not linked.
@@ -381,7 +381,7 @@ class InstallTests(InstallerTestCase):
 
         self.assertEqual(snapshot(self.home), before)
         self.assertEqual(self.backup_dirs(), backups_before)
-        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
         self.assertIn("unchanged: ~/.claude/settings.json notification hooks already configured", result.stdout)
 
     def test_symlinked_parent_directory_is_rejected_without_changes(self) -> None:
@@ -490,7 +490,7 @@ class RetiredItemInstallTests(InstallerTestCase):
         self.assert_all_links()
         self.assertEqual(self.backup_dirs(), [])
         self.assertIn(f"removed retired link: ~/{RETIRED}", result.stdout)
-        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged, 1 retired removed", result.stdout)
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 copied, 0 backed up, 0 unchanged, 1 retired removed", result.stdout)
 
     def test_install_keeps_retired_path_that_is_not_a_link_to_this_checkout(self) -> None:
         other_checkout = self.outside / RETIRED_SOURCE
@@ -542,7 +542,7 @@ class RetiredItemInstallTests(InstallerTestCase):
         result = self.install()
 
         self.assertEqual(snapshot(self.home), before)
-        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged, 0 retired removed", result.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged, 0 retired removed", result.stdout)
         self.assertNotIn(RETIRED, result.stdout)
 
     def test_install_stops_when_retired_link_changes_before_removal(self) -> None:
@@ -704,7 +704,7 @@ class RetiredSupervisionTests(InstallerTestCase):
         self.assert_supervision_removed(result)
         self.assert_all_links()
         self.assertEqual(self.backup_dirs(), [])
-        self.assertIn(f"{MANAGED_COUNT} linked, 0 backed up, 0 unchanged, 2 retired removed", result.stdout)
+        self.assertIn(f"{MANAGED_COUNT} linked, 0 copied, 0 backed up, 0 unchanged, 2 retired removed", result.stdout)
 
     def test_install_removes_directory_link_without_touching_the_leftover_directory(self) -> None:
         leftover = self.leave_ignored_cache()
@@ -1053,7 +1053,7 @@ class TargetTests(InstallerTestCase):
 
                 self.assertEqual(snapshot(self.home), before)
                 self.assertNotIn("recorded targets", rerun.stdout)
-                self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
+                self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
 
     def test_bare_install_reinstalls_the_recorded_targets(self) -> None:
         self.install()
@@ -1063,7 +1063,7 @@ class TargetTests(InstallerTestCase):
 
         self.assert_ok(result)
         self.assert_all_links()
-        self.assertIn(f"1 linked, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
+        self.assertIn(f"1 linked, 0 copied, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
         self.assertEqual(self.state(), "claude\n")
 
     def test_unsafe_or_unsupported_state_refuses_without_changes(self) -> None:
@@ -1095,7 +1095,7 @@ class TargetTests(InstallerTestCase):
 
         self.assert_ok(result)
         self.assert_all_links()
-        self.assertIn(f"1 linked, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
+        self.assertIn(f"1 linked, 0 copied, 0 backed up, {MANAGED_COUNT - 1} unchanged", result.stdout)
 
         uninstall = self.run_script("uninstall.sh")
 
@@ -1221,14 +1221,14 @@ class LegacyInstallTests(InstallerTestCase):
         self.assert_siblings_intact()
         self.assertEqual(self.backup_dirs(), [])
         self.assertEqual(result.stdout.count("(moved source)"), MOVED_COUNT)
-        self.assertIn(f"{MOVED_COUNT} linked, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
+        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
         self.assertEqual((self.home / TARGETS_STATE).read_text(), "claude\n")
 
         before = snapshot(self.home)
         rerun = self.run_script("install.sh")
         self.assert_ok(rerun)
         self.assertEqual(snapshot(self.home), before)
-        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged", rerun.stdout)
 
     def test_dry_run_on_legacy_install_reports_relinks_without_changes(self) -> None:
         self.link_legacy_install()
@@ -1249,7 +1249,7 @@ class LegacyInstallTests(InstallerTestCase):
         result = self.run_script("install.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"0 linked, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
+        self.assertIn(f"0 linked, 0 copied, 0 backed up, {MANAGED_COUNT} unchanged", result.stdout)
         self.assertEqual((self.home / TARGETS_STATE).read_text(), "claude\n")
         self.assertTrue(all(snapshot(self.home).get(rel) == value for rel, value in before.items()))
 
@@ -1292,7 +1292,7 @@ class LegacyInstallTests(InstallerTestCase):
         result = self.install()
 
         self.assert_all_links()
-        self.assertIn(f"{MOVED_COUNT} linked, {MOVED_COUNT} backed up", result.stdout)
+        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, {MOVED_COUNT} backed up", result.stdout)
         self.assert_ok(self.run_script("uninstall.sh"))
 
 
