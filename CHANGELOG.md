@@ -232,12 +232,15 @@ Upgrading from 0.1.0:
 1. `git pull`, then run `./scripts/install.sh` once (it is idempotent). It moves your links from
    the old `claude/` and `codex/` paths to the new sources (links to the old paths are relinked
    without backups; the old paths remain as compatibility links for this release only), records
-   the `claude` target, links the 18 role agents in `~/.claude/agents/` and the `flutter-dev`,
-   `web-dev`, `supabase-dev`, `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in
+   the `claude` target, links the 18 role agents (`po`, `metrics-analyst`, `analyst`, `architect`,
+   `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`, `ux-reviewer`,
+   `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`, `performance-reviewer`
+   and `qa`) in `~/.claude/agents/` and the `flutter-dev`, `web-dev`, `supabase-dev`,
+   `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in
    `~/.claude/skills/`, and removes old links that still point to this checkout:
    `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills
    directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link
-   elsewhere at those paths is kept and reported. Until you rerun it, the main agent reports the
+   elsewhere at those paths is kept and reported. Until you run it, the main agent reports the
    missing agents and runs their roles in a separate context.
 2. Stop selecting `codex --profile ifdev-autonomous`. A leftover `codex/skills/supervise-claude/`
    directory with only ignored `__pycache__/` files may remain in the checkout; it is unused and
@@ -245,11 +248,15 @@ Upgrading from 0.1.0:
 3. To use the toolkit with Codex, review `./scripts/install.sh --target codex --dry-run` first if
    you keep your own `~/.codex/AGENTS.md` (it is moved to the backups, not merged), then run
    `./scripts/install.sh --target codex` once. The target is recorded, so a bare
-   `./scripts/install.sh` reinstalls it; on an install made before targets were recorded, adding
-   Codex records `claude` too. A Claude-only install needs no action.
+   `./scripts/install.sh` reinstalls it; if you skipped step 1 on an install made before targets
+   were recorded, adding Codex records `claude` too. A Claude-only install needs no action.
 4. The Codex agents are copies, not links: rerun `./scripts/install.sh` after every `git pull` so
-   they get the updated content. If you installed the `codex` target from `main` before this
-   release, that rerun replaces the agent links in `~/.codex/agents/` with copies, without backups.
+   they get the updated content. Only if you tracked `main` between releases and installed the
+   `codex` target before this release: that rerun replaces the agent links in `~/.codex/agents/`
+   with copies, without backups.
+
+On a new machine, install with `./scripts/install.sh --target claude` (or `--target codex`, or
+`--target all`); a bare run refuses until a target is chosen.
 
 ## 0.1.0 - 2026-10-17
 
