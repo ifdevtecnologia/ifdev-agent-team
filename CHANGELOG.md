@@ -8,6 +8,12 @@ before this file existed and has no Git tag.
 ## Unreleased
 
 ### Added
+- Blank-line rule in `engineering-principles` (Clean Code): one blank line before and after `if`,
+  `switch`, `for`, `while`, `do` and `try` blocks, and before a `return` that is not the only
+  statement of its block or function, except right after a block opens, before it closes, between
+  a block and its continuation (`else`, `catch`, `finally`, the `while` of a `do`) and under a
+  comment above the statement. The project's formatter or
+  linter takes precedence.
 - OpenAI Codex target: `install.sh --target codex` (or `--target all` for Claude Code and Codex)
   links `~/.codex/AGENTS.md` (the team process with the three rules inside, generated into
   `dist/codex/`), one custom agent per role in `~/.codex/agents/<role>.toml` (a copy, see Fixed), the skills in

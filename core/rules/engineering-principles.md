@@ -10,6 +10,7 @@ Apply these principles across projects as pragmatic heuristics, not dogmas. When
 - Do not leave dead code, empty catches, or unexplained magic numbers/strings.
 - Avoid boolean flags that significantly change behavior; prefer explicit operations or useful abstractions.
 - Prefer explicitness over cleverness.
+- Separate control flow with blank lines: leave one blank line before and after an `if`, `switch`, `for`, `while`, `do` or `try` block, and before a `return` that is not the only statement of its block or function. Omit the blank line right after a block opens (for example `{`) or before it closes, and between a block and its continuation (`else`, `catch`, `finally`, the `while` of a `do`); a comment directly above the statement stays attached to it, with the blank line above the comment. The project's formatter or linter takes precedence.
 
 ## Coupling and cohesion
 
