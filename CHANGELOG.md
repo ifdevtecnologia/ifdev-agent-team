@@ -3,9 +3,11 @@
 User-visible changes to this toolkit (installed instructions, agents, skills and scripts). Format
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), [Semantic Versioning](https://semver.org/).
 There is no official 1.0.0 yet: versions stay in `0.y.z`. Version 0.1.0 groups everything merged
-before this file existed and has no Git tag.
+before this file existed and has no Git tag; 0.2.0 is the first tagged version (`v0.2.0`).
 
 ## Unreleased
+
+## 0.2.0 - 2026-11-12
 
 ### Added
 - Blank-line rule in `engineering-principles` (Clean Code): one blank line before and after `if`,
@@ -225,31 +227,29 @@ before this file existed and has no Git tag.
   without changing anything, and a file whose checksum cannot be computed is never removed.
 
 ### Upgrade
-- If you installed the `codex` target before this fix, run `./scripts/install.sh` once: it
-  replaces the agent links in `~/.codex/agents/` with copies, without backups. After every
-  `git pull`, rerun it so the Codex agents get the updated content.
-- To use the toolkit with Codex, run `./scripts/install.sh --target codex` (once; the target is then
-  recorded and a bare `./scripts/install.sh` reinstalls it). A Claude-only install needs no action;
-  on one made before targets were recorded, adding Codex records `claude` too.
-  Review `./scripts/install.sh --target codex --dry-run` first if you keep your own
-  `~/.codex/AGENTS.md`: it is moved to the backups, not merged.
-- `git pull` keeps existing installations working: the old paths in `claude/` and `codex/` are now
-  compatibility links to the new locations, kept for one release. Run `./scripts/install.sh` once
-  after pulling to move your links to the new sources; links to the old paths are relinked without
-  backups and the `claude` target is recorded. On a new machine, install with
-  `./scripts/install.sh --target claude`.
-- Run `./scripts/install.sh` again after pulling (idempotent): it links the `po`, `metrics-analyst`,
-  `analyst`, `architect`, `ux`, `designer`, `debugger`, `dev`, `devops`, `tech-writer`, `reviewer`,
-  `ux-reviewer`, `security-reviewer`, `api-reviewer`, `privacy-reviewer`, `db-reviewer`,
-  `performance-reviewer` and `qa` agents in `~/.claude/agents/` and the `flutter-dev`, `web-dev`,
-  `supabase-dev`, `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in
-  `~/.claude/skills/`, and removes old links that still point to this checkout:
-  `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills
-  directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a
-  file or a link elsewhere at those paths is kept and reported. Until then the main agent reports
-  the missing agents and runs their roles in a separate context. Stop selecting `codex --profile
-  ifdev-autonomous`. A leftover `codex/skills/supervise-claude/` directory with only ignored
-  `__pycache__/` files may remain in the checkout; it is unused and safe to delete.
+Upgrading from 0.1.0:
+
+1. `git pull`, then run `./scripts/install.sh` once (it is idempotent). It moves your links from
+   the old `claude/` and `codex/` paths to the new sources (links to the old paths are relinked
+   without backups; the old paths remain as compatibility links for this release only), records
+   the `claude` target, links the 18 role agents in `~/.claude/agents/` and the `flutter-dev`,
+   `web-dev`, `supabase-dev`, `java-spring-dev`, `safe-refactor` and `e2e-testing` skills in
+   `~/.claude/skills/`, and removes old links that still point to this checkout:
+   `senior-reviewer.md` in `~/.claude/agents/`, the `supervise-claude` link in the Codex skills
+   directory and `~/.codex/ifdev-autonomous.config.toml`. A real directory, a file or a link
+   elsewhere at those paths is kept and reported. Until you rerun it, the main agent reports the
+   missing agents and runs their roles in a separate context.
+2. Stop selecting `codex --profile ifdev-autonomous`. A leftover `codex/skills/supervise-claude/`
+   directory with only ignored `__pycache__/` files may remain in the checkout; it is unused and
+   safe to delete.
+3. To use the toolkit with Codex, review `./scripts/install.sh --target codex --dry-run` first if
+   you keep your own `~/.codex/AGENTS.md` (it is moved to the backups, not merged), then run
+   `./scripts/install.sh --target codex` once. The target is recorded, so a bare
+   `./scripts/install.sh` reinstalls it; on an install made before targets were recorded, adding
+   Codex records `claude` too. A Claude-only install needs no action.
+4. The Codex agents are copies, not links: rerun `./scripts/install.sh` after every `git pull` so
+   they get the updated content. If you installed the `codex` target from `main` before this
+   release, that rerun replaces the agent links in `~/.codex/agents/` with copies, without backups.
 
 ## 0.1.0 - 2026-10-17
 
