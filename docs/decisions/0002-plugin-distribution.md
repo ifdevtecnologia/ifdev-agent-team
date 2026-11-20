@@ -1,6 +1,6 @@
 # 0002. Distribute agents, skills and hooks as a Claude Code plugin (hybrid)
 
-- **Status:** Proposed
+- **Status:** Proposed; the hybrid decision is superseded in part by [0005](0005-plugin-and-setup.md) (proposed, deferred). The capability facts below stay valid.
 - **Date:** 2026-11-01
 - **Issue:** #39 (spike), parent #38; follow-ups #40, #41, #42
 - **Evaluated against:** Claude Code `2.1.314` (`claude --version`). Official docs fetched on 2026-11-01: `docs.claude.com/en/docs/claude-code/{plugins,plugins-reference,plugin-marketplaces,sub-agents,skills,memory,hooks}` and `code.claude.com/docs/en/plugins/{components,loading,marketplace-reference,install}`. The plugin feature changes often; revisit this record when the CLI's minor version moves a lot.

@@ -7,6 +7,12 @@ before this file existed and has no Git tag; 0.2.0 is the first tagged version (
 
 ## Unreleased
 
+### Added
+- `scripts/status.sh`: a read-only report of the toolkit version of the checkout (latest released
+  `CHANGELOG.md` section and Git commit) and of every installed item (`ok`, `outdated`, `modified`,
+  `missing`, `broken`, `foreign`, `unsafe-parent`) and Claude notification hook, with exit status 0
+  when everything is in place. It never writes and never follows a symlinked parent directory.
+
 ## 0.2.0 - 2026-11-12
 
 ### Added
