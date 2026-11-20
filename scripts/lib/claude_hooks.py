@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Safe structured merge/removal of this toolkit's notification hooks in
-~/.claude/settings.json (see scripts/install.sh and scripts/uninstall.sh).
+~/.claude/settings.json (see scripts/install.sh and scripts/uninstall.sh), plus a read-only
+status report of them (see scripts/status.sh).
 
 Claude Code's settings.json is user-owned and mutable, so it cannot be symlinked like
 the other managed items: it is merged instead. This module only ever adds or removes
@@ -299,9 +300,22 @@ def run(action: str, home: Path, dry_run: bool) -> list:
     return lines
 
 
+def status(home: Path) -> list:
+    """Read-only: "present: <event>" or "missing: <event>" for each managed hook, in
+    HOOK_COMMANDS order; raises HookInstallError on an unsafe or malformed settings file."""
+    _, settings = _settings_paths(home)
+    problem = _unsafe_parent_dir(home / ".claude") or _unsafe_existing(settings)
+    if problem:
+        raise HookInstallError(problem)
+    data = _load(settings)
+    _validate_managed_hooks_shape(settings, data)
+    present = plan_uninstall(data)
+    return [f"{'present' if event in present else 'missing'}: {event}" for event in HOOK_COMMANDS]
+
+
 def main(argv: list) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
-    parser.add_argument("action", choices=("install", "uninstall"))
+    parser.add_argument("action", choices=("install", "uninstall", "status"))
     parser.add_argument("--home", required=True, type=Path)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -310,7 +324,8 @@ def main(argv: list) -> int:
         print(f"error: --home must be an existing absolute directory: {home}", file=sys.stderr)
         return 1
     try:
-        for line in run(args.action, home, args.dry_run):
+        lines = status(home) if args.action == "status" else run(args.action, home, args.dry_run)
+        for line in lines:
             print(line)
     except HookInstallError as exc:
         print(f"error: {exc}", file=sys.stderr)

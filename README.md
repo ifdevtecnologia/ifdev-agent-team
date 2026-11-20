@@ -141,6 +141,7 @@ cd ifdev-agent-team
 ```
 
 - **Update:** `git pull && ./scripts/install.sh` (a bare run reinstalls the recorded targets and is idempotent).
+- **Status:** `./scripts/status.sh` shows the installed version and whether every item and hook is in place, without changing anything.
 - **Uninstall:** `./scripts/uninstall.sh --dry-run`, then `./scripts/uninstall.sh` (or `--target codex` for one target).
 - **Backups:** anything the installer replaces is moved to `~/.ifdev-ai-tools/backups/`, never deleted; see [manual restoration](docs/installation.md#backups-and-manual-restoration).
 

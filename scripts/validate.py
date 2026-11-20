@@ -96,6 +96,7 @@ REQUIRED_FILES = (
     *(f"{CODEX_AGENTS_DIR}/{role}.toml" for role in ROLES),
     "scripts/install.sh",
     "scripts/uninstall.sh",
+    "scripts/status.sh",
     "scripts/validate.sh",
     "scripts/validate.py",
     "scripts/build_targets.py",
@@ -123,7 +124,7 @@ COMPAT_LINKS = {
 }
 
 # Documented as runnable with `./scripts/<name>.sh`, so they must keep the executable bit.
-EXECUTABLE_SCRIPTS = ("scripts/install.sh", "scripts/uninstall.sh", "scripts/validate.sh", "scripts/agent-notify.sh")
+EXECUTABLE_SCRIPTS = ("scripts/install.sh", "scripts/uninstall.sh", "scripts/status.sh", "scripts/validate.sh", "scripts/agent-notify.sh")
 
 MAX_SCAN_BYTES = 1_000_000
 

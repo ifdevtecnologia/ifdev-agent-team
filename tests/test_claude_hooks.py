@@ -337,5 +337,48 @@ class AtomicWriteTests(ClaudeHooksTestCase):
         self.assertFalse(self.settings.exists())
 
 
+class StatusTests(ClaudeHooksTestCase):
+    def test_reports_every_hook_missing_without_a_settings_file_and_creates_nothing(self) -> None:
+        self.assertEqual(hooks.status(self.home), [f"missing: {event}" for event in OUR_EVENTS])
+        self.assertEqual(list(self.home.iterdir()), [])
+
+    def test_reports_installed_hooks_as_present_without_changing_the_file(self) -> None:
+        hooks.run("install", self.home, dry_run=False)
+        before = self.settings.read_bytes()
+
+        self.assertEqual(hooks.status(self.home), [f"present: {event}" for event in OUR_EVENTS])
+        self.assertEqual(self.settings.read_bytes(), before)
+
+    def test_reports_a_partial_install_event_by_event(self) -> None:
+        hooks.run("install", self.home, dry_run=False)
+        data = self.read_settings()
+        del data["hooks"]["StopFailure"]
+        self.write_settings(data)
+
+        self.assertEqual(hooks.status(self.home), ["present: Stop", "missing: StopFailure", "present: Notification"])
+
+    def test_refuses_unsafe_or_malformed_settings(self) -> None:
+        self.write_settings("{not json")
+        with self.assertRaises(hooks.HookInstallError):
+            hooks.status(self.home)
+
+        self.settings.unlink()
+        target = self.tmp / "elsewhere.json"
+        target.write_text("{}", encoding="utf-8")
+        os.symlink(target, self.settings)
+        with self.assertRaises(hooks.HookInstallError):
+            hooks.status(self.home)
+
+    def test_cli_status_prints_lines_and_exits_one_on_unsafe_settings(self) -> None:
+        with mock.patch("sys.stdout") as stdout:
+            self.assertEqual(hooks.main(["status", "--home", str(self.home)]), 0)
+        printed = "".join(call.args[0] for call in stdout.write.call_args_list)
+        self.assertIn("missing: Stop", printed)
+
+        self.write_settings("[]")
+        with mock.patch("sys.stderr"):
+            self.assertEqual(hooks.main(["status", "--home", str(self.home)]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
