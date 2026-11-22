@@ -67,6 +67,27 @@ fi
 
 Repeat the check for every item; never move a backup over an existing destination. On a conflict, compare both versions and decide yourself what to keep (for example rename the current one first); the backup stays where it is until you do. Backups are never removed automatically; delete them yourself once you no longer need them.
 
+## Check the installation
+
+```bash
+./scripts/status.sh                 # the recorded targets
+./scripts/status.sh --target codex  # or one target
+```
+
+Read-only: it never writes, never takes the installer lock and never follows a symlinked parent directory (it reports it). It prints the toolkit version of this checkout (the latest released section of `CHANGELOG.md` plus `git describe` and the short commit, with a note when Unreleased already lists changes), then one line per managed item of the selected targets and, for `claude`, the state of each notification hook in `~/.claude/settings.json` (`present`, `missing`, or `unsafe` when the file is invalid or a symlink).
+
+| State | Meaning | What to do |
+| --- | --- | --- |
+| `ok` | links to this checkout, or a Codex agent copy equal to the current file | nothing |
+| `outdated` | links to an item's old path, or a Codex agent copy of an older version or not yet recorded as the toolkit's | rerun `./scripts/install.sh` |
+| `modified` | a Codex agent copy you edited since it was installed | keep it, or rerun the installer (it backs your copy up first) |
+| `missing` | nothing at that path | rerun `./scripts/install.sh` |
+| `broken` | a dangling link | rerun `./scripts/install.sh`: a foreign dangling link is backed up and replaced; if it stops on a missing source, update or re-clone the checkout first |
+| `foreign` | a file or link that is not this toolkit's | decide yourself; the installer would back it up and replace it |
+| `unsafe-parent` | a parent directory is a symlink or not a directory | replace it with a real directory |
+
+The exit status is 0 when everything is `ok`, 1 when something needs attention (including an existing `~/.codex/AGENTS.override.md`, which Codex reads instead of the installed `AGENTS.md`) and 2 on invalid usage. Links left by retired items are not reported; the installer removes them.
+
 ## Upgrade
 
 - **Update:** `git pull`, then `./scripts/install.sh`. The links already point to the updated files, but the Codex custom agents are copies: they change only when the installer runs again, which updates every unmodified copy and backs up a copy you edited.
