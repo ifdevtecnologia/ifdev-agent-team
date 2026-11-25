@@ -32,6 +32,13 @@ HIDDEN_DIR = "bench_hidden"
 EVALUATOR_NETWORK = "none"
 DEFAULT_COMMAND_TIMEOUT_S = 900
 COPY_ERRORS = (OSError, shutil.Error)
+# Caches that running tools creates; left out of both sides of the patch so a run that only ran the
+# tests still has an empty diff. Everything else is added with --force on both sides, so neither the
+# snapshot's nor the agent's .gitignore can hide a file from the patch.
+PATCH_EXCLUDES = tuple(
+    f":(exclude,glob){pattern}"
+    for pattern in ("**/__pycache__/**", "**/*.pyc", "**/.pytest_cache/**", "**/.mypy_cache/**", "**/.ruff_cache/**")
+)
 
 
 def final_patch(base_tree: Path, work: Path, scratch: Path) -> bytes:
@@ -41,12 +48,12 @@ def final_patch(base_tree: Path, work: Path, scratch: Path) -> bytes:
     env = isolated_git_env(scratch)
     git_dir = scratch / "patch.git"
     git(["init", "-q", "--bare", str(git_dir)], env)
+    add = ["-c", f"core.excludesFile={os.devnull}", "add", "-A", "--force", "--", ".", *PATCH_EXCLUDES]
     base = ["--git-dir", str(git_dir), "--work-tree", str(base_tree)]
-    git([*base, "add", "-A", "."], env, cwd=base_tree)
+    git([*base, *add], env, cwd=base_tree)
     git([*base, "commit", "-q", "--allow-empty", "-m", "base"], env, cwd=base_tree)
-    after = ["--git-dir", str(git_dir), "--work-tree", str(work), "-c", f"core.excludesFile={os.devnull}"]
-    # --force: files the agent's .gitignore hides are still evaluated, so the patch must show them.
-    git([*after, "add", "-A", "--force", "."], env, cwd=work)
+    after = ["--git-dir", str(git_dir), "--work-tree", str(work)]
+    git([*after, *add], env, cwd=work)
 
     return git([*after, "diff", "--cached", "--binary", "HEAD"], env, cwd=work, binary=True).stdout
 

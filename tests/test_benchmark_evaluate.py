@@ -65,6 +65,23 @@ class PatchTests(EvaluateTestCase):
         self.assertIn(b"conftest.py", patch)
         self.assertIn(b"+planted", patch)
 
+    def test_ignored_snapshot_files_and_test_caches_keep_an_unchanged_run_empty(self) -> None:
+        # The snapshot ships a file its own .gitignore matches; the agent only ran the tests.
+        (self.task.snapshot / ".gitignore").write_text("vendor/\n")
+        (self.task.snapshot / "vendor").mkdir()
+        (self.task.snapshot / "vendor" / "lib.txt").write_text("vendored\n")
+        subprocess.run(["rm", "-r", "-f", str(self.run_root)], check=True)
+        self.run_root, self.base = isolate.prepare_run(self.runs_dir, "T01_A_r2", self.task, "A", PROJECT_CLAUDE, REPO_ROOT, None)
+        self.work = self.run_root / "work"
+        (self.work / "__pycache__").mkdir()
+        (self.work / "__pycache__" / "app.cpython.pyc").write_bytes(b"cache")
+        (self.work / ".pytest_cache").mkdir()
+        (self.work / ".pytest_cache" / "v").write_text("x\n")
+
+        result = self.evaluate()
+
+        self.assertTrue(result["empty_diff"], (self.out / "final.patch").read_bytes())
+
     def test_no_change_gives_empty_patch_and_failing_hidden_tests(self) -> None:
         result = self.evaluate()
 
