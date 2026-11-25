@@ -55,6 +55,7 @@ scripts/
   agent-notify.sh                    -> ~/.claude/hooks/agent-notify.sh (shared cross-agent notifier)
   validate.sh, validate.py           static repository validation
   context_budget.py                  estimate of the context loaded in every session (needs the dev dependency)
+benchmark/                           benchmark harness of ADR 0001 (not installed; see benchmark/README.md)
 docs/                                guides, decision records and project templates
 tests/                               isolated automated tests (Python unittest)
 requirements-dev.txt                 pinned development tools: PyYAML, Ruff, coverage.py, shellcheck-py
@@ -90,7 +91,7 @@ The authoritative list is `MANAGED_ITEMS` in `scripts/lib/common.sh` (source, de
 ```bash
 python3 -m pip install -r requirements-dev.txt   # once; pinned development tools
 git ls-files -z '*.sh' | xargs -0 shellcheck    # shell lint (.shellcheckrc)
-ruff check scripts tests                        # Python lint (ruff.toml)
+ruff check scripts tests benchmark              # Python lint (ruff.toml)
 for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$script"; done
 python3 scripts/build_targets.py --check
 ./scripts/validate.sh
@@ -110,11 +111,11 @@ Lint and coverage notes:
 
 - **ShellCheck** checks every tracked `*.sh` file. `.shellcheckrc` only lets it follow `source` directives relative to the sourcing script. Intentional exceptions are inline `# shellcheck disable=SCxxxx` comments with their reason (for example `~/` in messages is display text, not a path to expand). Fixes must keep the scripts Bash 3.2 compatible.
 - **Ruff** runs `ruff check` with the rules in `ruff.toml` (pycodestyle errors, Pyflakes, import order, bugbear and pyupgrade for Python 3.9). Line length (E501) and `ruff format` are not enforced: the formatter would rewrap most files.
-- **Coverage** (`.coveragerc`) measures `scripts/` with branch coverage and repository-relative paths. It also measures the Python scripts that the tests start as subprocesses (`patch = subprocess`): those inheriting the environment directly, and those started with a minimal environment (`PATH` and `HOME`), which receive only coverage's own `COVERAGE_PROCESS_CONFIG` through `coverage_env()` in `tests/subprocess_coverage.py`, and only under `coverage run`, so a plain test run is unchanged. The validator and installer tests run copies of `scripts/` in temporary fixtures; `[paths]` maps those copies back to `scripts/` when the data is combined. The upgrade tests' clones of other commits and the shell scripts are not measured. No minimum percentage is enforced yet.
+- **Coverage** (`.coveragerc`) measures `scripts/` and `benchmark/` with branch coverage and repository-relative paths. It also measures the Python scripts that the tests start as subprocesses (`patch = subprocess`): those inheriting the environment directly, and those started with a minimal environment (`PATH` and `HOME`), which receive only coverage's own `COVERAGE_PROCESS_CONFIG` through `coverage_env()` in `tests/subprocess_coverage.py`, and only under `coverage run`, so a plain test run is unchanged. The validator and installer tests run copies of `scripts/` in temporary fixtures; `[paths]` maps those copies back to `scripts/` when the data is combined. The upgrade tests' clones of other commits and the shell scripts are not measured. No minimum percentage is enforced yet.
 
 ### SonarQube Cloud
 
-The `sonar` job runs its steps only when the `SONAR_TOKEN` secret exists, so pull requests from forks (which do not receive the repository's secrets) and repositories without the secret skip the analysis and stay green. It runs in its own job, after `validate`, so the token never shares a runner with the repository's tests and scripts: it only checks out the sources, downloads the coverage report and runs the scanner. `sonar-project.properties` holds the organization and project keys, the analyzed directories (`scripts`, `targets`, tests in `tests`) and the coverage report path. One-time setup by the repository owner:
+The `sonar` job runs its steps only when the `SONAR_TOKEN` secret exists, so pull requests from forks (which do not receive the repository's secrets) and repositories without the secret skip the analysis and stay green. It runs in its own job, after `validate`, so the token never shares a runner with the repository's tests and scripts: it only checks out the sources, downloads the coverage report and runs the scanner. `sonar-project.properties` holds the organization and project keys, the analyzed directories (`scripts`, `targets`, `benchmark`, tests in `tests`) and the coverage report path. One-time setup by the repository owner:
 
 1. Sign in at [sonarcloud.io](https://sonarcloud.io) with GitHub, import the repository into the `ifdevtecnologia` organization and check that the organization and project keys it shows match `sonar-project.properties` (fix the file if they differ).
 2. In the project's **Administration → Analysis Method**, turn off **Automatic Analysis** before adding the secret: CI analysis and automatic analysis cannot both run, and the CI step fails while automatic analysis is on.
