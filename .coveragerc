@@ -22,3 +22,8 @@ scripts =
     scripts/
     */fixture repo/scripts/
     */repo with spaces/scripts/
+# The benchmark CLI tests run `python3 -m bench.<module>` from benchmark/, so with relative_files those
+# processes record bench/... paths; `coverage combine` maps them back to benchmark/bench/.
+benchmark =
+    benchmark/bench/
+    bench/
