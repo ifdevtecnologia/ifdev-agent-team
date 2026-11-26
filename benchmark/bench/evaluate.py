@@ -31,6 +31,9 @@ from bench.taskspec import Task
 HIDDEN_DIR = "bench_hidden"
 EVALUATOR_NETWORK = "none"
 DEFAULT_COMMAND_TIMEOUT_S = 900
+# Layout of each check's fresh copy: the workspace tree and the evaluator's HOME, side by side.
+CHECK_TREE = "tree"
+CHECK_HOME = "home"
 COPY_ERRORS = (OSError, shutil.Error)
 # Caches that running tools creates; left out of both sides of the patch so a run that only ran the
 # tests still has an empty diff. Everything else is added with --force on both sides, so neither the
@@ -124,14 +127,17 @@ def restore_protected(task: Task, workspace: Path) -> list[str]:
 
 
 def _check(task: Task, workspace: Path, command: str, log, timeout_s: float) -> dict[str, object]:
+    """Runs <command> in <workspace>, a fresh copy made by _fresh_copy: the container mounts the copy's
+    parent, so HOME is the copy's own empty directory next to the tree, never a shared one."""
+    check_dir = workspace.parent
     spec = ContainerSpec(
         image=task.image,
         name=f"bench-eval-{uuid.uuid4()}",
-        mount=workspace,
+        mount=check_dir,
         workdir=workspace,
         network=EVALUATOR_NETWORK,
         command=("sh", "-c", command),
-        env=(("HOME", "/tmp"),),
+        env=(("HOME", str(check_dir / CHECK_HOME)),),
     )
     log.write(f"$ {command}\n".encode())
     log.flush()
@@ -141,7 +147,9 @@ def _check(task: Task, workspace: Path, command: str, log, timeout_s: float) -> 
 
 
 def _fresh_copy(restored: Path, scratch: Path, name: str, task: Task | None = None) -> Path:
-    destination = scratch / name
+    """<scratch>/<name>/tree, a copy of <restored>, next to an empty <scratch>/<name>/home."""
+    (scratch / name / CHECK_HOME).mkdir(parents=True)
+    destination = scratch / name / CHECK_TREE
     copy_tree(restored, destination)
 
     if task is not None:

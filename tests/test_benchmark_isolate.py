@@ -104,9 +104,18 @@ class ToolkitTests(BenchTestCase):
 
         self.assertEqual(isolate.resolve_sha(repo, sha[:10]), sha)
 
-        for bad in ("0" * 40, "--all", "", "no-such-ref"):
+        for bad in ("0" * 40, "--all", "", "no-such-ref", "HEAD:README.md", "HEAD --all", "-n1", "@{-1}"):
             with self.subTest(bad=bad), self.assertRaises(isolate.IsolationError):
                 isolate.resolve_sha(repo, bad)
+
+    def test_export_refuses_a_revision_that_git_could_read_as_an_option(self) -> None:
+        repo, _ = self.make_repo()
+
+        for bad in ("--output=archive.tar", "--remote=x", "HEAD:README.md", ""):
+            with self.subTest(bad=bad), self.assertRaises(isolate.IsolationError):
+                isolate.export_toolkit(repo, bad, self.tmp / f"export-{len(bad)}")
+
+        self.assertFalse((repo / "archive.tar").exists())
 
     def test_export_excludes_the_harness_and_installer_runs_with_temporary_home(self) -> None:
         repo, sha = self.make_repo()

@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 from benchmark_support import BENCH_DIR, REPO_ROOT, BenchTestCase, make_task
 
@@ -147,6 +148,18 @@ class IsolationOfChecksTests(EvaluateTestCase):
 
         for mount in mounts:
             self.assertFalse(mount.startswith(str(self.run_root)), mount)
+
+        # Each check's HOME is its own directory inside its mount, never a shared one like /tmp.
+        homes = set()
+
+        for argv in self.docker_calls():
+            source = argv[argv.index("--mount") + 1].split(",")[1].removeprefix("source=")
+            home = next(a.removeprefix("HOME=") for a in argv if a.startswith("HOME="))
+            self.assertEqual(Path(home).parent, Path(source))
+            self.assertEqual(Path(argv[argv.index("-w") + 1]).parent, Path(source))
+            homes.add(home)
+
+        self.assertEqual(len(homes), 4)
 
         self.assertEqual(sorted(p.name for p in self.run_root.iterdir()), ["home", "out", "toolkit", "work"])
         self.assertEqual([p for p in self.runs_dir.iterdir() if p.name.startswith("eval-")], [])

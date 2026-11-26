@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import os
 import posixpath
+import re
 import shutil
 import subprocess
 import tarfile
@@ -23,6 +24,9 @@ RUN_SUBDIRS = ("home", "work", "toolkit", "out")
 # that A does not see.
 EXCLUDED_FROM_TOOLKIT = ("benchmark", "docs/benchmark", "docs/decisions/0001-benchmark-protocol.md", "tests")
 CONDITIONS_WITH_TOOLKIT = ("B", "C")
+# A revision passed to Git (a SHA, branch or HEAD~1): never an option, a path or a range.
+GIT_REVISION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._/^~-]{0,254}")
+FULL_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 
 
 class IsolationError(RuntimeError):
@@ -99,15 +103,27 @@ def init_workspace(run_root: Path, task: Task, project_claude: Path) -> str:
 
 def resolve_sha(repo: Path, sha: str) -> str:
     """Full SHA of an existing commit in <repo>; refuses names that do not resolve to a commit."""
-    if not sha or sha.startswith("-"):
-        raise IsolationError(f"invalid toolkit SHA: {sha!r}")
+    revision = _checked_revision(sha)
 
     try:
-        result = git(["-C", str(repo), "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"], isolated_git_env(repo))
+        result = git(["-C", str(repo), "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}"], isolated_git_env(repo))
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         raise IsolationError(f"toolkit SHA {sha!r} is not a commit of {repo}") from error
 
-    return result.stdout.strip()
+    full = result.stdout.strip()
+
+    if not FULL_SHA.fullmatch(full):
+        raise IsolationError(f"toolkit SHA {sha!r} did not resolve to a commit SHA")
+
+    return full
+
+
+def _checked_revision(revision: str) -> str:
+    """<revision> when it is a plain Git revision, so it can never be read as an option."""
+    if not GIT_REVISION.fullmatch(revision or ""):
+        raise IsolationError(f"invalid toolkit SHA: {revision!r}")
+
+    return revision
 
 
 def _excluded(name: str) -> bool:
@@ -129,7 +145,8 @@ def _link_stays_inside(member: tarfile.TarInfo) -> bool:
 
 def export_toolkit(repo: Path, sha: str, destination: Path) -> None:
     """`git archive` of the pinned SHA into <destination>, without the harness paths."""
-    archive = git(["-C", str(repo), "archive", "--format=tar", sha], isolated_git_env(repo), binary=True).stdout
+    revision = _checked_revision(sha)
+    archive = git(["-C", str(repo), "archive", "--format=tar", revision], isolated_git_env(repo), binary=True).stdout
 
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         members = []
