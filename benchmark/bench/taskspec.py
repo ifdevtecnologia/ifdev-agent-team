@@ -26,8 +26,9 @@ HIDDEN_PLACEHOLDER = "{test}"
 REQUIRED_KEYS = ("id", "type", "stack", "image", "commands", "expected_files", "protected_paths", "criteria", "hidden_tests")
 COMMAND_KEYS = {"test": True, "hidden": True, "build": False}
 
-_KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):(?:[ \t]+(.*))?$")
-_NESTED_KEY_LINE = re.compile(r"^  ([^\s:#'\"][^:#]*?|'[^']*'|\"[^\"]*\"):(?:[ \t]+(.*))?$")
+# The value group keeps its leading blanks (stripped later), so no two quantifiers compete for them.
+_KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*):(?:[ \t](.*))?$")
+_NESTED_KEY_LINE = re.compile(r"^  ([^\s:#'\"][^:#]*|'[^']*'|\"[^\"]*\"):(?:[ \t](.*))?$")
 _LIST_LINE = re.compile(r"^  - (.*)$")
 
 
@@ -92,7 +93,7 @@ def _scalar(raw: str, where: str) -> str:
 
         return match.group(1).replace("''", "'") if value[0] == "'" else match.group(1)
 
-    value = re.sub(r"\s+#.*$", "", value)
+    value = re.sub(r"\s#.*", "", value).rstrip()
 
     if not value or value[0] in "[]{}&*!|>%@`,#-?:" and not re.match(r"^-[^\s]", value):
         raise TaskError(f"{where}: unsupported or empty value (quote it)")
