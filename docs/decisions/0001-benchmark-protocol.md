@@ -195,3 +195,39 @@ Each has a recommended default.
 2. **#29 runner:** (devops) stack images with pinned Claude Code, warm dependency caches and the network policy; (dev) `isolate`, `runner`, `evaluate`, `extract` → `runs.csv` and `role_costs.csv`, with unittest fakes in CI. Done when A, B and C each run end to end with a fake `claude`.
 3. **#30 report** (dev): bootstrap CIs (10,000 resamples), sign test, cost ratios and guardrails from a synthetic `runs.csv`, written as Markdown. Can start once the schema is frozen.
 4. **#31 reference run** (owner, after items 1, 2 and 5 of the authorization list): smoke round to check the assumptions above and validate cost capture; then the pilot, with go or no-go per plan §9.
+
+## Amendment: toolkit treatment for conditions B and C (#96)
+
+- Status: Proposed
+- Date: 2026-11-27
+
+### Context
+
+The `process-metrics` instrument ([ADR 0006](0006-process-metrics-instrument.md), #77) is installed for every toolkit user: a skill, a paragraph and a skill-list entry in the always-loaded instructions, and a bullet in the `git-workflow` rule. Without a mode line the skill asks the user on the first task, and its prompts and reports carry records. The plan (§4.7) requires B and C to run without it, and the difference between A, B and C must stay the treatment under test: `project-claude.md` cannot switch it off, because it is identical in every condition and never mentions the toolkit (Appendix A).
+
+### Options considered
+
+- **Edit the export before installing** (drop the skill from `toolkit/` and the sentences from its sources): B and C would no longer install the pinned release as a user gets it, and the edit would depend on the source layout (`core/`, `dist/`) instead of on what the agent loads.
+- **Install unchanged, then treat the run `HOME`** (chosen): the toolkit is installed exactly as a user would get it, and only the instrument is then removed, with a check that nothing loaded still mentions it.
+- **A machine-wide switch-off** (an environment variable or setting the instrument honours): contradicts ADR 0006, where the mode lives in the project's instructions and nothing machine-wide changes it, and would add product code only for the benchmark.
+- **A settings deny rule for the skill:** keeps the always-loaded sentences that name it, so B would still differ from A by the instrument's text.
+
+### Decision
+
+The export is trusted: it comes from a pinned commit of this repository, and its installer already runs as the user. The treatment's boundary checks (links and files resolved inside `RUN_ROOT`, single-link files, symlink-safe removal) are defense in depth against mistakes, not a sandbox against a hostile export.
+
+After `install.sh`, the harness (`remove_instrument` in `benchmark/bench/isolate.py`):
+
+1. removes `home/.claude/skills/process-metrics` (a link into `toolkit/` or a directory in the run `HOME`; a link anywhere else fails the run). For a link it also removes the skill's source from `toolkit/`, so the skill cannot be loaded from the export by path through the mounted `RUN_ROOT`; other mentions that are never loaded, such as the docs, stay in the export;
+2. cuts three fragments, each by an exact pattern, only from regular files with a single link inside `RUN_ROOT`, written to a new file renamed over the old name: the **Process metrics.** paragraph with its following blank line and the `process-metrics` entry of the skill list in `CLAUDE.md`, and the `process-metrics` bullet of the `git-workflow` rule. Applied to the commit that added the instrument, the result equals the text before it byte for byte;
+3. fails closed: with the skill installed each fragment must be found exactly once, without it none may be found, and no regular file reachable under `home/.claude` (links followed, `projects/` skipped) may mention `process-metrics` or `process metrics`;
+4. records the treatment in `meta.json` (`toolkit_treatment`): what was removed, with digests, and the SHA-256 of every loaded file, so B and C can be shown to load the same files for the same toolkit SHA. A records `null`.
+
+The extractor counts the instrument's traces in each run's stream (`instrument_markers`: subagent prompts starting with `issue <repo>#<n> phase=`, `process-metrics v1` blocks and any mention); `instrument_leak` is true when any count is above zero, and the runner reports it and exits non-zero. The smoke round checks these counts in every run.
+
+### Consequences
+
+- B and C install the released toolkit unchanged, and the only content removed is the instrument's.
+- A toolkit change that adds a mention of the instrument to a loaded file, or rewrites one of the three fragments, makes the harness refuse to start B and C, and the harness test that installs the real `HEAD` fails. That change must update the patterns in the same pull request.
+- Older toolkit SHAs without the instrument run unchanged (`instrument: absent`).
+- A leaked run stays `finished`; excluding it from the analysis is a rule for the report (#30).
