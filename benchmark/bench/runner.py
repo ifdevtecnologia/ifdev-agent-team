@@ -434,11 +434,21 @@ def _outcome(stream: dict, evaluation: dict, timed_out: bool) -> dict[str, objec
     return {**failures, "o1_success": hidden_ok and not any(failures.values())}
 
 
-def finished(run_dir: Path) -> bool:
+def recorded_meta(run_dir: Path) -> dict[str, object]:
+    """The run's meta.json, or an empty mapping when it is missing or unreadable."""
     try:
-        return json.loads((run_dir / "meta.json").read_text(encoding="utf-8")).get("status") == FINISHED
-    except (OSError, ValueError, AttributeError):
-        return False
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+    return meta if isinstance(meta, dict) else {}
+
+
+def instrument_fields(stream: dict) -> dict[str, object]:
+    """The stream's instrument markers and whether any is above zero (a leak)."""
+    markers = stream["instrument_markers"]
+
+    return {"instrument_markers": markers, "instrument_leak": any(count > 0 for count in markers.values())}
 
 
 def redact_outputs(run_dir: Path, secret: str) -> bool:
@@ -475,7 +485,9 @@ def _evaluate(args: argparse.Namespace, run_dir: Path, task: Task, run_root: Pat
     """Everything after the agent ran. Any failure here is final for the run (never retried, so a
     run is never paid for twice) and counts as an O1 failure."""
     stream = parse_stream(run_dir / "stream.jsonl", args.subagent_tool)
-    result: dict[str, object] = {"status": FINISHED, "exit_code": exit_code, "stream": stream}
+    # A leaked run stays finished: excluding it is a rule of the statistical report, not of the runner.
+    result: dict[str, object] = {"status": FINISHED, "exit_code": exit_code, "stream": stream,
+                                 "instrument_leak": instrument_fields(stream)["instrument_leak"]}
 
     try:
         evaluation = evaluate_run(task, run_root, run_dir, args.project_claude, base_commit, args.command_timeout, args.runs_dir)
@@ -505,10 +517,10 @@ def execute_run(args: argparse.Namespace, run: PlannedRun, task: Task, sha: str)
     meta = _base_meta(args, run, run_uuid, sha)
 
     try:
-        run_root, base_commit = prepare_run(
+        run_root, base_commit, treatment = prepare_run(
             args.runs_dir, run.run_id, task, run.condition, args.project_claude, args.toolkit_repo, args.toolkit_sha
         )
-        meta.update(run_root=str(run_root), base_commit=base_commit)
+        meta.update(run_root=str(run_root), base_commit=base_commit, toolkit_treatment=treatment)
         prompt = compose_prompt(
             args.prompt_template.read_text(encoding="utf-8"),
             task.prompt.read_text(encoding="utf-8"),
@@ -519,7 +531,10 @@ def execute_run(args: argparse.Namespace, run: PlannedRun, task: Task, sha: str)
         exit_code, host_timeout = _agent_run(args, run_dir, task, run_root, run_uuid)
     except ContainerNotStopped:
         # The agent ran and may still be running: never evaluated, never retried (it would be paid twice).
-        meta.update(status=FINISHED, evaluation_error="container_not_stopped", timed_out=True, o1_success=False)
+        # The stream read so far still shows whether the instrument leaked (parse_stream never raises).
+        stream = parse_stream(run_dir / "stream.jsonl", args.subagent_tool)
+        meta.update(status=FINISHED, evaluation_error="container_not_stopped", timed_out=True, o1_success=False,
+                    stream=stream, instrument_leak=instrument_fields(stream)["instrument_leak"])
     except (IsolationError, ContainerError, TaskError, OSError, ValueError, tarfile.TarError, subprocess.SubprocessError) as error:
         # A harness failure before or while starting the agent: recorded, and retried on resume.
         meta.update(status="error", error=type(error).__name__)
@@ -565,18 +580,24 @@ def main(argv: list[str] | None = None) -> int:
 
     write_round_file(args)
     sha = harness_sha()
-    errors = 0
+    errors = leaks = 0
 
     for run in plan:
-        if finished(args.results_dir / args.round_id / run.run_id):
+        meta = recorded_meta(args.results_dir / args.round_id / run.run_id)
+
+        if meta.get("status") == FINISHED:
             print(f"skip {run.run_id} (already finished)")
-            continue
+        else:
+            meta = execute_run(args, run, tasks[run.task_id], sha)
+            errors += meta["status"] != FINISHED
+            print(f"{meta['status']:8s} {run.run_id} o1_success={meta.get('o1_success')}")
 
-        meta = execute_run(args, run, tasks[run.task_id], sha)
-        errors += meta["status"] != FINISHED
-        print(f"{meta['status']:8s} {run.run_id} o1_success={meta.get('o1_success')}")
+        # A leak recorded by an earlier invocation still fails the resumed round.
+        if meta.get("instrument_leak"):
+            leaks += 1
+            print(f"instrument leak {run.run_id}")
 
-    return 1 if errors else 0
+    return 1 if errors or leaks else 0
 
 
 if __name__ == "__main__":

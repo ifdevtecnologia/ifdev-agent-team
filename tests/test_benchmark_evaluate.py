@@ -25,7 +25,7 @@ class EvaluateTestCase(BenchTestCase):
         super().setUp()
         self.task = load_task(make_task(self.tasks_dir))
         self.runs_dir.mkdir()
-        self.run_root, self.base = isolate.prepare_run(self.runs_dir, "T01_A_r1", self.task, "A", PROJECT_CLAUDE, REPO_ROOT, None)
+        self.run_root, self.base, _ = isolate.prepare_run(self.runs_dir, "T01_A_r1", self.task, "A", PROJECT_CLAUDE, REPO_ROOT, None)
         self.work = self.run_root / "work"
         self.out = self.tmp / "out"
         self.out.mkdir()
@@ -72,7 +72,7 @@ class PatchTests(EvaluateTestCase):
         (self.task.snapshot / "vendor").mkdir()
         (self.task.snapshot / "vendor" / "lib.txt").write_text("vendored\n")
         subprocess.run(["rm", "-r", "-f", str(self.run_root)], check=True)
-        self.run_root, self.base = isolate.prepare_run(self.runs_dir, "T01_A_r2", self.task, "A", PROJECT_CLAUDE, REPO_ROOT, None)
+        self.run_root, self.base, _ = isolate.prepare_run(self.runs_dir, "T01_A_r2", self.task, "A", PROJECT_CLAUDE, REPO_ROOT, None)
         self.work = self.run_root / "work"
         (self.work / "__pycache__").mkdir()
         (self.work / "__pycache__" / "app.cpython.pyc").write_bytes(b"cache")

@@ -2,19 +2,25 @@
 
 Each run gets RUN_ROOT under BENCH_RUNS_DIR with home/ (the temporary HOME), work/ (the
 workspace), toolkit/ (the pinned toolkit export, conditions B and C) and out/ (the outputs).
+Conditions B and C run without the process-metrics instrument (ADR 0001, "Amendment: toolkit
+treatment for conditions B and C"): the toolkit is installed unchanged and the run's HOME is
+treated afterwards.
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import posixpath
 import re
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 from bench.gitops import SYNTHETIC_EMAIL, SYNTHETIC_NAME, copy_tree, git, isolated_git_env
 from bench.taskspec import Task
@@ -27,10 +33,28 @@ CONDITIONS_WITH_TOOLKIT = ("B", "C")
 # A revision passed to Git (a SHA, branch or HEAD~1): never an option, a path or a range.
 GIT_REVISION = re.compile(r"[0-9A-Za-z][0-9A-Za-z._/^~-]{0,254}")
 FULL_SHA = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+# The process-metrics instrument, removed from the run HOME of B and C. Paths are relative to the run HOME.
+INSTRUMENT_SKILL = Path(".claude/skills/process-metrics")
+INSTRUMENT_TOKEN = re.compile(r"process[- ]metrics", re.IGNORECASE)
+# (file, rule name, fragment), applied in order: the skill-list fragment of CLAUDE.md goes after its paragraph.
+INSTRUMENT_EDITS = (
+    (".claude/CLAUDE.md", "paragraph", re.compile(r"^\*\*Process metrics\.\*\*[^\n]*\n\n", re.M)),
+    (".claude/CLAUDE.md", "skill_list_item", re.compile(r", `process-metrics` \([^)\n]*\)")),
+    (".claude/rules/git-workflow.md", "bullet", re.compile(r"^- [^\n]*`process-metrics`[^\n]*\n", re.M)),
+)
+# Session data the agent writes under the config directory, not loaded toolkit content.
+UNSCANNED_CONFIG_DIRS = ("projects",)
 
 
 class IsolationError(RuntimeError):
     """The run directory or the toolkit could not be prepared safely."""
+
+
+class PreparedRun(NamedTuple):
+    run_root: Path
+    base_commit: str
+    # What remove_instrument did; None for condition A, which installs no toolkit.
+    toolkit_treatment: dict[str, object] | None
 
 
 def _inside(path: Path, parent: Path) -> bool:
@@ -187,18 +211,194 @@ def install_toolkit(run_root: Path) -> None:
         raise IsolationError(f"toolkit install failed with exit code {result.returncode}: {result.stderr[-2000:]}")
 
 
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _remove_tree(path: Path) -> None:
+    """shutil.rmtree, refused on platforms where it can be redirected through a symlink race."""
+    if not shutil.rmtree.avoids_symlink_attacks:
+        raise IsolationError("shutil.rmtree is not safe against symlink attacks on this platform")
+
+    shutil.rmtree(path)
+
+
+def _read_editable(target: Path, rel: str) -> str:
+    """The text of a file the treatment may edit: a regular file with a single link, or "" when missing."""
+    try:
+        status = os.lstat(target)
+    except FileNotFoundError:
+        return ""
+
+    if not stat.S_ISREG(status.st_mode) or status.st_nlink > 1:
+        raise IsolationError(f"{rel} is not a regular file with a single link")
+
+    return target.read_bytes().decode("utf-8")
+
+
+def _replace_file(target: Path, text: str) -> None:
+    """Writes <text> to a new file next to <target> and renames it over the name, so the original
+    inode is never truncated."""
+    descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
+
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(text.encode("utf-8"))
+
+        os.chmod(temporary, stat.S_IMODE(os.lstat(target).st_mode))
+        os.replace(temporary, target)
+    except BaseException:
+        os.unlink(temporary)
+        raise
+
+
+def _remove_instrument_skill(run_root: Path, home: Path) -> bool:
+    """Removes the installed skill (a link into toolkit/, or a directory in the run HOME) and, for a
+    link, its source in toolkit/, which the agent could otherwise read through the mounted run root.
+    Returns whether the skill was installed."""
+    skill = home / INSTRUMENT_SKILL
+
+    if not os.path.lexists(skill):
+        return False
+
+    if not _inside(skill.parent.resolve(), home):
+        raise IsolationError(f"{INSTRUMENT_SKILL} is not inside the run home")
+
+    if skill.is_symlink():
+        toolkit = run_root / "toolkit"
+        source = skill.resolve()
+
+        if source == toolkit or not _inside(source, toolkit):
+            raise IsolationError(f"{INSTRUMENT_SKILL} links outside the toolkit export")
+
+        skill.unlink()
+
+        if source.is_dir():
+            _remove_tree(source)
+        elif source.exists():
+            source.unlink()
+
+        return True
+
+    if skill.is_dir():
+        _remove_tree(skill)
+
+        return True
+
+    raise IsolationError(f"{INSTRUMENT_SKILL} is neither a link into the toolkit export nor a directory")
+
+
+def _remove_instrument_text(run_root: Path, home: Path) -> list[dict[str, object]]:
+    """Removes the instrument's fragments from the loaded files, editing the resolved file only
+    inside the run root and only when it is a regular file with a single link. Missing files count
+    as zero removals."""
+    removed = []
+
+    for rel, rule, fragment in INSTRUMENT_EDITS:
+        target = (home / rel).resolve()
+
+        if not _inside(target, run_root):
+            raise IsolationError(f"{rel} resolves outside the run directory")
+
+        text = _read_editable(target, rel)
+        matches = fragment.findall(text)
+
+        if matches:
+            _replace_file(target, fragment.sub("", text))
+
+        removed.append({
+            "path": rel,
+            "rule": rule,
+            "count": len(matches),
+            "removed_sha256": _sha256("".join(matches).encode("utf-8")) if matches else None,
+        })
+
+    return removed
+
+
+def _loaded_files(run_root: Path, config: Path) -> dict[str, Path]:
+    """Every regular file reachable under the config directory (links followed, each directory
+    visited once), keyed by its path relative to the config directory. A link that leaves the run
+    root is refused, never followed."""
+    files: dict[str, Path] = {}
+    pending, visited = [config], set()
+
+    while pending:
+        directory = pending.pop()
+        real = directory.resolve()
+
+        if real in visited:
+            continue
+
+        visited.add(real)
+
+        # Lists the resolved directory, so a link swapped after the check is never followed.
+        for entry in sorted(real.iterdir()):
+            logical = directory / entry.name
+            rel = logical.relative_to(config).as_posix()
+
+            if rel in UNSCANNED_CONFIG_DIRS:
+                continue
+
+            target = entry.resolve()
+
+            if not _inside(target, run_root):
+                raise IsolationError(f"{rel} resolves outside the run directory")
+
+            if target.is_dir():
+                pending.append(logical)
+            elif target.is_file():
+                files[rel] = target
+
+    return dict(sorted(files.items()))
+
+
+def remove_instrument(run_root: Path) -> dict[str, object]:
+    """Leaves the run HOME of B and C without the process-metrics instrument: the skill removed,
+    its fragments cut from the loaded instructions and no mention left in any loaded file. Fails
+    closed (IsolationError) on any layout it does not recognise. Reads and writes only inside
+    <run_root>; returns the treatment record with the digest of every loaded file."""
+    run_root = run_root.resolve()
+    home = run_root / "home"
+    skill_removed = _remove_instrument_skill(run_root, home)
+    removed = _remove_instrument_text(run_root, home)
+    counts = [entry["count"] for entry in removed]
+    expected = 1 if skill_removed else 0
+
+    if any(count != expected for count in counts):
+        state = "installed" if skill_removed else "absent"
+        raise IsolationError(f"unexpected process-metrics layout: skill {state}, fragment counts {counts}")
+
+    config = home / ".claude"
+    loaded = _loaded_files(run_root, config)
+    digests = {}
+
+    for rel, path in loaded.items():
+        data = path.read_bytes()
+
+        if INSTRUMENT_TOKEN.search(data.decode("utf-8", errors="replace")):
+            raise IsolationError(f"process-metrics still mentioned in {rel}")
+
+        digests[rel] = _sha256(data)
+
+    return {"instrument": "removed" if skill_removed else "absent", "removed": removed, "loaded_sha256": digests}
+
+
 def prepare_run(
     runs_dir: Path, run_id: str, task: Task, condition: str, project_claude: Path, toolkit_repo: Path, toolkit_sha: str | None
-) -> tuple[Path, str]:
-    """Creates and fills RUN_ROOT for one run; returns it with the workspace's base commit."""
+) -> PreparedRun:
+    """Creates and fills RUN_ROOT for one run; returns it with the workspace's base commit and,
+    for B and C, the toolkit treatment."""
     run_root = create_run_root(runs_dir, run_id)
     base_commit = init_workspace(run_root, task, project_claude)
 
-    if condition in CONDITIONS_WITH_TOOLKIT:
-        if not toolkit_sha:
-            raise IsolationError(f"condition {condition} needs a pinned toolkit SHA")
+    if condition not in CONDITIONS_WITH_TOOLKIT:
+        return PreparedRun(run_root, base_commit, None)
 
-        export_toolkit(toolkit_repo, toolkit_sha, run_root / "toolkit")
-        install_toolkit(run_root)
+    if not toolkit_sha:
+        raise IsolationError(f"condition {condition} needs a pinned toolkit SHA")
 
-    return run_root, base_commit
+    export_toolkit(toolkit_repo, toolkit_sha, run_root / "toolkit")
+    install_toolkit(run_root)
+
+    return PreparedRun(run_root, base_commit, remove_instrument(run_root))

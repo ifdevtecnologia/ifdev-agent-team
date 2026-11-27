@@ -94,6 +94,24 @@ class ParseStreamTests(unittest.TestCase):
         self.assertIsNone(summary["total_cost_usd"])
         self.assertIsNone(summary["num_turns"])
 
+    def test_instrument_markers_are_counted_in_every_nested_string(self) -> None:
+        prompt = {"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Agent", "input": {
+            "subagent_type": "dev", "prompt": "issue example-repo#12 phase=execute\nImplement the change."}}]}}
+        report = {"type": "user", "message": {"content": [{"type": "tool_result", "content": [
+            {"type": "text", "text": "Done.\n```process-metrics v1\n{}\n```\nissue other#3 phase=estimate"}]}]}}
+        question = {"type": "assistant", "message": {"content": [{"type": "text", "text": "Which Process Metrics mode?"}]}}
+        not_first_line = {"type": "assistant", "message": {"content": [{"type": "text", "text": "see issue x#0 phase=execute"}]}}
+
+        summary = parse_stream(self.write(prompt, report, question, not_first_line, RESULT))
+
+        self.assertEqual(summary["instrument_markers"], {"first_lines": 2, "record_blocks": 1, "mentions": 2})
+
+    def test_clean_stream_has_zero_instrument_markers(self) -> None:
+        self.assertEqual(parse_stream(self.write(tool_use("Agent", "reviewer"), RESULT))["instrument_markers"],
+                         {"first_lines": 0, "record_blocks": 0, "mentions": 0})
+        self.assertEqual(parse_stream(self.dir / "missing.jsonl")["instrument_markers"],
+                         {"first_lines": 0, "record_blocks": 0, "mentions": 0})
+
 
 if __name__ == "__main__":
     unittest.main()

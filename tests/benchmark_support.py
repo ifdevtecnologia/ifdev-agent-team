@@ -96,6 +96,9 @@ if mode == "noresult":
     sys.exit(1)
 if mode == "garbage":
     print("this line is not JSON", flush=True)
+if mode == "instrument":
+    emit({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Agent", "input": {"subagent_type": "dev", "prompt": "issue example-repo#12 phase=execute"}}]}})
 if mode == "leak":
     print(json.dumps({"type": "user", "tool_result": os.environ.get("BENCH_TEST_AUTH", "")}), flush=True)
 subtype = "error_max_budget_usd" if mode == "budget" else "success"
