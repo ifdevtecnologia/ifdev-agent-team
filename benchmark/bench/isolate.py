@@ -40,7 +40,7 @@ INSTRUMENT_TOKEN = re.compile(r"process[- ]metrics", re.IGNORECASE)
 INSTRUMENT_EDITS = (
     (".claude/CLAUDE.md", "paragraph", re.compile(r"^\*\*Process metrics\.\*\*[^\n]*\n\n", re.M)),
     (".claude/CLAUDE.md", "skill_list_item", re.compile(r", `process-metrics` \([^)\n]*\)")),
-    (".claude/rules/git-workflow.md", "bullet", re.compile(r"^- [^\n]*`process-metrics`[^\n]*\n", re.M)),
+    (".claude/rules/git-workflow.md", "bullet", re.compile(r"^- (?:[^\n`]|`(?!process-metrics`))*`process-metrics`[^\n]*\n", re.M)),
 )
 # Session data the agent writes under the config directory, not loaded toolkit content.
 UNSCANNED_CONFIG_DIRS = ("projects",)
