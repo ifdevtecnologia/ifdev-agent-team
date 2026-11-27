@@ -1,6 +1,8 @@
 # Coverage of the tests (`coverage run -m unittest discover -s tests -v`), reported to SonarQube Cloud.
 [run]
-source = scripts
+source =
+    scripts
+    benchmark
 branch = true
 # Paths relative to the repository root, so coverage.xml matches the paths Sonar analyzes.
 relative_files = true
@@ -20,3 +22,8 @@ scripts =
     scripts/
     */fixture repo/scripts/
     */repo with spaces/scripts/
+# The benchmark CLI tests run `python3 -m bench.<module>` from benchmark/, so with relative_files those
+# processes record bench/... paths; `coverage combine` maps them back to benchmark/bench/.
+benchmark =
+    benchmark/bench/
+    bench/

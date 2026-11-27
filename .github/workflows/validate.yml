@@ -30,7 +30,7 @@ jobs:
         run: git ls-files -z '*.sh' | xargs -0 shellcheck
 
       - name: Ruff
-        run: ruff check scripts tests
+        run: ruff check scripts tests benchmark
 
   validate:
     runs-on: ubuntu-latest

@@ -3,8 +3,9 @@
 # The scripts support Python 3.9+, so pyupgrade fixes must not use newer syntax.
 target-version = "py39"
 line-length = 120
-# scripts/ and tests/ are flat module directories (no packages): treat their modules as first-party.
-src = ["scripts", "scripts/lib", "tests"]
+# scripts/ and tests/ are flat module directories (no packages) and benchmark/ holds the `bench`
+# package: treat their modules as first-party.
+src = ["scripts", "scripts/lib", "tests", "benchmark"]
 
 [lint]
 # pycodestyle errors, Pyflakes, import order, bugbear and pyupgrade.

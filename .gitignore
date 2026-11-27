@@ -29,3 +29,6 @@ auth.json
 .coverage
 .coverage.*
 coverage.xml
+
+# Benchmark results and logs (ADR 0001): local only, never versioned
+benchmark/results/
