@@ -17,7 +17,7 @@ Sources are tool-neutral and live in `core/`; files that only one tool needs liv
 
 The text in `core/` refers to rules, skills and roles by name ("the `testing` rule", "the `web-dev` skill", "the `reviewer` role"); each target's adapter and agent footer say where that tool finds them (for Claude Code, `~/.claude/rules/<name>.md` and `~/.claude/skills/<name>/SKILL.md`). Agents in `core/agents/` declare `read_only: true` or `false` instead of tool lists; each target maps it to its own permissions.
 
-Installed paths for the `claude` target (thirty-three links):
+Installed paths for the `claude` target (thirty-four links):
 
 ```
 core/
@@ -34,6 +34,7 @@ core/
   skills/java-spring-dev/            -> ~/.claude/skills/java-spring-dev (Java and Spring Boot stack guidance)
   skills/safe-refactor/              -> ~/.claude/skills/safe-refactor (refactoring without behavior change)
   skills/e2e-testing/                -> ~/.claude/skills/e2e-testing (acceptance and end-to-end tests)
+  skills/process-metrics/            -> ~/.claude/skills/process-metrics (with references/; process records on the issue)
 targets/
   claude/adapter.md                  Claude-specific note placed first in dist/claude/CLAUDE.md
   claude/agent-footer.md             Claude-specific note appended to every generated agent
@@ -64,13 +65,13 @@ sonar-project.properties             SonarQube Cloud analysis settings
 .github/workflows/validate.yml       CI: lint, syntax, validator, tests with coverage and SonarQube Cloud
 ```
 
-Installed paths for the `codex` target (eleven links and eighteen copies; the notify adapter is shared with `claude`):
+Installed paths for the `codex` target (twelve links and eighteen copies; the notify adapter is shared with `claude`):
 
 ```
 dist/codex/AGENTS.md                 -> ~/.codex/AGENTS.md (Codex adapter + core/instructions.md + the three rules)
 dist/codex/agents/<role>.toml        => ~/.codex/agents/<role>.toml (copied, not linked: Codex does not load a
                                         symlinked agent; one per role, eighteen; checksums in ~/.ifdev-ai-tools/copies)
-core/skills/<name>/                  -> ~/.agents/skills/<name> (the eight skills; work-session has agents/openai.yaml)
+core/skills/<name>/                  -> ~/.agents/skills/<name> (the nine skills; work-session has agents/openai.yaml)
 scripts/agent-notify.sh              -> ~/.codex/notify/agent-notify.sh (shared notifier)
 targets/codex/notify/agent-notify-codex.sh -> ~/.codex/notify/agent-notify-codex.sh (shared with claude)
 targets/codex/adapter.md, agent-footer.md  Codex-specific notes placed first in AGENTS.md and appended to every agent
@@ -163,6 +164,7 @@ So `core/instructions.md` and the three global rules are **always loaded** (for 
 | --- | --- |
 | `core/skills/verify-changes/SKILL.md` | `references/commit-messages.md` (when commit messages are proposed) |
 | `core/skills/work-session/SKILL.md` | `references/commit-proposal.md` (when delivery is not authorized) |
+| `core/skills/process-metrics/SKILL.md` | `references/records-v1.md` (before writing or checking a record) |
 
 A reference is binding once its phase starts. Reference directories ride on the existing skill directory links, so adding references does not change the managed paths.
 

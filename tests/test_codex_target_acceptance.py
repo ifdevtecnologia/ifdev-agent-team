@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # Python < 3.11
     tomllib = None
 
 from test_codex_target import CODEX, CODEX_COPIED, CODEX_LINKED, CODEX_MANAGED, ROLES, SHARED_ADAPTER, CodexTestCase
-from test_install import MANAGED, PRE_0004_COMMIT, SETTINGS_JSON, TARGETS_STATE, snapshot
+from test_install import ADDED_SINCE_0004, MANAGED, PRE_0004_COMMIT, SETTINGS_JSON, TARGETS_STATE, snapshot
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # The last commit before the codex target (slices A and B): the claude target with recorded targets.
@@ -140,13 +140,13 @@ class CodexBackupTests(CodexTestCase):
 
 
 class ClaudeTargetUnchangedTests(CodexTestCase):
-    def test_claude_target_installs_exactly_its_33_destinations_and_no_codex_item(self) -> None:
-        self.assertEqual(len(MANAGED), 33)
+    def test_claude_target_installs_exactly_its_34_destinations_and_no_codex_item(self) -> None:
+        self.assertEqual(len(MANAGED), 34)
 
         result = self.install("--target", "claude")
 
         self.assertEqual(self.links(), self.expected_links(MANAGED))
-        self.assertIn("33 linked", result.stdout)
+        self.assertIn("34 linked", result.stdout)
         for rel in CODEX_ONLY:
             self.assert_absent(self.home / rel)
         self.assert_absent(self.home / ".agents")
@@ -206,8 +206,13 @@ class PriorInstallUpgradeTests(unittest.TestCase):
     def state(self) -> str:
         return (self.home / TARGETS_STATE).read_text()
 
-    def assert_claude_installed(self) -> None:
+    def assert_claude_installed(self, pending: frozenset[str] = frozenset()) -> None:
+        """Every claude item links to the checkout, except the pending ones a claude install has not linked yet."""
         for destination, source in MANAGED.items():
+            if destination in pending:
+                self.assertFalse(os.path.lexists(self.home / destination), destination)
+                continue
+
             self.assertEqual(os.readlink(self.home / destination), str(self.repo_real / source), destination)
         self.assertIn(HOOK_COMMAND, (self.home / SETTINGS_JSON).read_text())
 
@@ -225,17 +230,18 @@ class PriorInstallUpgradeTests(unittest.TestCase):
         self.assert_no_codex_only_items()
         self.assertEqual(self.state(), "claude\n")
 
-    def test_bare_install_after_pulling_onto_a_recorded_claude_install_changes_nothing(self) -> None:
+    def test_bare_install_after_pulling_onto_a_recorded_claude_install_only_links_the_added_items(self) -> None:
         self.install_at_and_pull(PRE_CODEX_COMMIT, "--target", "claude")
         before = snapshot(self.home)
+        added = {rel: ("link", str(self.repo_real / MANAGED[rel])) for rel in ADDED_SINCE_0004}
 
         result = self.run_script("install.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"0 linked, 0 copied, 0 backed up, {len(MANAGED)} unchanged", result.stdout)
+        self.assertIn(f"{len(added)} linked, 0 copied, 0 backed up, {len(MANAGED) - len(added)} unchanged", result.stdout)
         self.assertEqual(
             {rel: value for rel, value in snapshot(self.home).items() if not rel.startswith(".ifdev-ai-tools/backups")},
-            {rel: value for rel, value in before.items() if not rel.startswith(".ifdev-ai-tools/backups")},
+            {**{rel: value for rel, value in before.items() if not rel.startswith(".ifdev-ai-tools/backups")}, **added},
         )
         self.assert_no_codex_only_items()
         self.assertEqual(self.state(), "claude\n")
@@ -248,7 +254,8 @@ class PriorInstallUpgradeTests(unittest.TestCase):
 
         self.assert_ok(result)
         self.assertEqual(self.state(), "claude\ncodex\n")
-        self.assert_claude_installed()
+        # Installing codex alone does not link the claude items added since the older commit.
+        self.assert_claude_installed(pending=frozenset(ADDED_SINCE_0004))
         self.assertEqual((self.home / SETTINGS_JSON).read_text(), settings)
         for destination, source in CODEX_LINKED.items():
             self.assertEqual(os.readlink(self.home / destination), str(self.repo_real / source), destination)
@@ -256,9 +263,10 @@ class PriorInstallUpgradeTests(unittest.TestCase):
             self.assertFalse(os.path.islink(self.home / destination), destination)
             self.assertEqual((self.home / destination).read_bytes(), (self.repo / source).read_bytes(), destination)
 
-        # A bare rerun keeps both; removing codex later leaves claude working.
+        # A bare rerun keeps both and links the added claude items; removing codex later leaves claude working.
         self.assert_ok(self.run_script("install.sh"))
         self.assertEqual(self.state(), "claude\ncodex\n")
+        self.assert_claude_installed()
         self.assert_ok(self.run_script("uninstall.sh", *CODEX))
         self.assertEqual(self.state(), "claude\n")
         self.assert_claude_installed()

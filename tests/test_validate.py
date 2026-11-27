@@ -259,6 +259,8 @@ class FrontmatterTests(ValidatorTestCase):
         "core/skills/safe-refactor/SKILL.md",
         "core/skills/java-spring-dev/SKILL.md",
         "core/skills/e2e-testing/SKILL.md",
+        "core/skills/process-metrics/SKILL.md",
+        "core/skills/process-metrics/references/records-v1.md",
     )
 
     def test_new_skills_are_required(self) -> None:

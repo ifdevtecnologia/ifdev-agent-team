@@ -194,6 +194,7 @@ class GuideReferenceTests(unittest.TestCase):
             "core/rules/git-workflow.md": (
                 "unless the project's instructions name another tracker or opt out",
                 "unless the project documents a stricter workflow",
+                "When the `process-metrics` mode is `on`",
             ),
             "core/instructions.md": ("When the project keeps a `CHANGELOG.md`",),
         }

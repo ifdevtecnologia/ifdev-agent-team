@@ -17,7 +17,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_install import MANAGED, MANAGED_COUNT, MOVED_COUNT, PRE_0004_COMMIT, SETTINGS_JSON, TARGETS_STATE, snapshot
+from test_install import (
+    ADDED_COUNT,
+    LEGACY_SOURCES,
+    MANAGED,
+    MANAGED_COUNT,
+    MOVED_COUNT,
+    PRE_0004_COMMIT,
+    SETTINGS_JSON,
+    TARGETS_STATE,
+    snapshot,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKUPS = ".ifdev-ai-tools/backups"
@@ -98,12 +108,12 @@ class GitPullUpgradeTests(unittest.TestCase):
     def test_after_git_pull_every_installed_link_resolves_to_the_current_content(self) -> None:
         self.install_pre_0004_and_pull()
 
-        for destination, source in MANAGED.items():
+        for destination in LEGACY_SOURCES:
             with self.subTest(destination=destination):
                 installed = self.home / destination
                 self.assertTrue(installed.is_symlink())
                 self.assertTrue(installed.exists(), f"dangling after pull: {os.readlink(installed)}")
-                self.assertEqual(read_through(installed), read_through(self.repo / source))
+                self.assertEqual(read_through(installed), read_through(self.repo / MANAGED[destination]))
         # The Claude hook command kept in settings.json still finds its script.
         self.assertIn(HOOK_COMMAND, (self.home / SETTINGS_JSON).read_text())
         self.assertTrue((self.home / ".claude/hooks/agent-notify-hook.sh").is_file())
@@ -139,7 +149,8 @@ class GitPullUpgradeTests(unittest.TestCase):
         result = self.run_script("install.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
+        linked = MOVED_COUNT + ADDED_COUNT
+        self.assertIn(f"{linked} linked, 0 copied, 0 backed up, {MANAGED_COUNT - linked} unchanged", result.stdout)
         self.assertEqual(self.backups(self.home), backups_before)
         fresh_home = self.make_home("fresh home")
         self.assert_ok(self.run_script("install.sh", "--target", "claude", home=fresh_home))
@@ -167,7 +178,8 @@ class GitPullUpgradeTests(unittest.TestCase):
         result = self.run_script("uninstall.sh")
 
         self.assert_ok(result)
-        self.assertIn(f"done: {MANAGED_COUNT} removed", result.stdout)
+        # Destinations added since 0004 were never linked by the old install.
+        self.assertIn(f"done: {MANAGED_COUNT - ADDED_COUNT} removed", result.stdout)
         self.assert_nothing_managed()
 
     def assert_nothing_managed(self) -> None:

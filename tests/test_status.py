@@ -16,8 +16,8 @@ from test_install import LEGACY_SOURCES, MANAGED, REPO_ROOT, InstallerTestCase, 
 
 ALL = ("--target", "all")
 CLAUDE_ITEMS = len(MANAGED)
-# The codex target owns twenty-nine items, one of them the notify adapter shared with claude.
-ALL_ITEMS = CLAUDE_ITEMS + 28
+# The codex target owns thirty items, one of them the notify adapter shared with claude.
+ALL_ITEMS = CLAUDE_ITEMS + 29
 ITEM_LINE = re.compile(r"^(\S+)\s+~/(\S+)$")
 
 

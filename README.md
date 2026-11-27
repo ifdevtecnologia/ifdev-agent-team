@@ -11,7 +11,7 @@ One reviewed, versioned set of **global** defaults: a delivery process (Analyze 
 - 🧭 **A team process**: who runs when, from requirements to a pull request a human merges ([`core/instructions.md`](core/instructions.md)).
 - 📏 **Three rules**, defined once: [engineering principles](core/rules/engineering-principles.md), [testing](core/rules/testing.md) and the [Git workflow](core/rules/git-workflow.md).
 - 👥 **Eighteen roles**, each started in a fresh context, read-only where it should be ([`core/agents/`](core/agents/)).
-- 🧰 **Eight skills**: local verification, work sessions, safe refactoring, end-to-end tests and stack guidance.
+- 🧰 **Nine skills**: local verification, work sessions, safe refactoring, end-to-end tests, process metrics and stack guidance.
 - 🔔 **Notifications** when an agent finishes, is blocked or needs you.
 - 🔒 **A safe installer**: symlinks instead of copies (except the Codex custom agents, which Codex only loads as regular files), backups instead of deletion, a dry run, no elevated privileges.
 
@@ -90,6 +90,7 @@ No role commits, pushes or deploys; delivery belongs to the main agent and follo
 | [`work-session`](core/skills/work-session/SKILL.md) | A bounded work session with a plan and a resume report |
 | [`safe-refactor`](core/skills/safe-refactor/SKILL.md) | Refactor without changing behavior |
 | [`e2e-testing`](core/skills/e2e-testing/SKILL.md) | Acceptance and end-to-end tests from acceptance criteria |
+| [`process-metrics`](core/skills/process-metrics/SKILL.md) | Process records for the task's issue, in the mode each project chooses ([on, local or off](docs/process-metrics.md)) |
 | [`web-dev`](core/skills/web-dev/SKILL.md), [`flutter-dev`](core/skills/flutter-dev/SKILL.md), [`supabase-dev`](core/skills/supabase-dev/SKILL.md), [`java-spring-dev`](core/skills/java-spring-dev/SKILL.md) | Stack guidance, read only when a change touches that stack |
 
 ## 🔌 Supported tools
@@ -155,6 +156,7 @@ Keep the checkout where it is: the links point into it. The Codex custom agents 
 | [docs/team.md](docs/team.md) | Every role, when it runs and what it never does |
 | [docs/notifications.md](docs/notifications.md) | Desktop, sound and bell notifications for Claude Code and Codex |
 | [docs/customization.md](docs/customization.md) | Adapting a project: `AGENTS.md`, overrides, project reviewers |
+| [docs/process-metrics.md](docs/process-metrics.md) | Process records on issues: choosing the mode, what is collected, deleting records |
 | [docs/development.md](docs/development.md) | Working on this repository: layout, validator, context budget |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution rules |
 | [CHANGELOG.md](CHANGELOG.md) | Changes and upgrade notes |

@@ -12,6 +12,34 @@ before this file existed and has no Git tag; 0.2.0 is the first tagged version (
   `CHANGELOG.md` section and Git commit) and of every installed item (`ok`, `outdated`, `modified`,
   `missing`, `broken`, `foreign`, `unsafe-parent`) and Claude notification hook, with exit status 0
   when everything is in place. It never writes and never follows a symlinked parent directory.
+- `process-metrics` skill, installed for Claude Code (`~/.claude/skills/process-metrics`) and Codex
+  (`~/.agents/skills/process-metrics`): on a task tracked by an issue, the main agent records role
+  invocations (verdict and check counts) and its own board moves as `process-metrics v1` JSON lines
+  with only IDs, categories and numbers, never free text, paths, names or secrets. Estimate and
+  finding records are defined but not emitted yet. The schema is in the skill's
+  `references/records-v1.md`; see `docs/process-metrics.md` and decision record 0006.
+
+### Changed
+- The default flow now handles process metrics on every task with an issue. Each project chooses
+  the mode with a line in its instructions: `process-metrics: on` (records posted as new issue
+  comments marked `<!-- process-metrics v1 -->`, append-only), `process-metrics: local` (a local
+  file outside the repository, `$PROCESS_METRICS_DIR/<owner>/<repo>/<n>.jsonl`, nothing posted) or
+  `process-metrics: off`. Without the line, the main agent asks once on the first task with an issue
+  and records your answer where you choose; until then nothing is published. With `on`, comments
+  are attributed to the posting GitHub account and show the UTC time of each board move the agent
+  makes (and a declared duration when the main agent does the Dev work itself), visible to anyone
+  who can read the issue, including clients. The `git-workflow` rule's
+  delivery authorization covers these comments only with the mode `on`; without that authorization
+  they are proposed with the delivery.
+
+### Upgrade
+1. `git pull`, then rerun `./scripts/install.sh` (it is idempotent) to link the new
+   `process-metrics` skill for each installed target. Until you do, the global instructions name a
+   skill that is not installed yet: the main agent reports it and continues without records.
+2. To decide ahead of the question, add `process-metrics: on`, `process-metrics: local` or
+   `process-metrics: off`, alone on its line, to the project's root `AGENTS.md` (Codex does not read
+   a line that is only in `CLAUDE.md`). For `local`, set `PROCESS_METRICS_DIR` to an absolute
+   directory outside every repository.
 
 ## 0.2.0 - 2026-11-12
 

@@ -50,11 +50,14 @@ MANAGED = {
     ".claude/skills/safe-refactor": "core/skills/safe-refactor",
     ".claude/skills/java-spring-dev": "core/skills/java-spring-dev",
     ".claude/skills/e2e-testing": "core/skills/e2e-testing",
+    ".claude/skills/process-metrics": "core/skills/process-metrics",
     ".claude/hooks/agent-notify.sh": "scripts/agent-notify.sh",
     ".claude/hooks/agent-notify-hook.sh": "targets/claude/hooks/agent-notify-hook.sh",
     ".codex/notify/agent-notify-codex.sh": "targets/codex/notify/agent-notify-codex.sh",
 }
-# Pre-0004 sources of every destination: what a machine installed before the move links to.
+# Destinations added after decision record 0004: a machine installed before it has no link there.
+ADDED_SINCE_0004 = {".claude/skills/process-metrics"}
+# Pre-0004 sources of every other destination: what a machine installed before the move links to.
 LEGACY_SOURCES = {
     ".claude/CLAUDE.md": "claude/CLAUDE.md",
     ".claude/rules/engineering-principles.md": "claude/rules/engineering-principles.md",
@@ -91,9 +94,10 @@ LEGACY_SOURCES = {
     ".codex/notify/agent-notify-codex.sh": "codex/notify/agent-notify-codex.sh",
 }
 MANAGED_COUNT = len(MANAGED)
-MOVED_COUNT = sum(LEGACY_SOURCES[d] != source for d, source in MANAGED.items())
+MOVED_COUNT = sum(LEGACY_SOURCES[d] != MANAGED[d] for d in LEGACY_SOURCES)
+ADDED_COUNT = len(ADDED_SINCE_0004)
 # The last commit before the neutral layout (decision record 0004): the Claude target must keep
-# installing exactly the destinations it managed there.
+# installing every destination it managed there, plus the ones added since.
 PRE_0004_COMMIT = "e79c8ae9e4c284cfa9a2ca6a501591299584fae7"
 TARGETS_STATE = ".ifdev-ai-tools/targets"
 CLAUDE = ("--target", "claude")
@@ -1178,8 +1182,9 @@ class LegacyInstallTests(InstallerTestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             os.symlink(self.repo_real / source, path)
 
-    def test_claude_install_creates_exactly_the_pre_0004_destinations(self) -> None:
-        self.assertEqual(set(MANAGED), set(LEGACY_SOURCES))
+    def test_claude_install_creates_the_pre_0004_destinations_and_the_added_ones(self) -> None:
+        self.assertEqual(set(MANAGED), set(LEGACY_SOURCES) | ADDED_SINCE_0004)
+        self.assertFalse(set(LEGACY_SOURCES) & ADDED_SINCE_0004)
         self.assertEqual(managed_destinations((self.repo / "scripts/lib/common.sh").read_text()), set(MANAGED))
 
         self.install()
@@ -1197,14 +1202,14 @@ class LegacyInstallTests(InstallerTestCase):
         if old.returncode != 0:
             # Shallow clones (the CI checkout) do not contain older commits.
             self.skipTest(f"commit {PRE_0004_COMMIT} is not available in this clone")
-        self.assertEqual(managed_destinations(old.stdout), set(MANAGED))
+        self.assertEqual(managed_destinations(old.stdout), set(LEGACY_SOURCES))
 
     def test_old_links_still_resolve_after_a_pull(self) -> None:
         self.link_legacy_install()
 
-        for destination, source in MANAGED.items():
+        for destination in LEGACY_SOURCES:
             installed = self.home / destination
-            new = self.repo / source
+            new = self.repo / MANAGED[destination]
             if new.is_dir():
                 self.assertEqual(sorted(p.name for p in installed.iterdir()), sorted(p.name for p in new.iterdir()))
             else:
@@ -1221,7 +1226,8 @@ class LegacyInstallTests(InstallerTestCase):
         self.assert_siblings_intact()
         self.assertEqual(self.backup_dirs(), [])
         self.assertEqual(result.stdout.count("(moved source)"), MOVED_COUNT)
-        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, 0 backed up, {MANAGED_COUNT - MOVED_COUNT} unchanged", result.stdout)
+        linked = MOVED_COUNT + ADDED_COUNT
+        self.assertIn(f"{linked} linked, 0 copied, 0 backed up, {MANAGED_COUNT - linked} unchanged", result.stdout)
         self.assertEqual((self.home / TARGETS_STATE).read_text(), "claude\n")
 
         before = snapshot(self.home)
@@ -1277,7 +1283,7 @@ class LegacyInstallTests(InstallerTestCase):
         for destination in MANAGED:
             self.assert_absent(self.home / destination)
         self.assert_siblings_intact()
-        self.assertIn(f"done: {MANAGED_COUNT} removed, 0 retired removed", result.stdout)
+        self.assertIn(f"done: {MANAGED_COUNT - ADDED_COUNT} removed, 0 retired removed", result.stdout)
         self.assert_absent(self.home / TARGETS_STATE)
 
     def test_empty_moved_list_is_accepted(self) -> None:
@@ -1292,7 +1298,7 @@ class LegacyInstallTests(InstallerTestCase):
         result = self.install()
 
         self.assert_all_links()
-        self.assertIn(f"{MOVED_COUNT} linked, 0 copied, {MOVED_COUNT} backed up", result.stdout)
+        self.assertIn(f"{MOVED_COUNT + ADDED_COUNT} linked, 0 copied, {MOVED_COUNT} backed up", result.stdout)
         self.assert_ok(self.run_script("uninstall.sh"))
 
 

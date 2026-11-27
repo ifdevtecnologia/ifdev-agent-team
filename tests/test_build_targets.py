@@ -60,6 +60,12 @@ FRESH_CONTEXT_FALLBACK = (
     " hand-off (objective, acceptance criteria, scope and the previous role's report); when that is not"
     ' possible either, state "independent review not performed" for that role and report PARTIAL. When '
 )
+PROCESS_METRICS_SENTENCE = (
+    "**Process metrics.** On a task tracked by an issue, follow the `process-metrics` skill, which records role runs"
+    " and board moves; the project's instructions choose its mode with `process-metrics: on`, `local` or `off`, and"
+    " without that line the skill asks the user first."
+    " If the skill is not installed, say so in the report and continue without it."
+)
 # One-off sentences, applied before NEUTRAL_WORDING; each must occur exactly once in its file.
 ONE_OFF_WORDING = {
     "CLAUDE.md": (
@@ -71,6 +77,12 @@ ONE_OFF_WORDING = {
         ("Project-specific reviewers (`.claude/agents/`),", "Project-specific reviewers defined in the project's instructions,"),
         ("agents read a skill at `~/.claude/skills/<name>/SKILL.md`", "agents use a skill by name"),
         ("never skip a role silently. When ", "never skip a role silently. When " + FRESH_CONTEXT_FALLBACK),
+        # Issue #77: the process-metrics sentence and its entry in the global skills list.
+        ("do not replace them.\n", "do not replace them.\n\n" + PROCESS_METRICS_SENTENCE + "\n"),
+        (
+            "`e2e-testing` (acceptance and end-to-end tests) and",
+            "`e2e-testing` (acceptance and end-to-end tests), `process-metrics` (process records on the task's issue) and",
+        ),
     ),
     "agents/db-reviewer.md": (
         (

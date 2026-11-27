@@ -49,6 +49,8 @@ The stack skills [`flutter-dev`](../core/skills/flutter-dev/SKILL.md), [`web-dev
 
 Two procedure skills complement them: [`safe-refactor`](../core/skills/safe-refactor/SKILL.md) (characterization tests first, small verified steps, refactor separate from behavior changes) for the Dev, and [`e2e-testing`](../core/skills/e2e-testing/SKILL.md) (acceptance and end-to-end tests from acceptance criteria) for QA. [`verify-changes`](../core/skills/verify-changes/SKILL.md) selects and runs the local checks, and [`work-session`](../core/skills/work-session/SKILL.md) runs a bounded objective with a plan and a resume report.
 
+[`process-metrics`](../core/skills/process-metrics/SKILL.md) records role invocations and the main agent's board moves for the task's issue, as numbers and categories only (estimates and findings are defined for later steps). Each project chooses the mode with `process-metrics: on`, `process-metrics: local` or `process-metrics: off`; without that line the main agent asks on the first task with an issue. See [process-metrics.md](process-metrics.md).
+
 ## After an update
 
 A release that adds managed items (such as new agents) needs `./scripts/install.sh` again to create the new links; see [installation.md](installation.md#upgrade).

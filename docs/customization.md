@@ -86,14 +86,15 @@ Common overrides the global rules explicitly allow; other more specific project 
 | Stricter Git workflow | [git-workflow.md](../core/rules/git-workflow.md): it applies *unless the project documents a stricter workflow*; scopes follow the ones the project documents. | `Git: branch names include the issue number (<type>/<issue>-<topic>); commit scopes are <scope list>; pull requests need two human approvals.` |
 | Own validation commands | [testing.md](../core/rules/testing.md): follow the project's testing conventions and select commands from the project. | A `Validation` section with the exact non-interactive commands, as in the [`AGENTS.md` template](templates/project/AGENTS.md). |
 | Different testing tools or conventions | [testing.md](../core/rules/testing.md): explicit project conflicts take precedence and must be explained. | `Testing: unit tests live next to the source as <pattern>; we do not write snapshot tests because <reason>.` |
+| Process metrics mode | [git-workflow.md](../core/rules/git-workflow.md#project-board): *when the `process-metrics` mode is `on`*, the delivery authorization covers posting its records as issue comments; without a mode line, the main agent asks on the first task with an issue. | In the template's **Overrides** section, the exact line `process-metrics: on`, `process-metrics: local` (local file only) or `process-metrics: off`; see [process-metrics.md](process-metrics.md#choosing-the-mode). |
 | Code conventions that differ from the principles | [engineering-principles.md](../core/rules/engineering-principles.md): on explicit conflict, follow the project's conventions and explain the tradeoff. | `Conventions: <convention> because <reason>.` |
 
-The toolkit offers no project opt-out for these, so do not write project instructions that try to relax them:
+Apart from the switches in the table, the toolkit offers no project opt-out for these, so do not write project instructions that try to relax them:
 
 - the Git workflow in a looser direction: a project can only make it stricter;
 - the safety rules in `core/instructions.md` (secrets, destructive operations, permissions and hooks, the user's work) and the deploy and remote-operation limits;
 - the completion rule in `testing.md`: mandatory checks and test coverage for meaningful behavior stay mandatory;
-- the team flow: roles are skipped only on the criteria `core/instructions.md` defines, and never silently.
+- the team flow: roles are skipped only on the criteria `core/instructions.md` defines, and never silently (the `process-metrics` records are not part of it and have their own mode line).
 
 An explicit restriction from the user in a session still wins over any project or global default.
 

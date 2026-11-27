@@ -30,6 +30,7 @@ SKILLS = (
     "safe-refactor",
     "java-spring-dev",
     "e2e-testing",
+    "process-metrics",
 )
 SHARED_ADAPTER = ".codex/notify/agent-notify-codex.sh"
 # Installed as regular-file copies: Codex does not load a symlinked custom agent (ELOOP).
