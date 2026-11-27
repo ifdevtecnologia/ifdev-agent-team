@@ -11,11 +11,11 @@ The harness that runs the benchmark protocol of [ADR 0001](../docs/decisions/000
 | `task.yaml` schema and `check_task.py` | done |
 | `isolate.py`, `runner.py` (plan, dry run, cost and safety guards, agent container, resume) | done |
 | `evaluate.py` (final patch, evaluator containers, protected paths) | done |
-| `extract.py` (numbers from the stream-json log) | done; `runs.csv` and `role_costs.csv` wait for the plan's §4.7 schema |
-| `report.py` (bootstrap CIs, sign test, cost ratios, guardrails) | pending the plan's §4.6 |
+| `extract.py` (numbers from the stream-json log) | done; `runs.csv` and `role_costs.csv` follow the [plan's §4.7](../docs/benchmark/measurement-plan.md#47-data-schemas-prices-and-retention) (#90) |
+| `report.py` (bootstrap CIs, sign test, cost ratios, guardrails) | pending; follows the [plan's §4.6](../docs/benchmark/measurement-plan.md#46-statistical-report) (#30) |
 | Stack images, pinned Claude Code, egress allowlist network (`docker/`) | #29 |
 | Private tasks repository and tasks | #28 |
-| `project-claude.md`, `prompt-template.md`, `conditions/C-light.txt` | placeholders until the measurement plan (OD-6) and the light-mode definition (OD-1) |
+| `project-claude.md`, `prompt-template.md`, `conditions/C-light.txt` | placeholders until the [measurement plan](../docs/benchmark/measurement-plan.md)'s Appendices A and B (OD-6) and the light-mode definition (OD-1) |
 
 ## Layout
 

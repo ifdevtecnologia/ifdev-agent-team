@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-11-01
 - Issue: #27 (epic #26). Follow-ups: #28 tasks, #29 runner, #30 report, #31 reference run.
-- Implements: the measurement plan (a proposal by the metrics analyst, kept in the owner's product notes; it will be committed as `docs/benchmark/measurement-plan.md` with the pre-registration, see OD-6. Until then, "plan §N" refers to that document). This record turns that plan into an executable protocol and does not redesign it. Hypotheses, metrics, sample size, decision rules and threats to validity are defined in the plan; on any conflict, the plan wins and this record is corrected.
+- Implements: the [measurement plan](../benchmark/measurement-plan.md) ("plan §N"). Its §4.6 and §4.7 are committed as a draft; the other sections, still in the owner's product notes, are added before the pre-registration (OD-6). This record turns that plan into an executable protocol and does not redesign it. Hypotheses, metrics, sample size, decision rules and threats to validity are defined in the plan; on any conflict, the plan wins and this record is corrected.
 - Claude Code version checked: 2.1.314 (`claude --version`, 2026-11-01). Verified flags: `-p`, `--output-format`, `--verbose`, `--model`, `--effort`, `--session-id`, `--max-budget-usd`, `--permission-mode`, `--permission-prompts`, `--allowedTools`, `--disallowedTools`, `--strict-mcp-config`, `--bare`. Anything else is marked as an assumption.
 
 ## Context
@@ -170,7 +170,7 @@ Each has a recommended default.
 - **OD-3 Environment and permissions:** disposable container per run, only the run directory mounted, `acceptEdits`, prompts denied, tool allowlist with Bash, web tools denied, dependencies baked into the images, egress allowlist (Anthropic API only) required for pilot and evaluation rounds.
 - **OD-4 Pinned model:** one full model ID and an explicit effort level for every condition; subagents use the session model; Claude Code pinned at 2.1.314 in the images, autoupdate off.
 - **OD-5 Margins:** accept the plan's numbers (15 pp, 10 pp, ≤ 4× cost, ≤ 3× time, ≤ 50%) and freeze them in the pre-registration commit.
-- **OD-6 Plan and tasks location:** commit the measurement plan (translated to English) under `docs/benchmark/` with the pre-registration; private tasks repository location; whether to use historical snapshots from the owner's repositories.
+- **OD-6 Plan and tasks location:** commit the measurement plan (translated to English) as `docs/benchmark/measurement-plan.md`, with §4.6 and §4.7 first as a draft and the rest before the pre-registration; private tasks repository location; whether to use historical snapshots from the owner's repositories.
 
 ## Consequences
 
