@@ -15,7 +15,14 @@ import sys
 from pathlib import Path
 
 from benchmark_support import (
-    AUTH_ENV, AUTH_SENTINEL, BENCH_DIR, REPO_ROOT, SOLVE_SCRIPT, BenchTestCase, head_sha, make_task,
+    AUTH_ENV,
+    AUTH_SENTINEL,
+    BENCH_DIR,
+    REPO_ROOT,
+    SOLVE_SCRIPT,
+    BenchTestCase,
+    head_sha,
+    make_task,
 )
 
 MODEL = "claude-test-model-1-0"
