@@ -37,6 +37,7 @@ MANAGED_ITEMS=(
   "core/skills/safe-refactor|.claude/skills/safe-refactor|claude"
   "core/skills/java-spring-dev|.claude/skills/java-spring-dev|claude"
   "core/skills/e2e-testing|.claude/skills/e2e-testing|claude"
+  "core/skills/process-metrics|.claude/skills/process-metrics|claude"
   # Shared cross-agent notifier plus its Claude hook and opt-in Codex `notify` adapters. The Codex
   # adapter is shared: the claude target has installed it since before targets existed, and the
   # codex target installs it next to its own copy of the notifier, which the adapter prefers.
@@ -73,6 +74,7 @@ MANAGED_ITEMS=(
   "core/skills/safe-refactor|.agents/skills/safe-refactor|codex"
   "core/skills/java-spring-dev|.agents/skills/java-spring-dev|codex"
   "core/skills/e2e-testing|.agents/skills/e2e-testing|codex"
+  "core/skills/process-metrics|.agents/skills/process-metrics|codex"
 )
 
 # Sources that moved to a new path (decision record 0004), as "<old source>|<destination>". A

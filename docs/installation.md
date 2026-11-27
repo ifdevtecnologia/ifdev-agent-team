@@ -33,7 +33,7 @@ The clone location is free: links point to wherever the repository lives, so kee
 | `claude` (Claude Code) | subagents of the same name | enforced (edit tools blocked) | `Stop`, `StopFailure` and `Notification` hooks | supported |
 | `codex` (OpenAI Codex CLI) | custom agents started with `spawn_agent` and `fork_turns: "none"` | by instruction only | opt-in `notify` adapter (turn completion only) | supported; custom agent registration still needs a manual check in a Codex session |
 
-The exact items of each target are listed in [development.md](development.md#layout): thirty-three links for `claude`, and for `codex` eleven links plus the eighteen agent copies (the Codex notify adapter is shared by both).
+The exact items of each target are listed in [development.md](development.md#layout): thirty-four links for `claude`, and for `codex` twelve links plus the eighteen agent copies (the Codex notify adapter is shared by both).
 
 ## What the installer guarantees
 
@@ -113,7 +113,7 @@ The exit status is 0 when everything is `ok`, 1 when something needs attention (
 
 ## What the toolkit owns
 
-The repository owns only the linked items of the installed targets (thirty-three for `claude`, including the opt-in Codex notify adapter, and eleven for `codex`), the Codex agent copies that still match their recorded checksum (eighteen), plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude or Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
+The repository owns only the linked items of the installed targets (thirty-four for `claude`, including the opt-in Codex notify adapter, and twelve for `codex`), the Codex agent copies that still match their recorded checksum (eighteen), plus the three notification hook entries merged into `~/.claude/settings.json`. It does not version or manage the base Codex `config.toml`, the rest of `~/.claude/settings.json`, or other Claude or Codex permissions, authentication, caches, plugins, histories, built-in or third-party skills, or project trust configuration; those stay machine-local and untouched. Installing, uninstalling and every notification backend never change permissions, sandbox settings or command authority.
 
 ## Troubleshooting
 

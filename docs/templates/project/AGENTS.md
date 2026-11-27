@@ -46,6 +46,7 @@ Delete the lines that do not apply.
 
 - Release notes: <this project keeps no CHANGELOG.md | add an entry to <release notes file>>.
 - Git (stricter than the global workflow): <branch name format>; commit scopes are <scope list>.
+- Process metrics: replace this line with `process-metrics: on`, `process-metrics: local` or `process-metrics: off`, alone on its line; without it, the main agent asks on the first task with an issue.
 
 ## Project reviewers
 
