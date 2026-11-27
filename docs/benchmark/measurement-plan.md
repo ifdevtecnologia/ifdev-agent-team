@@ -185,7 +185,7 @@ pilot-1,r0007,T02,B,reviewer,1,12000,1800,9000,240000,0.41,95000,p2026-11,transc
 
 Conditions B and C run **without** the `process-metrics` instrument (#77). Findings I1 to I3 come from the heuristic in every condition. Running B with the instrument would add a prompt difference between A and B that is not the treatment under test.
 
-Because #77 makes the instrument active by default, the harness has to turn it off in B and C. It must not do this through `project-claude.md`, which stays identical in all conditions and mentions nothing about the toolkit (Appendix A). The mechanism is defined with #77 and checked in the smoke round.
+Because the instrument from #77 is installed for every user and asks for a mode on the first task of a project, the harness has to keep it out of B and C. It must not do this through `project-claude.md`, which stays identical in all conditions and mentions nothing about the toolkit (Appendix A). The mechanism is defined in a follow-up issue and checked in the smoke round.
 
 ## Open points for the pre-registration
 
