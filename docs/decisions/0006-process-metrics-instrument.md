@@ -38,7 +38,7 @@ The constraint is the always-loaded context ([development.md](../development.md#
 - There is no automatic retention; the user deletes comments or the local file when they choose.
 - v1 assumes one posting account per issue. Readers (the #82 extractor) take a list of trusted posting logins from the owner, kept outside the repository; a repeated header from a different trusted login is a conflict to report, not a silent duplicate.
 - There is no machine validator for the records yet; the reference examples are parsed by the toolkit's tests, and #82 validates against the reference.
-- The benchmark conditions B and C must run without the instrument; the switch-off mechanism for the harness is a follow-up.
+- The benchmark conditions B and C must run without the instrument; the harness removes it from their run `HOME` ([ADR 0001 amendment](0001-benchmark-protocol.md#amendment-toolkit-treatment-for-conditions-b-and-c-96)).
 
 ## Out of scope
 

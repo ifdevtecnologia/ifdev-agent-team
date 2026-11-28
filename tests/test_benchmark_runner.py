@@ -195,6 +195,10 @@ class ExecuteTests(RunnerTestCase):
                 self.assertEqual((meta["hidden_passed"], meta["hidden_total"]), (2, 2))
                 self.assertEqual(meta["seed"], 7)
                 self.assertEqual(meta["toolkit_sha"], None if condition == "A" else head_sha())
+                self.assertEqual(meta["toolkit_treatment"] and meta["toolkit_treatment"]["instrument"],
+                                 None if condition == "A" else "removed")
+                self.assertFalse(meta["instrument_leak"])
+                self.assertEqual(meta["stream"]["instrument_markers"], {"first_lines": 0, "record_blocks": 0, "mentions": 0})
                 self.assertEqual(meta["stream"]["total_cost_usd"], 0.42)
                 self.assertEqual(meta["stream"]["subagent_calls"], {"reviewer": 1})
                 self.assertFalse(meta["committed"])
@@ -325,6 +329,32 @@ class ExecuteTests(RunnerTestCase):
             self.assertEqual(meta["stream"]["malformed_lines"], 1)
             self.assertTrue(meta["o1_success"])
 
+    def test_instrument_trace_in_the_stream_is_a_leak_and_returns_nonzero(self) -> None:
+        os.environ["FAKE_CLAUDE_MODE"] = "instrument"
+
+        code, out, err = self.execute(conditions="B")
+
+        meta = self.meta("T01_B_r1")
+        self.assertEqual(code, 1, out + err)
+        self.assertIn("instrument leak T01_B_r1", out)
+        self.assertEqual(meta["status"], "finished")
+        self.assertTrue(meta["instrument_leak"])
+        self.assertEqual(meta["stream"]["instrument_markers"]["first_lines"], 1)
+        self.assertTrue(meta["o1_success"])
+
+    def test_leak_recorded_before_a_resume_still_fails_the_round(self) -> None:
+        os.environ["FAKE_CLAUDE_MODE"] = "instrument"
+        self.execute(conditions="B")
+        os.environ.pop("FAKE_CLAUDE_MODE")
+        calls = len(self.agent_calls())
+
+        code, out, err = self.execute(conditions="B")
+
+        self.assertEqual(code, 1, out + err)
+        self.assertIn("skip T01_B_r1 (already finished)", out)
+        self.assertIn("instrument leak T01_B_r1", out)
+        self.assertEqual(len(self.agent_calls()), calls)
+
     def test_container_not_stopped_is_final_not_retried_nor_evaluated(self) -> None:
         def stuck(*args, **kwargs):
             raise runner.ContainerNotStopped("simulated")
@@ -336,7 +366,24 @@ class ExecuteTests(RunnerTestCase):
         meta = self.meta("T01_A_r1")
         self.assertEqual(code, 0, out + err)
         self.assertEqual((meta["status"], meta["evaluation_error"], meta["o1_success"]), ("finished", "container_not_stopped", False))
+        self.assertEqual((meta["stream"]["instrument_markers"], meta["instrument_leak"]), ({"first_lines": 0, "record_blocks": 0, "mentions": 0}, False))
         self.assertFalse((self.results_dir / "harness" / "T01_A_r1" / "eval.json").exists())
+
+    def test_container_not_stopped_still_records_an_instrument_leak(self) -> None:
+        def stuck_after_writing(args, run_dir, *rest):
+            (run_dir / "stream.jsonl").write_text(json.dumps({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "```process-metrics v1"}]}}) + "\n")
+            raise runner.ContainerNotStopped("simulated")
+
+        with mock.patch.object(runner, "_agent_run", stuck_after_writing):
+            code, out, err = self.execute(conditions="B")
+
+        meta = self.meta("T01_B_r1")
+        self.assertEqual(code, 1, out + err)
+        self.assertEqual(meta["evaluation_error"], "container_not_stopped")
+        self.assertEqual(meta["stream"]["instrument_markers"], {"first_lines": 0, "record_blocks": 1, "mentions": 1})
+        self.assertTrue(meta["instrument_leak"])
+        self.assertIn("instrument leak T01_B_r1", out)
 
     def test_evaluation_failure_after_the_agent_is_final_not_retried(self) -> None:
         def failing_evaluate(*args, **kwargs):

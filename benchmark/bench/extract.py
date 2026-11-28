@@ -3,7 +3,8 @@
 Only numbers and categories leave this module: free text in the stream (prompts, code, reports)
 is never copied into the result. The stream format is an assumption checked in the smoke round:
 the final `result` event carries `total_cost_usd`, `usage`, `modelUsage`, `duration_ms` and
-`num_turns`, and subagent calls are `tool_use` blocks of the subagent tool with a `subagent_type`.
+`num_turns`, subagent calls are `tool_use` blocks of the subagent tool with a `subagent_type`, and
+the stream carries the subagent prompts and reports and the init event that lists the skills.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
+
+from bench.isolate import INSTRUMENT_TOKEN
 
 # Assumed name of the subagent tool (formerly `Task`); check in the smoke round.
 DEFAULT_SUBAGENT_TOOL = "Agent"
@@ -24,6 +27,10 @@ OTHER_SUBAGENT = "other"
 # Assumed: a result subtype that mentions the budget means `--max-budget-usd` ended the run.
 BUDGET_MARKER = "budget"
 BLOCKED_MARKER = "BLOCKED"
+# Traces of the process-metrics instrument, which B and C must not show (ADR 0001, "Amendment:
+# toolkit treatment for conditions B and C"): the first line of a subagent prompt and a record block.
+RECORD_FIRST_LINE = re.compile(r"^issue [a-z0-9-]{1,32}#[1-9][0-9]* phase=", re.M)
+RECORD_BLOCK = "process-metrics v1"
 
 
 def _number(value: object) -> float | int | None:
@@ -77,6 +84,31 @@ def _ends_blocked(text: object) -> bool:
     return bool(lines) and BLOCKED_MARKER in lines[-1]
 
 
+def _strings(value: object) -> list[str]:
+    """Every string value nested in a decoded JSON value."""
+    if isinstance(value, str):
+        return [value]
+
+    if isinstance(value, dict):
+        value = list(value.values())
+
+    if isinstance(value, list):
+        return [text for item in value for text in _strings(item)]
+
+    return []
+
+
+def _instrument_markers(event: dict) -> Counter[str]:
+    markers: Counter[str] = Counter()
+
+    for text in _strings(event):
+        markers["first_lines"] += len(RECORD_FIRST_LINE.findall(text))
+        markers["record_blocks"] += text.count(RECORD_BLOCK)
+        markers["mentions"] += len(INSTRUMENT_TOKEN.findall(text))
+
+    return markers
+
+
 def parse_stream(path: Path, subagent_tool: str = DEFAULT_SUBAGENT_TOOL) -> dict[str, object]:
     """Parses the stream line by line; malformed lines are counted and skipped, a missing file or
     a missing `result` event is reported in the returned fields, never raised."""
@@ -93,8 +125,10 @@ def parse_stream(path: Path, subagent_tool: str = DEFAULT_SUBAGENT_TOOL) -> dict
         "model_usage": {},
         "subagent_calls": {},
         "malformed_lines": 0,
+        "instrument_markers": {},
     }
     calls: Counter[str] = Counter()
+    markers: Counter[str] = Counter(first_lines=0, record_blocks=0, mentions=0)
 
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -116,6 +150,7 @@ def parse_stream(path: Path, subagent_tool: str = DEFAULT_SUBAGENT_TOOL) -> dict
             continue
 
         calls.update(_subagent_types(event, subagent_tool))
+        markers.update(_instrument_markers(event))
 
         if event.get("type") == "result":
             subtype = event.get("subtype")
@@ -134,5 +169,6 @@ def parse_stream(path: Path, subagent_tool: str = DEFAULT_SUBAGENT_TOOL) -> dict
             )
 
     summary["subagent_calls"] = dict(sorted(calls.items()))
+    summary["instrument_markers"] = dict(markers)
 
     return summary
